@@ -45,14 +45,14 @@ describe('PreviewOverlayRegistry', () => {
     expect(getPreviewOverlays()).toHaveLength(1)
     expect(events).toEqual([1])
     expect(collectPreviewHoles(rect(100, 100, 1000, 600))).toEqual([
-      { x: 100, y: 20, w: 180, h: 220, r: 10 },
+      { x: 99, y: 19, w: 182, h: 222, r: 11 },
     ])
 
     r = rect(240, 140, 180, 220)
     notifyPreviewOverlays()
     expect(events).toEqual([1, 2])
     expect(collectPreviewHoles(rect(100, 100, 1000, 600))).toEqual([
-      { x: 140, y: 40, w: 180, h: 220, r: 10 },
+      { x: 139, y: 39, w: 182, h: 222, r: 11 },
     ])
 
     off()
@@ -85,7 +85,7 @@ describe('PreviewOverlayRegistry', () => {
     const holes = collectPreviewHoles(rect(0, 0, 1000, 600))
     expect(holes).not.toBeNull()
     expect(holes).toHaveLength(PREVIEW_MAX_HOLES)
-    expect(holes![0]).toEqual({ x: 10, y: 10, w: 100, h: 100, r: 0 })
+    expect(holes![0]).toEqual({ x: 9, y: 9, w: 102, h: 102, r: 0 })
 
     for (let i = 2; i <= PREVIEW_MAX_OVERLAYS + 1; i++) {
       cleanups.push(registerPreviewHole(`ov-${i}`, () => rect(10 + i, 10, 20, 20)))
@@ -132,5 +132,15 @@ describe('PreviewOverlayRegistry', () => {
     expect(collectPreviewHoles(rect(0, 0, 1000, 600), 0, { maxHoles: 2 })).toHaveLength(2)
     off1()
     off2()
+  })
+
+  it('widens a fractional panel rect to whole pixels plus one so no hairline shows past its border', () => {
+    const off = registerPreviewHole('frac', () => rect(200.4, 100.6, 300.3, 200.2))
+    const [h] = collectPreviewHoles(rect(0, 0, 1000, 600))!
+    expect(h!.x).toBeLessThanOrEqual(199)
+    expect(h!.y).toBeLessThanOrEqual(99)
+    expect(h!.x + h!.w).toBeGreaterThanOrEqual(501.7)
+    expect(h!.y + h!.h).toBeGreaterThanOrEqual(301.8)
+    off()
   })
 })

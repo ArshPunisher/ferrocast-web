@@ -877,14 +877,13 @@ body[data-scene-drag] iframe {
   }
 }
 
+/* Opacity only: the native picture's hole follows the dialog's box, so it must not move. */
 @keyframes fc-golive-modal-in {
   from {
     opacity: 0;
-    transform: scale(0.86);
   }
   to {
     opacity: 1;
-    transform: scale(1);
   }
 }
 

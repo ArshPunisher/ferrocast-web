@@ -14,6 +14,7 @@ import {
   findUnregisteredPreviewOverlays,
   getPreviewOverlays,
   notifyPreviewOverlays,
+  registerPreviewHole,
   resetPreviewOverlayRegistry,
   subscribePreviewOverlays,
   toast,
@@ -171,7 +172,7 @@ describe('InfoTip overlay registry and reposition (M8 regression)', () => {
     expect(getPreviewOverlays().some((e) => e.target === tip)).toBe(true)
     expect(notifications.length).toBeGreaterThanOrEqual(1)
     expect(collectPreviewHoles(rect(0, 0, 1200, 700))).toEqual([
-      { x: 220, y: 230, w: 180, h: 48, r: 0 },
+      { x: 219, y: 229, w: 182, h: 50, r: 0 },
     ])
 
     // Escape closes InfoTip.
@@ -274,6 +275,22 @@ describe('SidebarAccount menu portal and containment (M6 regression)', () => {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
     expect(document.body.querySelector('[role="menu"][aria-label="Account"]')).toBeNull()
+  })
+})
+
+describe('A raw <dialog> registered as a preview hole', () => {
+  it('cuts a hole when it is the panel, none when it only holds a window-sized backdrop', () => {
+    const panel = document.body.appendChild(document.createElement('dialog'))
+    panel.setAttribute('open', '')
+    panel.getBoundingClientRect = () => rect(300, 100, 600, 400)
+    const off = registerPreviewHole('raw-panel', panel)
+    expect(collectPreviewHoles(rect(0, 0, 1200, 700))).toHaveLength(1)
+    off()
+
+    panel.getBoundingClientRect = () => rect(0, 0, window.innerWidth, window.innerHeight)
+    const off2 = registerPreviewHole('raw-backdrop', panel)
+    expect(collectPreviewHoles(rect(0, 0, 1200, 700))).toEqual([])
+    off2()
   })
 })
 

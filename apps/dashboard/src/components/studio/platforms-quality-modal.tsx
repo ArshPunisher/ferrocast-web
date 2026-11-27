@@ -40,6 +40,7 @@ import {
   Switch,
   cx,
   lockPageScroll,
+  notifyPreviewOverlays,
   usePreviewHole,
 } from '@ferrocast/ui'
 import { useLive } from '../../lib/store'
@@ -660,6 +661,8 @@ export function PlatformsQualityModal({
         if (e.target === dialogRef.current) onClose()
       }}
       onKeyDown={handleKeyDown}
+      onAnimationEnd={() => notifyPreviewOverlays()}
+      data-over-preview
       className="fc-golive-modal fc-om-dialog"
     >
       {open && (

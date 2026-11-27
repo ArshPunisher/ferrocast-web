@@ -457,8 +457,8 @@ describe('what lies over the preview', () => {
     away.setAttribute('role', 'listbox')
     place(away, 0, 700, 50, 50)
     expect(overPreview(new DOMRect(100, 100, 1000, 500), 0)).toEqual([
-      { x: 200, y: 50, w: 200, h: 400, r: 10 },
-      { x: 800, y: -100, w: 440, h: 800, r: 0 },
+      { x: 199, y: 49, w: 202, h: 402, r: 11 },
+      { x: 799, y: -101, w: 442, h: 802, r: 0 },
     ])
   })
   it('never sends more holes than the app takes; guide lines give way to menus and panels', () => {
@@ -476,7 +476,7 @@ describe('what lies over the preview', () => {
     const holes = overPreview(new DOMRect(0, 0, 1000, 600), 0)
     expect(holes).not.toBeNull()
     expect(holes!.length).toBeLessThanOrEqual(MAX_SENT_HOLES)
-    expect(holes![0]).toMatchObject({ x: 10, y: 10, w: 100, h: 100 }) // the menu is first and kept
+    expect(holes![0]).toMatchObject({ x: 9, y: 9, w: 102, h: 102 }) // the menu is first and kept
   })
   it('a modal dialog counts by its panel, not its full-window box', () => {
     document.body.innerHTML = ''

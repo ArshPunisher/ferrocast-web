@@ -117,11 +117,20 @@ function resolveEntryRect(entry: RegisteredPreviewOverlay): {
 } {
   const el = elementOf(entry)
   if (el) {
-    if (typeof HTMLDialogElement !== 'undefined' && el instanceof HTMLDialogElement) {
-      return { el, rect: null }
-    }
     if (!isOverlayElementVisible(el)) return { el, rect: null }
     const rect = entry.getRect ? entry.getRect() : el.getBoundingClientRect()
+    // A dialog that fills the window is only the backdrop holder: its panel registers itself.
+    // A dialog that is the panel (smaller than the window) cuts its own hole.
+    if (
+      rect &&
+      typeof HTMLDialogElement !== 'undefined' &&
+      el instanceof HTMLDialogElement &&
+      typeof window !== 'undefined' &&
+      rect.width >= window.innerWidth - 1 &&
+      rect.height >= window.innerHeight - 1
+    ) {
+      return { el, rect: null }
+    }
     return { el, rect }
   }
   const rect = entry.getRect ? entry.getRect() : (entry.target as () => DOMRect | null)()
@@ -264,16 +273,21 @@ export function collectPreviewHoles(
   const pushRect = (el: Element | null, b: DOMRect, kind: PreviewHoleKind, radius?: number) => {
     if (b.width < 1 || b.height < 1) return
     if (!(b.right > rx0 && b.left < rx1 && b.bottom > ry0 && b.top < ry1)) return
-    const hole: PreviewHoleRect = {
-      x: b.left - box.x,
-      y: b.top - box.y,
-      w: b.width,
-      h: b.height,
-      r: radiusOf(el, radius),
-    }
+    const r = radiusOf(el, radius)
     if (kind === 'guide' || el?.hasAttribute(PREVIEW_GUIDE_ATTR)) {
-      guides.push(hole)
+      guides.push({ x: b.left - box.x, y: b.top - box.y, w: b.width, h: b.height, r })
       return
+    }
+    // A panel's 1 px border sits on a fractional pixel at 125%/150%/2x scaling. The hole is
+    // widened to whole pixels plus one, so no hairline of the live picture shows past the border.
+    const hx = Math.floor(b.left - box.x) - 1
+    const hy = Math.floor(b.top - box.y) - 1
+    const hole: PreviewHoleRect = {
+      x: hx,
+      y: hy,
+      w: Math.ceil(b.right - box.x) + 1 - hx,
+      h: Math.ceil(b.bottom - box.y) + 1 - hy,
+      r: r > 0 ? r + 1 : 0,
     }
     if (boxArea > 0) {
       const ix = Math.max(0, Math.min(b.right, box.x + box.width) - Math.max(b.left, box.x))
@@ -293,9 +307,9 @@ export function collectPreviewHoles(
   if (opts.extraDomSelector && typeof document !== 'undefined') {
     for (const el of document.querySelectorAll(opts.extraDomSelector)) {
       if (seen.has(el)) continue
-      if (typeof HTMLDialogElement !== 'undefined' && el instanceof HTMLDialogElement) continue
       if (!isOverlayElementVisible(el)) continue
-      pushRect(el, el.getBoundingClientRect(), 'overlay')
+      const rect = resolveEntryRect({ id: '', target: el, kind: 'overlay' }).rect
+      if (rect) pushRect(el, rect, 'overlay')
     }
   }
 
@@ -346,8 +360,9 @@ export function findUnregisteredPreviewOverlays(stageEl?: Element | null): Eleme
 
   const bad: Element[] = []
   for (const el of document.querySelectorAll(UNREGISTERED_OVERLAY_SELECTOR)) {
-    if (typeof HTMLDialogElement !== 'undefined' && el instanceof HTMLDialogElement) continue
     if (!isOverlayElementVisible(el)) continue
+    // The window-sized dialog that only holds a backdrop is not a panel.
+    if (resolveEntryRect({ id: '', target: el, kind: 'overlay' }).rect === null) continue
     const b = el.getBoundingClientRect()
     if (b.width < 1 || b.height < 1) continue
     const overlaps = stageRects.some(
