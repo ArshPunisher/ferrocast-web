@@ -908,6 +908,7 @@ export class DemoStudioEngine {
   private undoStack: UndoEntry[] = []
   private redoStack: UndoEntry[] = []
   private collections = new Map<string, CollectionSnapshot>()
+  private profiles = new Map<string, Record<string, unknown>>()
   private clipboardSummary: EngineClipboard | null = null
   private clipboardSource: CopiedSourceBundle | null = null
   private clipboardFiltersData: ItemFilterState | null = null
@@ -994,6 +995,7 @@ export class DemoStudioEngine {
     this.onStreamChange = hooks?.onStreamChange
     this.seedDefaults()
     this.collections.set(this.shelfCollections.current, this.captureSnapshot())
+    this.profiles.set(this.shelfProfiles.current, clone(this.studioSettingsData))
   }
 
   isRunning(): boolean {
@@ -2284,13 +2286,77 @@ export class DemoStudioEngine {
 
     if (rest[2] === 'library' && (rest[3] === 'collections' || rest[3] === 'profiles')) {
       const isCol = rest[3] === 'collections'
+      const noun = isCol ? 'scene collections' : 'profiles'
       const shelf = isCol ? this.shelfCollections : this.shelfProfiles
       if (method === 'GET' && rest.length === 4) return clone(shelf)
-      if (method === 'POST' && rest.length === 4) {
+      if (method === 'POST' && isCol && rest.length === 5 && rest[4] === 'import') {
+        if (this.isBusyLive()) {
+          throw new HttpError(
+            409,
+            'studio_busy',
+            `Stop streaming and recording before changing ${noun}.`,
+            'Stop every active output first.',
+          )
+        }
         const b = requireObj(body)
         const raw = String(b.name ?? '').trim()
-        if (!raw) throw new HttpError(400, 'invalid', 'name: 1 to 80 letters.')
-        const name = raw.slice(0, 80)
+        if (!raw || [...raw].length > 100) {
+          throw new HttpError(400, 'invalid', 'Name must be 1 to 100 characters.')
+        }
+        const doc = b.doc && typeof b.doc === 'object' ? (b.doc as Record<string, unknown>) : {}
+        const rawScenes = Array.isArray(doc.scenes)
+          ? (doc.scenes as unknown[])
+              .map((s) =>
+                typeof s === 'string'
+                  ? s.trim()
+                  : s && typeof s === 'object' && typeof (s as { name?: unknown }).name === 'string'
+                    ? (s as { name: string }).name.trim()
+                    : '',
+              )
+              .filter(Boolean)
+          : ['Main']
+        const scenes = rawScenes.length > 0 ? rawScenes : ['Main']
+        return this.applyImport({
+          list: { id: 'imported', name: raw, scenes: scenes.length, sources: 1 },
+          scenes,
+          preview: {
+            source: 'obs',
+            id: 'imported',
+            name: raw,
+            scenes: scenes.length,
+            scene_names: scenes,
+            truncated_scenes: 0,
+            sources: 1,
+            web_pages: 0,
+            missing: [],
+            device_resets: [],
+            skipped: [],
+            skipped_total: 0,
+          },
+        })
+      }
+      if (method === 'POST' && rest.length === 4) {
+        if (this.isBusyLive()) {
+          throw new HttpError(
+            409,
+            'studio_busy',
+            `Stop streaming and recording before changing ${noun}.`,
+            'Stop every active output first.',
+          )
+        }
+        const b = requireObj(body)
+        const raw = String(b.name ?? '').trim()
+        if (!raw || [...raw].length > 100) {
+          throw new HttpError(400, 'invalid', 'name: 1 to 100 letters.')
+        }
+        const name = raw
+        if (shelf.list.some((x) => x.name.toLowerCase() === name.toLowerCase())) {
+          throw new HttpError(
+            400,
+            'invalid',
+            `There's already a ${isCol ? 'scene collection' : 'profile'} called "${name}".`,
+          )
+        }
         const base =
           name
             .toLowerCase()
@@ -2307,25 +2373,71 @@ export class DemoStudioEngine {
             this.clearHistory()
           }
           this.collections.set(id, this.captureSnapshot())
+        } else {
+          this.profiles.set(shelf.current, clone(this.studioSettingsData))
+          if (!b.copy) {
+            this.studioSettingsData = {
+              ...this.studioSettingsData,
+              width: 1920,
+              height: 1080,
+              fps: 60,
+              video_kbps: 6000,
+              scale: null,
+            }
+          }
+          this.profiles.set(id, clone(this.studioSettingsData))
         }
         shelf.list.push({ id, name })
         shelf.current = id
         return { id }
       }
       if (method === 'PUT' && rest.length === 5 && rest[4] === 'current') {
+        if (this.isBusyLive()) {
+          throw new HttpError(
+            409,
+            'studio_busy',
+            `Stop streaming and recording before changing ${noun}.`,
+            'Stop every active output first.',
+          )
+        }
         const id = String(requireObj(body).id ?? '')
         if (!shelf.list.some((x) => x.id === id)) {
-          throw new HttpError(404, 'studio_no_such', `There’s no collection "${id}".`)
+          throw new HttpError(
+            404,
+            'studio_no_such',
+            `There’s no ${isCol ? 'collection' : 'profile'} "${id}".`,
+          )
         }
-        if (isCol && shelf.current !== id) {
-          this.collections.set(shelf.current, this.captureSnapshot())
-          const nextSnap = this.collections.get(id)
-          if (nextSnap) this.restoreSnapshot(nextSnap)
-          else {
-            this.seedForScenes(['Main'], true)
-            this.collections.set(id, this.captureSnapshot())
+        if (shelf.current !== id) {
+          if (isCol) {
+            this.collections.set(shelf.current, this.captureSnapshot())
+            const nextSnap = this.collections.get(id)
+            if (nextSnap) this.restoreSnapshot(nextSnap)
+            else {
+              this.seedForScenes(['Main'], true)
+              this.collections.set(id, this.captureSnapshot())
+            }
+            this.clearHistory()
+          } else {
+            const prev = clone(this.studioSettingsData)
+            this.profiles.set(shelf.current, prev)
+            const nextProf = this.profiles.get(id)
+            if (nextProf) {
+              this.studioSettingsData = clone(nextProf)
+            } else {
+              this.profiles.set(id, clone(this.studioSettingsData))
+            }
+            this.onStreamChange?.(this.streamActive)
+            shelf.current = id
+            const rateChanged = prev.sample_rate !== this.studioSettingsData.sample_rate
+            return rateChanged
+              ? {
+                  id,
+                  restart: 'Audio sample rate applies after Ferrocast restarts.',
+                  restart_detail: 'Restart Ferrocast to apply the new profile audio rate.',
+                }
+              : { id }
           }
-          this.clearHistory()
         }
         shelf.current = id
         return { id }
@@ -2334,21 +2446,32 @@ export class DemoStudioEngine {
         const id = decodeURIComponent(rest[4]!)
         const name = String(requireObj(body).name ?? '').trim()
         const entry = shelf.list.find((x) => x.id === id)
-        if (!entry) throw new HttpError(404, 'studio_no_such', `There’s no collection "${id}".`)
-        if (!name) throw new HttpError(400, 'invalid', 'name: 1 to 80 letters.')
+        if (!entry)
+          throw new HttpError(
+            404,
+            'studio_no_such',
+            `There’s no ${isCol ? 'collection' : 'profile'} "${id}".`,
+          )
+        if (!name || [...name].length > 100) {
+          throw new HttpError(400, 'invalid', 'name: 1 to 100 letters.')
+        }
         entry.name = name
         return undefined
       }
       if (method === 'GET' && rest.length === 6 && rest[5] === 'export') {
         const id = decodeURIComponent(rest[4]!)
         const entry = shelf.list.find((x) => x.id === id)
-        if (!entry) throw new HttpError(404, 'studio_no_such', `There’s no collection "${id}".`)
-        const snap =
-          isCol && id === shelf.current
-            ? this.captureSnapshot()
-            : isCol
-              ? this.collections.get(id)
-              : null
+        if (!entry)
+          throw new HttpError(
+            404,
+            'studio_no_such',
+            `There’s no ${isCol ? 'collection' : 'profile'} "${id}".`,
+          )
+        if (!isCol) {
+          const prof = id === shelf.current ? this.studioSettingsData : this.profiles.get(id)
+          return clone(prof ?? this.studioSettingsData)
+        }
+        const snap = id === shelf.current ? this.captureSnapshot() : this.collections.get(id)
         return {
           name: entry.name,
           current_scene: snap?.currentScene ?? this.currentScene,
@@ -2359,7 +2482,12 @@ export class DemoStudioEngine {
       if (method === 'DELETE' && rest.length === 5) {
         const id = decodeURIComponent(rest[4]!)
         const entry = shelf.list.find((x) => x.id === id)
-        if (!entry) throw new HttpError(404, 'studio_no_such', `There’s no collection "${id}".`)
+        if (!entry)
+          throw new HttpError(
+            404,
+            'studio_no_such',
+            `There’s no ${isCol ? 'collection' : 'profile'} "${id}".`,
+          )
         if (shelf.current === id) {
           throw new HttpError(
             409,
@@ -2370,6 +2498,7 @@ export class DemoStudioEngine {
         }
         shelf.list = shelf.list.filter((x) => x.id !== id)
         if (isCol) this.collections.delete(id)
+        else this.profiles.delete(id)
         return undefined
       }
     }
@@ -3528,6 +3657,7 @@ export class DemoStudioEngine {
       const patch = requireObj(body)
       const prev = this.studioSettingsData
       this.studioSettingsData = { ...this.studioSettingsData, ...patch }
+      this.profiles.set(this.shelfProfiles.current, clone(this.studioSettingsData))
       if (
         [
           'video_kbps',
@@ -4572,6 +4702,7 @@ export class DemoStudioEngine {
   private scenesPayload() {
     const def = this.namedTransitions.find((t) => t.default) ?? this.namedTransitions[0]!
     return {
+      collection_id: this.shelfCollections.current,
       current: this.currentScene,
       scenes: this.activeScenes.map((name) =>
         this.sceneToInfo(name, this.currentScene, this.previewScene),
@@ -4621,6 +4752,8 @@ export class DemoStudioEngine {
     const width = Number(this.studioSettingsData.width ?? 1920)
     const height = Number(this.studioSettingsData.height ?? 1080)
     return {
+      collection_id: this.shelfCollections.current,
+      profile_id: this.shelfProfiles.current,
       engine: {
         cpu: 14.2,
         fps,

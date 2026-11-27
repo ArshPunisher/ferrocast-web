@@ -362,6 +362,8 @@ export function resolveTransitionFromScenes(
 }
 
 export interface EngineScenes {
+  /** Active scene collection identifier, when reported by the engine. */
+  collection_id?: string
   scenes: EngineScene[]
   current: string
   /** The Studio is off: the scenes are from its saved file (nothing is on air). */
@@ -1035,6 +1037,9 @@ export interface StillResult {
 }
 
 export interface EngineStats {
+  /** Active scene collection and profile identifiers, when reported by the engine. */
+  collection_id?: string
+  profile_id?: string
   engine: {
     cpu: number
     fps: number
@@ -1574,9 +1579,19 @@ export function studioEngineApi(c: FerroClient) {
       c.request<EngineShelf>('GET', `/api/v1/studio/engine/library/${kind}`),
     /** A new one (empty, or a copy of the one in use), switched to. */
     newShelf: (kind: EngineShelfKind, name: string, copy = false) =>
-      c.request<{ id: string }>('POST', `/api/v1/studio/engine/library/${kind}`, { name, copy }),
+      c.request<{
+        id: string
+        note?: string | null
+        restart?: string | null
+        restart_detail?: string | null
+      }>('POST', `/api/v1/studio/engine/library/${kind}`, { name, copy }),
     switchShelf: (kind: EngineShelfKind, id: string) =>
-      c.request<{ id: string }>('PUT', `/api/v1/studio/engine/library/${kind}/current`, { id }),
+      c.request<{
+        id: string
+        note?: string | null
+        restart?: string | null
+        restart_detail?: string | null
+      }>('PUT', `/api/v1/studio/engine/library/${kind}/current`, { id }),
     renameShelf: (kind: EngineShelfKind, id: string, name: string) =>
       c.request<void>('POST', `/api/v1/studio/engine/library/${kind}/${enc(id)}/rename`, { name }),
     removeShelf: (kind: EngineShelfKind, id: string) =>
