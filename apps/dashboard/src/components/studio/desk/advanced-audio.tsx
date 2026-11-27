@@ -143,7 +143,7 @@ function SoundRow({
     <div
       id={rowId(a.name)}
       className={cx(
-        'grid grid-cols-1 gap-x-4 gap-y-2 rounded-[10px] sm:grid-cols-2 border border-line p-3 lg:grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] lg:h-10 lg:items-center lg:gap-3 lg:rounded-none lg:border-0 lg:border-b lg:px-2 lg:py-0',
+        'grid grid-cols-1 gap-x-4 gap-y-2 rounded-[10px] sm:grid-cols-2 border border-line p-3 lg:grid-cols-[minmax(120px,1.4fr)_80px_48px_minmax(150px,1.2fr)_96px_168px_196px] lg:min-h-10 lg:items-center lg:gap-x-3 lg:gap-y-1 lg:rounded-none lg:border-0 lg:border-b lg:px-2 lg:py-1',
         focused && 'bg-accent/8',
       )}
     >

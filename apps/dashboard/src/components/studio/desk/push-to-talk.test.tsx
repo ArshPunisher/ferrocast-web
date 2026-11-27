@@ -165,4 +165,13 @@ describe('the meter while a push key holds the sound muted', () => {
     expect(buttons.className).toContain('sm:flex')
     expect(buttons.className).toContain('min-w-0')
   })
+
+  it('lets the sound row grow with its push rows instead of a fixed height', async () => {
+    audioNow = mic({ push_to_talk: true, push_to_talk_ms: 150 })
+    await mountAdvanced()
+    const row = document.querySelector('[id^="adv-audio-"]') as HTMLElement
+    // A fixed row height made Push to talk, Push to mute and the rest spill onto the next sound.
+    expect(row.className).not.toMatch(/(^|\s)lg:h-10(\s|$)/)
+    expect(row.className).toContain('lg:min-h-10')
+  })
 })
