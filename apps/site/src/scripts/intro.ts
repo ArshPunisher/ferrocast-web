@@ -11,9 +11,11 @@
 //    burst into the star field, and the three chats flow out of the hub to Twitch, YouTube
 //    and Kick.
 //
-// The page's text is real from the first frame; this only animates it. Any scroll, touch,
-// click or key finishes everything at once. CSS holds the start states only while
-// html.intro-hold is set, and a CSS failsafe shows everything if this script never runs.
+// The page's text is real from the first frame; this only animates it. Nothing the visitor
+// does (scroll, touch, click, key) cuts it short: it always plays through (about 1.8 s), and
+// the helper pieces that are not fixed to the screen scroll with the page. CSS holds the
+// start states only while html.intro-hold is set, and a CSS failsafe shows everything if
+// this script never runs. With prefers-reduced-motion the page never calls this at all.
 
 const EXPO = 'cubic-bezier(0.16, 1, 0.3, 1)'
 
@@ -52,8 +54,10 @@ export function playIntro(hero: HTMLElement) {
     document.body,
   )
   if (er) {
-    sign.style.left = `${er.left}px`
-    sign.style.top = `${er.top + er.height / 2}px`
+    // page coordinates (the sign is position: absolute), so it stays on the eyebrow if the
+    // page is scrolled while it plays
+    sign.style.left = `${er.left + scrollX}px`
+    sign.style.top = `${er.top + scrollY + er.height / 2}px`
   }
   const lamp = sign.querySelector('.intro-lamp')!
   const wash = add('<div class="intro-wash" aria-hidden="true"></div>', document.body)
@@ -174,16 +178,6 @@ export function playIntro(hero: HTMLElement) {
     root.classList.remove('intro-hold')
     anims.forEach((a) => a.cancel())
     extras.forEach((el) => el.remove())
-    removeEventListener('wheel', skip)
-    removeEventListener('touchmove', skip)
-    removeEventListener('keydown', skip)
-    removeEventListener('pointerdown', skip)
-  }
-  const skip = () => {
-    anims.forEach((a) => a.finish())
-    end()
   }
   Promise.all(anims.map((a) => a.finished)).then(end, end)
-  for (const ev of ['wheel', 'touchmove', 'keydown', 'pointerdown'] as const)
-    addEventListener(ev, skip, { passive: true })
 }

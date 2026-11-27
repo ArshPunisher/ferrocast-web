@@ -95,11 +95,19 @@ test('opening: On air, Level check and Spark drop play, then every helper is gon
   )
 })
 
-test('opening: any key skips straight to the finished banner', async ({ page }) => {
+test('opening: scrolling, clicking or a key never cuts it short', async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('.intro-onair')).toHaveCount(1)
+  await page.mouse.wheel(0, 120)
   await page.keyboard.press('Shift')
-  await expect(page.locator('html')).not.toHaveClass(/intro-hold/)
+  await page.mouse.click(700, 500)
+  await page.waitForTimeout(150)
+  // still playing: the start states and helper pieces are in place
+  await expect(page.locator('html')).toHaveClass(/intro-hold/)
+  await expect(page.locator('.intro-meter')).toHaveCount(1)
+  await expect(page.locator('.intro-onair')).toHaveCount(1)
+  // and it still finishes by itself
+  await expect(page.locator('html')).not.toHaveClass(/intro-hold/, { timeout: 4000 })
   await expect(page.locator('.intro-standby')).toHaveCount(0)
   await expect(page.locator('.hero .lede')).toHaveCSS('opacity', '1')
 })

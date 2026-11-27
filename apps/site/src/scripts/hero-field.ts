@@ -312,12 +312,6 @@ export function mountHeroField(hero: HTMLElement, stage: HTMLElement, opts: { in
     .add(done, 2.4)
     .to(uniforms.uScatter, { value: 1, duration: 2.2, ease: 'power2.inOut' }, 1.9)
     .to(uniforms.uOpacity, { value: () => paint.field, duration: 2.2 }, 1.9)
-  // any scroll, click or key skips straight to the field
-  const skip = () => {
-    if (tl.progress() >= 1) return
-    tl.progress(1)
-  }
-  for (const ev of ['wheel', 'touchmove', 'keydown', 'pointerdown'])
-    addEventListener(ev, skip, { passive: true, once: true, signal: ac.signal })
+  // the burst always plays through: scrolling or clicking never skips it
   return { canvas }
 }
