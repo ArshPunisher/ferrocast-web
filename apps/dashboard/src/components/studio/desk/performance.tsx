@@ -99,7 +99,11 @@ export function PerformanceToggle({ panel = false }: { panel?: boolean } = {}) {
         aria-label={label}
         aria-pressed={paused}
         disabled={busy}
-        className={cx(paused ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
+        className={cx(
+          paused
+            ? 'bg-accent-soft! text-accent-text! shadow-[inset_0_0_0_1px_var(--fc-accent-line)]!'
+            : 'text-text-2',
+        )}
         onClick={() => toggle()}
       >
         <Gauge size={16} weight="bold" aria-hidden />
@@ -113,7 +117,11 @@ export function PerformanceToggle({ panel = false }: { panel?: boolean } = {}) {
       label={label}
       aria-pressed={paused}
       disabled={busy}
-      className={cx(paused ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
+      className={cx(
+        paused
+          ? 'bg-accent-soft! text-accent-text! shadow-[inset_0_0_0_1px_var(--fc-accent-line)]!'
+          : 'text-text-2',
+      )}
       onClick={() => toggle()}
     >
       <Gauge size={17} weight="bold" />

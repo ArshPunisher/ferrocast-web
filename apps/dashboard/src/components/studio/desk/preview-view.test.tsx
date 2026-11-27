@@ -2744,7 +2744,7 @@ describe('Studio preview live-resize and scale sync', () => {
     }
   })
 
-  it('uses real canvas aspect ratio instead of 16:9, resends vertical rect on collectionKey change, surfaces history errors, and gaps toggle pills', async () => {
+  it('keeps 16:9 preview box aspect, resends vertical rect on collectionKey change without null teardown, surfaces history errors, and frames active toggles', async () => {
     const { desk, req, putCalls } = setupPreviewTest()
     Object.assign(desk as unknown as Record<string, unknown>, {
       size: { width: 1024, height: 768 },
@@ -2785,11 +2785,11 @@ describe('Studio preview live-resize and scale sync', () => {
       })
 
       const mainCanvasBox = host.querySelector<HTMLElement>('[data-canvas-box]')!
-      expect(mainCanvasBox.className).not.toContain('aspect-video')
-      expect(mainCanvasBox.style.aspectRatio).toBe('1024 / 768')
-      expect(mainCanvasBox.style.getPropertyValue('--fc-aspect')).toBe(String(1024 / 768))
+      expect(mainCanvasBox.className).toContain('aspect-video')
+      expect(mainCanvasBox.style.aspectRatio).toBe('')
+      expect(mainCanvasBox.style.getPropertyValue('--fc-aspect')).toBe('')
 
-      // Changing collectionKey re-sends vertical + main rect even when DOM geometry didn't move.
+      // Changing collectionKey re-sends vertical + main rect in place without calling put(null, null, null).
       const beforeCollectionSwitch = putCalls().length
       ;(desk as unknown as Record<string, unknown>).collectionKey = 2
       await act(async () => {
@@ -2799,13 +2799,30 @@ describe('Studio preview live-resize and scale sync', () => {
             <StageBar />
           </DeskProvider>,
         )
+      })
+      await act(async () => {
         await vi.advanceTimersByTimeAsync(25)
       })
-      expect(putCalls().length).toBeGreaterThan(beforeCollectionSwitch)
+      const switchCalls = putCalls().slice(beforeCollectionSwitch)
+      expect(switchCalls.length).toBeGreaterThan(0)
+      expect(
+        switchCalls.some((c) => {
+          const body = c[2] as { rect?: unknown; program?: unknown; vertical?: unknown }
+          return body.rect === null && body.program === null && body.vertical === null
+        }),
+      ).toBe(false)
 
-      // Toggle buckets in OverflowRow and History group have explicit spacing.
+      // Toggle buckets in OverflowRow, VerticalToggle, PictureViewPick, and History have spacing and active accent ring.
       const viewBucket = host.querySelector('[data-ov="view"]')
       expect(viewBucket?.className).toMatch(/\bgap-(1|1\.5|2)\b/)
+      const verticalBtn = host.querySelector(
+        'button[title*="Turn the vertical picture off"]',
+      ) as HTMLButtonElement | null
+      expect(verticalBtn?.className).toContain('var(--fc-accent-line)')
+      const activeViewBtn = host.querySelector(
+        '[aria-label="Pictures shown"] button[aria-pressed="true"]',
+      ) as HTMLButtonElement | null
+      expect(activeViewBtn?.className).toContain('var(--fc-accent-line)')
       const historyBtn = host.querySelector(
         'button[aria-label*="History"]',
       ) as HTMLButtonElement | null

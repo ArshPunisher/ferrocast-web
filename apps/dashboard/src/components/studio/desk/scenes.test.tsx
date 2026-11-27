@@ -962,7 +962,7 @@ describe('ScenesDock pointer drag and keyboard reorder (Group E)', () => {
     expect(api.moveScene).not.toHaveBeenCalled()
   })
 
-  it('re-fetches scene thumbnails on collectionKey change even with identical scene names and uses canvas aspect', async () => {
+  it('keeps 16:9 grid tiles, gates scene thumbnail polling during scenesSettling, and re-fetches on collectionKey change', async () => {
     const prevDesktop = window.__FERROCAST__
     window.__FERROCAST__ = { api: '', desktop: true }
     localStorage.setItem('fc-studio-scenes-grid', '1')
@@ -978,10 +978,19 @@ describe('ScenesDock pointer drag and keyboard reorder (Group E)', () => {
       vertical: null,
       scenes: [makeScene('Main', { current: true })],
     }
+    const scenesB: EngineScenes = {
+      current: 'Outro',
+      preview: null,
+      transition: { kind: 'fade', ms: 300 },
+      top_layer: null,
+      vertical: null,
+      scenes: [makeScene('Outro', { current: true })],
+    }
     const { desk } = makeDesk(scenesA, { thumbnail })
     Object.assign(desk as unknown as Record<string, unknown>, {
       size: { width: 1024, height: 768 },
       collectionKey: 1,
+      scenesSettling: false,
     })
     const host = document.body.appendChild(document.createElement('div'))
     const created = createRoot(host)
@@ -999,28 +1008,47 @@ describe('ScenesDock pointer drag and keyboard reorder (Group E)', () => {
 
       const firstImg = host.querySelector('img') as HTMLImageElement | null
       expect(firstImg?.src).toContain('Main-gen-1')
-      // Non-16:9 canvas uses exact 1024 / 768 aspect ratio on grid thumb frame, not hardcoded aspect-video.
+      // Grid tiles stay 16:9 (aspect-video).
       const thumbBox = firstImg?.parentElement as HTMLElement | null
-      expect(thumbBox?.className).not.toContain('aspect-video')
-      expect(thumbBox?.style.aspectRatio).toBe('1024 / 768')
+      expect(thumbBox?.className).toContain('aspect-video')
+      expect(thumbBox?.style.aspectRatio).toBe('')
 
-      // Switch collection keeping scene name "Main": old thumbnail clears and gen-2 loads.
+      // Mid-switch while scenesSettling=true and old scene names are still present: must NOT fetch old scene thumbnails.
       generation = 2
-      const nextDesk = {
+      const settlingDesk = {
         ...desk,
         collectionKey: 2,
+        scenesSettling: true,
         scenes: { ...desk.scenes, data: { ...scenesA } },
       } as unknown as Desk
       await act(async () => {
         created.render(
-          <DeskProvider value={nextDesk}>
+          <DeskProvider value={settlingDesk}>
+            <ScenesDock />
+          </DeskProvider>,
+        )
+      })
+      await flush()
+      expect(thumbnail).toHaveBeenCalledTimes(1)
+
+      // Once scenes settle with Collection B's scenes, fetch thumbnail for Outro.
+      const settledDesk = {
+        ...desk,
+        collectionKey: 2,
+        scenesSettling: false,
+        scenes: { ...desk.scenes, data: { ...scenesB } },
+      } as unknown as Desk
+      await act(async () => {
+        created.render(
+          <DeskProvider value={settledDesk}>
             <ScenesDock />
           </DeskProvider>,
         )
       })
       await flush()
       expect(thumbnail).toHaveBeenCalledTimes(2)
-      expect((host.querySelector('img') as HTMLImageElement | null)?.src).toContain('Main-gen-2')
+      expect(thumbnail).toHaveBeenLastCalledWith('Outro', 256)
+      expect((host.querySelector('img') as HTMLImageElement | null)?.src).toContain('Outro-gen-2')
     } finally {
       if (prevDesktop === undefined) delete window.__FERROCAST__
       else window.__FERROCAST__ = prevDesktop
