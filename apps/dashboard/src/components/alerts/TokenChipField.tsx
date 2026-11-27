@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { BracketsCurly, Plus, Warning, X } from '@phosphor-icons/react'
 import { KNOWN_VARS, checkTemplate } from '@ferrocast/api'
-import { Input, Textarea, cx } from '@ferrocast/ui'
+import { Input, PopoverSurface, Textarea, cx } from '@ferrocast/ui'
 
 const TOKEN_LABELS: Record<string, string> = {
   name: 'Viewer name',
@@ -122,7 +122,7 @@ export function TokenChipField({
   const [announcement, setAnnouncement] = useState('')
   const [paletteOpen, setPaletteOpen] = useState(false)
   const paletteBtn = useRef<HTMLButtonElement>(null)
-  const palettePanel = useRef<HTMLDivElement>(null)
+  const palettePanel = useRef<HTMLElement>(null)
   const paletteId = useId()
   const inputEl = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
   const chipRefs = useRef<(HTMLButtonElement | null)[]>([])
@@ -138,19 +138,8 @@ export function TokenChipField({
       : null
 
   const quickOptions = options
-  // The palette is a small popover: Escape or a click elsewhere closes it, and focus goes back.
   useEffect(() => {
-    if (!paletteOpen) return
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node
-      if (palettePanel.current?.contains(t) || paletteBtn.current?.contains(t)) return
-      setPaletteOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [paletteOpen])
-  useEffect(() => {
-    if (paletteOpen) paletteRefs.current[0]?.focus()
+    if (paletteOpen) paletteRefs.current[0]?.focus({ preventScroll: true })
   }, [paletteOpen])
 
   /** Writes the token at the caret; false when it would not fit (nothing changed). */
@@ -244,59 +233,58 @@ export function TokenChipField({
             <BracketsCurly size={13} weight="bold" aria-hidden="true" />
             Tokens
           </button>
-          {paletteOpen && (
-            <div
-              ref={palettePanel}
-              id={paletteId}
-              role="group"
-              aria-label={`Insert token into ${label}`}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  e.stopPropagation()
-                  setPaletteOpen(false)
-                  paletteBtn.current?.focus()
-                }
-              }}
-              className="absolute top-full right-0 z-30 mt-1.5 flex max-h-64 w-[min(18rem,calc(100vw-2rem))] flex-col gap-1 overflow-y-auto rounded-control border border-line-strong bg-surface-1 p-2 shadow-pop"
-            >
-              {quickOptions.map((opt, i) => (
-                <button
-                  key={opt.key}
-                  ref={(el) => {
-                    paletteRefs.current[i] = el
-                  }}
-                  type="button"
-                  data-insert-token={opt.key}
-                  title={`Insert {${opt.key}} (${opt.label})`}
-                  onClick={() => {
-                    // Closed only when it went in: a refusal keeps the focus on this option.
-                    if (insertToken(opt.key)) setPaletteOpen(false)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-                      e.preventDefault()
-                      paletteRefs.current[(i + 1) % quickOptions.length]?.focus()
-                    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-                      e.preventDefault()
-                      paletteRefs.current[
-                        (i - 1 + quickOptions.length) % quickOptions.length
-                      ]?.focus()
-                    }
-                  }}
-                  className="fc-press flex min-h-9 items-center gap-2 rounded-[8px] px-2 text-left hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
-                >
-                  <Plus
-                    size={11}
-                    weight="bold"
-                    aria-hidden="true"
-                    className="shrink-0 text-text-3"
-                  />
-                  <span className="font-mono text-[13px] font-semibold text-text">{`{${opt.key}}`}</span>
-                  <span className="ml-auto truncate text-[13px] text-text-3">{opt.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <PopoverSurface
+            open={paletteOpen}
+            onClose={(reason) => {
+              setPaletteOpen(false)
+              if (reason === 'escape') paletteBtn.current?.focus()
+            }}
+            anchorRef={paletteBtn}
+            surfaceRef={palettePanel}
+            placement="bottom"
+            align="end"
+            gap={6}
+            edgePadding={8}
+            id={paletteId}
+            role="group"
+            aria-label={`Insert token into ${label}`}
+            className="z-[70] flex max-h-64 w-[min(18rem,calc(100vw-2rem))] flex-col gap-1 rounded-control border border-line-strong bg-surface-1 p-2 shadow-pop [&>*]:shrink-0"
+          >
+            {quickOptions.map((opt, i) => (
+              <button
+                key={opt.key}
+                ref={(el) => {
+                  paletteRefs.current[i] = el
+                }}
+                type="button"
+                data-insert-token={opt.key}
+                title={`Insert {${opt.key}} (${opt.label})`}
+                onClick={() => {
+                  // Closed only when it went in: a refusal keeps the focus on this option.
+                  if (insertToken(opt.key)) setPaletteOpen(false)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                    e.preventDefault()
+                    paletteRefs.current[(i + 1) % quickOptions.length]?.focus()
+                  } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                    e.preventDefault()
+                    paletteRefs.current[(i - 1 + quickOptions.length) % quickOptions.length]?.focus()
+                  }
+                }}
+                className="fc-press flex min-h-9 items-center gap-2 rounded-[8px] px-2 text-left hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+              >
+                <Plus
+                  size={11}
+                  weight="bold"
+                  aria-hidden="true"
+                  className="shrink-0 text-text-3"
+                />
+                <span className="font-mono text-[13px] font-semibold text-text">{`{${opt.key}}`}</span>
+                <span className="ml-auto truncate text-[13px] text-text-3">{opt.label}</span>
+              </button>
+            ))}
+          </PopoverSurface>
         </div>
       </div>
 
