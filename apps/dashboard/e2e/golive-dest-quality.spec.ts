@@ -276,6 +276,14 @@ test.describe('One Modal B unified platforms & quality editor', () => {
     })
     expect(focusInside).toBe(true)
 
+    // An open tip takes its own Escape first; the next one closes the dialog.
+    const tip = modal.getByRole('button', { name: /About Twitch quality details/ })
+    await tip.focus()
+    await expect(tip).toHaveAttribute('aria-expanded', 'true')
+    await page.keyboard.press('Escape')
+    await expect(modal).toBeVisible()
+    await expect(tip).toHaveAttribute('aria-expanded', 'false')
+    await modal.locator('[data-apply-quality]').focus()
     await page.keyboard.press('Escape')
     await expect(modal).toBeHidden()
     await expect(twitchTrigger).toBeFocused()

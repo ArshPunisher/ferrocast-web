@@ -644,7 +644,7 @@ describe('DeskStandby & StudioDesk Review Fixes', () => {
     expect(planBtn).toBeUndefined()
   })
 
-  it('passes inDialog to Platforms in DeskStandby so Manage opens without duplicate heading or nested panel', async () => {
+  it('opens Manage in one dialog with a single heading and the platform list inside it', async () => {
     installClient(async (_method, path) => {
       if (path === '/api/v1/schedule') return { streams: [] }
       if (path === '/api/v1/clips')
@@ -683,7 +683,7 @@ describe('DeskStandby & StudioDesk Review Fixes', () => {
       (el) => el.textContent?.trim() === 'Your platforms',
     )
     expect(headings).toHaveLength(1)
-    const platformsRoot = dialog!.querySelector('#golive-platforms')
+    const platformsRoot = dialog!.querySelector('.fc-om-pane-l')
     expect(platformsRoot?.tagName).toBe('DIV')
   })
 

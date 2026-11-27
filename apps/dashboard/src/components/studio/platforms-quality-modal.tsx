@@ -32,7 +32,16 @@ import {
   type GoLiveQualityOptionsResponse,
   type GoLiveView,
 } from '@ferrocast/api'
-import { Button, IconButton, InfoTip, Skeleton, Switch, cx, usePreviewHole } from '@ferrocast/ui'
+import {
+  Button,
+  IconButton,
+  InfoTip,
+  Skeleton,
+  Switch,
+  cx,
+  lockPageScroll,
+  usePreviewHole,
+} from '@ferrocast/ui'
 import { useLive } from '../../lib/store'
 import { useMode } from '../../lib/mode'
 import { ProtectionRule } from './golive-advanced'
@@ -48,11 +57,13 @@ import {
   buildMatchMainComparison,
   buildModalModel,
   buildQualitySummaryText,
+  clampDraftToHardLimits,
   evaluateModalDraft,
   formatEditorHeaderStatus,
   formatModalRate,
   formatModalResFps,
   initialDraftFromModel,
+  MAX_CUSTOM_KBPS,
   mapQualityApiError,
   toDestinationQualityPayload,
   type ApiQualityErrorInfo,
@@ -116,7 +127,7 @@ export function PlatformsQualityModal({
   canvasFilter = 'all',
   triggerEl,
   usesObs,
-  isRemote: _isRemote = false,
+  isRemote = false,
   videoKbps,
   audioKbps,
   optionsResponse,
@@ -158,6 +169,23 @@ export function PlatformsQualityModal({
   const [clampNotice, setClampNotice] = useState<string | null>(null)
   const [appliedNotice, setAppliedNotice] = useState<string | null>(null)
   const [sliderShaking, setSliderShaking] = useState(false)
+  const [addTarget, setAddTarget] = useState<Canvas>(addCanvas)
+  const [kbpsText, setKbpsText] = useState<string | null>(null)
+  // One number per time the dialog opens: a result for a closed session never speaks for a new one.
+  const sessionRef = useRef(0)
+  const [openEpoch, setOpenEpoch] = useState(0)
+  // Edits not applied yet, kept per platform while the dialog is open.
+  const draftsRef = useRef<Record<string, ModalDraft>>({})
+  // What the engine last accepted, per platform, until the options feed catches up.
+  const [accepted, setAccepted] = useState<Record<string, DestinationQuality>>({})
+  const selectedIdRef = useRef<string | null>(null)
+  const sliderTimerRef = useRef<number | undefined>(undefined)
+  const radioRefs = useRef<Record<'match' | 'own', HTMLButtonElement | null>>({
+    match: null,
+    own: null,
+  })
+  const dismissAskRef = useRef(ctrl.saver.dismissAsk)
+  dismissAskRef.current = ctrl.saver.dismissAsk
 
   // Initialize selection and mobile step only on open transition or explicit target change,
   // never resetting user navigation when background GoLive frames refresh `view`.
@@ -177,10 +205,22 @@ export function PlatformsQualityModal({
       open && (prev.destId !== initialDestId || prev.mode !== initialMode)
     prevInitRef.current = { open, destId: initialDestId, mode: initialMode }
 
+    if (!open && prev.open) {
+      // Closing ends the session: a question still waiting and any late result are dropped.
+      sessionRef.current += 1
+      dismissAskRef.current()
+    }
     if (becameOpen) {
+      sessionRef.current += 1
+      draftsRef.current = {}
+      setAccepted({})
+      setOpenEpoch((n) => n + 1)
       onReloadOptionsRef.current()
     }
     if (!becameOpen && !explicitTargetChanged) return
+    setAddTarget(
+      initialMode === 'add' ? addCanvas : canvasFilter === 'vertical' ? 'vertical' : 'main',
+    )
     setRightView(initialMode)
     if (initialDestId) {
       setSelectedId(initialDestId)
@@ -196,7 +236,7 @@ export function PlatformsQualityModal({
     setClampNotice(null)
     setAppliedNotice(null)
     userEditedRef.current = false
-  }, [open, initialDestId, initialMode, defaultSelectedId, isCompact])
+  }, [open, initialDestId, initialMode, defaultSelectedId, isCompact, addCanvas, canvasFilter])
 
   // Ensure selectedId stays valid if a custom destination is removed or added.
   useEffect(() => {
@@ -216,12 +256,32 @@ export function PlatformsQualityModal({
 
   const model = useMemo(() => {
     if (!selectedDest) return null
+    const acceptedQuality = accepted[selectedDest.id] ?? null
     return buildModalModel({
       dest: selectedDest,
       destOpts: selectedDestOpts,
       response: optionsResponse,
+      accepted: acceptedQuality,
     })
-  }, [selectedDest, selectedDestOpts, optionsResponse])
+  }, [selectedDest, selectedDestOpts, optionsResponse, accepted])
+
+  selectedIdRef.current = selectedDest?.id ?? null
+
+  // Once the options feed reports the accepted choice itself, it speaks for it again.
+  useEffect(() => {
+    setAccepted((prev) => {
+      let changed = false
+      const next = { ...prev }
+      for (const [id, q] of Object.entries(prev)) {
+        const cur = optionsResponse?.destinations?.[id]?.current
+        if (cur && JSON.stringify(cur) === JSON.stringify(q)) {
+          delete next[id]
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [optionsResponse])
 
   const [draft, setDraft] = useState<ModalDraft>(() =>
     model
@@ -229,29 +289,46 @@ export function PlatformsQualityModal({
       : { matchMain: true, width: 1920, height: 1080, fps: 60, kbps: 6000, codec: null },
   )
 
-  // Reset draft cleanly whenever switching selected platform or receiving fresh engine state when clean.
+  // Follow the engine while nothing is edited; keep each platform's own edits while the dialog is
+  // open, and start clean every time it opens.
   const prevDestIdRef = useRef<string | null>(selectedDest?.id ?? null)
   const prevQualitySigRef = useRef<string>('')
-  const currentQualitySig = selectedDest
-    ? `${selectedDest.id}:${JSON.stringify(selectedDestOpts?.current ?? selectedDest.quality ?? 'same')}:${selectedDestOpts?.resolved?.kbps ?? selectedDest.resolved_quality?.kbps ?? 0}`
+  const prevEpochRef = useRef(openEpoch)
+  const draftRef = useRef<ModalDraft | null>(null)
+  const currentQualitySig = model
+    ? `${model.dest.id}:${JSON.stringify(model.saved)}:${model.savedIsFresh}:${(() => {
+        const r = model.savedIsFresh
+          ? model.dest.resolved_quality
+          : (model.destOpts?.resolved ?? model.dest.resolved_quality)
+        return r ? `${r.width}x${r.height}@${r.fps}:${r.kbps}:${r.auto_fitted}` : ''
+      })()}`
     : 'none'
 
   useLayoutEffect(() => {
     if (!model) return
     const destChanged = prevDestIdRef.current !== model.dest.id
+    const reopened = prevEpochRef.current !== openEpoch
     const engineSynced = prevQualitySigRef.current !== currentQualitySig
-    if (destChanged || (!userEditedRef.current && engineSynced)) {
+    if (destChanged || reopened || (!userEditedRef.current && engineSynced)) {
+      if (destChanged && userEditedRef.current && prevDestIdRef.current && draftRef.current) {
+        draftsRef.current[prevDestIdRef.current] = draftRef.current
+      }
       prevDestIdRef.current = model.dest.id
       prevQualitySigRef.current = currentQualitySig
-      setDraft(initialDraftFromModel(model))
-      if (destChanged) {
-        userEditedRef.current = false
+      prevEpochRef.current = openEpoch
+      const kept = destChanged && !reopened ? draftsRef.current[model.dest.id] : undefined
+      setDraft(kept ?? initialDraftFromModel(model))
+      setKbpsText(null)
+      if (destChanged || reopened) {
+        userEditedRef.current = Boolean(kept)
         setApiError(null)
         setClampNotice(null)
         setAppliedNotice(null)
       }
     }
-  }, [model, currentQualitySig])
+  }, [model, currentQualitySig, openEpoch])
+
+  draftRef.current = draft
 
   usePreviewHole(dialogRef, {
     active: open,
@@ -285,10 +362,12 @@ export function PlatformsQualityModal({
           dialog.setAttribute('open', '')
         }
       }
+      // The step the dialog opens on, worked out here so it never reads the previous session's.
+      const openStep = isCompact && (initialDestId || initialMode === 'add') ? 'editor' : 'list'
       requestAnimationFrame(() => {
         const preferred =
           dialog.querySelector<HTMLElement>(
-            isCompact && mobileStep === 'list'
+            isCompact && openStep === 'list'
               ? '[data-select-platform], button:not([disabled])'
               : '.fc-om-pane-r [role="radio"][aria-checked="true"], .fc-om-pane-r button:not([disabled]), .fc-om-pane-l [data-select-platform], button:not([disabled])',
           ) ?? dialog
@@ -308,7 +387,39 @@ export function PlatformsQualityModal({
             : null
       back?.focus({ preventScroll: true })
     }
-  }, [open, triggerEl, isCompact, mobileStep])
+  }, [open, triggerEl, isCompact, initialDestId, initialMode])
+
+  // On a phone the two panes are steps: after one changes, focus goes to where the person now is.
+  const prevStepRef = useRef({ step: mobileStep, view: rightView })
+  useEffect(() => {
+    const prev = prevStepRef.current
+    prevStepRef.current = { step: mobileStep, view: rightView }
+    const dialog = dialogRef.current
+    if (!open || !isCompact || !dialog) return
+    if (prev.step === mobileStep && prev.view === rightView) return
+    const id = window.requestAnimationFrame(() => {
+      const target =
+        mobileStep === 'editor'
+          ? dialog.querySelector<HTMLElement>(
+              '.fc-om-pane-r [data-pane-focus], .fc-om-pane-r button:not([disabled]), .fc-om-pane-r input:not([disabled])',
+            )
+          : (dialog.querySelector<HTMLElement>(
+              `[data-select-platform="${selectedIdRef.current ?? ''}"]`,
+            ) ?? dialog.querySelector<HTMLElement>('.fc-om-pane-l button:not([disabled])'))
+      target?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [open, isCompact, mobileStep, rightView])
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(sliderTimerRef.current)
+    },
+    [],
+  )
+
+  // The page behind does not scroll while the dialog is open.
+  useEffect(() => (open ? lockPageScroll() : undefined), [open])
 
   const liveForSelected = selectedDest
     ? selectedDest.canvas === 'vertical'
@@ -342,8 +453,25 @@ export function PlatformsQualityModal({
     [model, ignoreLimits],
   )
 
+  // The one-tap fix after a refused quality: only when the client can tell what to change.
+  const clampFix = useMemo(() => {
+    if (!model || !evalResult) return null
+    const fixed = evalResult.hardLimit?.fixedDraft ?? clampDraftToHardLimits(model, draft)
+    const same =
+      fixed.width === draft.width &&
+      fixed.height === draft.height &&
+      fixed.fps === draft.fps &&
+      fixed.kbps === draft.kbps &&
+      !draft.matchMain
+    if (same) return null
+    return {
+      draft: fixed,
+      label: `Use ${formatModalResFps(fixed.width, fixed.height, fixed.fps)} · ${formatModalRate(fixed.kbps)}`,
+    }
+  }, [model, evalResult, draft])
+
   const addState = useAddDestinationState({
-    canvas: addCanvas,
+    canvas: addTarget,
     onAdded: (createdId) => {
       onSaved()
       onReloadOptions()
@@ -366,6 +494,10 @@ export function PlatformsQualityModal({
       ? view.cut.ffmpeg.percent
       : undefined
   const activeLockedReason =
+    (usesObs
+      ? 'OBS sets the resolution, frame rate and bitrate. Change them in OBS, or switch Picture source to Ferrocast Studio.'
+      : null) ??
+    (isRemote ? 'Change destination quality from your PC.' : null) ??
     model?.lockedReason ??
     (ffmpegDownloading
       ? `Setting up vertical video${ffmpegPercent != null ? ` (${Math.round(ffmpegPercent)}%)` : ''}. Custom quality unlocks once ready.`
@@ -373,6 +505,7 @@ export function PlatformsQualityModal({
 
   const commitDraft = (next: ModalDraft) => {
     userEditedRef.current = true
+    setKbpsText(null)
     setDraft(next)
     setApiError(null)
     setAppliedNotice(null)
@@ -382,66 +515,87 @@ export function PlatformsQualityModal({
   }
 
   const handleApply = async (overrideQuality?: DestinationQuality) => {
-    if (!selectedDest || !evalResult || submitting || selectedDest.switching_quality) return
+    if (!selectedDest || !evalResult || !model || submitting || selectedDest.switching_quality) {
+      return
+    }
+    if (activeLockedReason) return
+    const destId = selectedDest.id
+    const destName = selectedDest.name
+    const session = sessionRef.current
     const payload = overrideQuality ?? toDestinationQualityPayload(draft)
+    // What the engine will send for the choice being saved: the custom numbers themselves, or
+    // its own Match main result.
     const effective =
-      overrideQuality?.mode === 'custom'
-        ? {
-            width: overrideQuality.width,
-            height: overrideQuality.height,
-            fps: overrideQuality.fps,
-            kbps: overrideQuality.kbps,
-          }
-        : evalResult.effective
+      payload.mode === 'custom' ? payload : (model.sameAsMainResolved ?? evalResult.effective)
     setSubmitting(true)
     setApiError(null)
     setAppliedNotice(null)
     try {
       if (liveForSelected && selectedDest.enabled) {
         onOptimisticSwitch?.(
-          selectedDest.id,
+          destId,
           `${formatModalResFps(effective.width, effective.height, effective.fps)} · ${formatModalRate(effective.kbps)}`,
         )
       }
-      const nextView = await ctrl.api.setQuality(selectedDest.id, payload)
-      userEditedRef.current = false
+      const nextView = await ctrl.api.setQuality(destId, payload)
+      // The engine answered: the "Switching to ..." label ends unless it says it is still switching.
+      if (!nextView.destinations.find((d) => d.id === destId)?.switching_quality) {
+        onOptimisticSwitch?.(destId, null)
+      }
+      // The engine accepted it: publish that whichever session is showing now.
+      delete draftsRef.current[destId]
+      setAccepted((prev) => ({ ...prev, [destId]: payload }))
       useLive.getState().setGoLiveView(nextView)
       onUpdated?.(nextView)
       onReloadOptions()
       onSaved()
-      if (initialDestId) {
+      const mine = session === sessionRef.current
+      if (selectedIdRef.current === destId) userEditedRef.current = false
+      if (mine && initialDestId) {
         onClose()
-      } else {
+      } else if (mine && selectedIdRef.current === destId) {
         setAppliedNotice(
-          `${selectedDest.name} updated to ${formatModalResFps(effective.width, effective.height, effective.fps)} · ${formatModalRate(effective.kbps)}.`,
+          `${destName} updated to ${formatModalResFps(effective.width, effective.height, effective.fps)} · ${formatModalRate(effective.kbps)}.`,
         )
       }
     } catch (e: unknown) {
-      onOptimisticSwitch?.(selectedDest.id, null)
-      if (e instanceof ApiError) {
-        setApiError(mapQualityApiError(e.code, e.message, selectedDest.name))
-      } else {
-        const msg = e instanceof Error ? e.message : 'Something went wrong.'
-        setApiError(mapQualityApiError(null, msg, selectedDest.name))
+      onOptimisticSwitch?.(destId, null)
+      if (session === sessionRef.current && selectedIdRef.current === destId) {
+        if (e instanceof ApiError) {
+          setApiError(mapQualityApiError(e.code, e.message, destName))
+        } else {
+          const msg = e instanceof Error ? e.message : 'Something went wrong.'
+          setApiError(mapQualityApiError(null, msg, destName))
+        }
       }
     } finally {
       setSubmitting(false)
     }
   }
 
+  // Escape and the browser's own cancel take one step back at a time: an open tip, a question, the
+  // add form, then the dialog.
+  const stepBack = (): 'tip' | 'done' => {
+    if (dialogRef.current?.querySelector('[aria-expanded="true"]')) return 'tip'
+    if (confirmRemoveId) {
+      setConfirmRemoveId(null)
+    } else if (ctrl.saver.ask) {
+      ctrl.saver.dismissAsk()
+    } else if (rightView === 'add') {
+      handleCancel()
+    } else {
+      onClose()
+    }
+    return 'done'
+  }
+
   const handleKeyDown = (e: ReactKeyboardEvent<HTMLDialogElement>) => {
     if (e.key === 'Escape') {
+      // An open tip handles its own Escape first.
+      if (dialogRef.current?.querySelector('[aria-expanded="true"]')) return
       e.stopPropagation()
       e.preventDefault()
-      if (confirmRemoveId) {
-        setConfirmRemoveId(null)
-        return
-      }
-      if (ctrl.saver.ask) {
-        ctrl.saver.dismissAsk()
-        return
-      }
-      onClose()
+      stepBack()
       return
     }
     if (e.key === 'Tab' && dialogRef.current) {
@@ -450,7 +604,11 @@ export function PlatformsQualityModal({
           'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ),
       ).filter(
-        (el) => !el.closest('[inert]') && el.getAttribute('aria-hidden') !== 'true' && !el.hidden,
+        (el) =>
+          !el.closest('[inert]') &&
+          el.getAttribute('aria-hidden') !== 'true' &&
+          !el.hidden &&
+          el.getClientRects().length > 0,
       )
       if (focusables.length === 0) return
       const first = focusables[0]!
@@ -495,7 +653,7 @@ export function PlatformsQualityModal({
       aria-labelledby={headingId}
       onCancel={(e) => {
         e.preventDefault()
-        onClose()
+        stepBack()
       }}
       onClick={(e) => {
         if (e.target === dialogRef.current) onClose()
@@ -533,12 +691,52 @@ export function PlatformsQualityModal({
             </IconButton>
           </div>
 
+          {/* A question about the list (the upload may not carry it, or it is the last platform). It sits above both panes so it is seen on every step. */}
+          {ctrl.saver.ask && (
+            <div
+              role="alert"
+              data-save-question=""
+              className="mx-5 mt-3 flex shrink-0 flex-col gap-2.5 rounded-[12px] border border-warn/45 bg-warn-soft/35 p-3.5"
+            >
+              <div className="flex items-start gap-2">
+                <Warning
+                  size={17}
+                  weight="fill"
+                  className="mt-0.5 shrink-0 text-warn"
+                  aria-hidden
+                />
+                <div className="min-w-0 text-[13px] leading-snug">
+                  <p className="m-0 font-semibold text-text">
+                    {ctrl.saver.last
+                      ? 'Stop sending to your last platform?'
+                      : 'Your upload may not carry this'}
+                  </p>
+                  <p className="m-0 mt-0.5 text-text-2">
+                    {ctrl.saver.ask.message} {ctrl.saver.ask.hint} {ctrl.saver.askFailed ?? ''}
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button size="xs" variant="outline" onClick={ctrl.saver.dismissAsk}>
+                  {ctrl.saver.last ? 'Keep it on' : 'Not now'}
+                </Button>
+                <Button
+                  size="xs"
+                  variant={ctrl.saver.last ? 'danger' : 'primary'}
+                  busy={ctrl.saver.askBusy}
+                  onClick={ctrl.saver.confirmAsk}
+                >
+                  {ctrl.saver.last ? 'Stop sending' : 'Add it anyway'}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Two-Pane Body (Side-by-side Desktop, Smooth 2-Step Drawer <= 820px) */}
           <div className="fc-om-stage">
             <div className="fc-om-panes" data-step={mobileStep}>
               {/* LEFT PANE: Platform List & Global Toggles */}
               <div
-                id="golive-platforms"
                 className="fc-om-pane-l"
                 inert={isCompact && mobileStep === 'editor' ? true : undefined}
               >
@@ -551,8 +749,11 @@ export function PlatformsQualityModal({
                     variant="outline"
                     icon={<Plus size={13} />}
                     aria-label="Add a destination"
+                    disabled={isRemote}
+                    title={isRemote ? 'Add a destination from your PC.' : undefined}
                     onClick={() => {
                       addState.reset()
+                      setAddTarget(canvasFilter === 'vertical' ? 'vertical' : 'main')
                       setConfirmRemoveId(null)
                       setRightView('add')
                       if (isCompact) setMobileStep('editor')
@@ -667,13 +868,14 @@ export function PlatformsQualityModal({
                                 size="xs"
                                 variant="ghost"
                                 aria-label={`Test connection to ${d.name}`}
+                                title={`Test connection to ${d.name}`}
                                 busy={ctrl.busy === `test:${d.id}`}
                                 onClick={() => ctrl.test(d)}
                               >
                                 <Pulse size={14} aria-hidden />
                               </Button>
                             )}
-                            {d.kind === 'custom' && (
+                            {d.kind === 'custom' && !isRemote && (
                               <IconButton
                                 size="xs"
                                 variant="ghost"
@@ -691,7 +893,11 @@ export function PlatformsQualityModal({
                               label={`Stream to ${d.name}`}
                               hideLabel
                               checked={d.enabled}
-                              disabled={ctrl.busy === 'order' || (!d.enabled && Boolean(d.blocked))}
+                              disabled={
+                                ctrl.busy === 'order' ||
+                                (!d.enabled &&
+                                  (Boolean(d.blocked) || (d.kind !== 'custom' && !d.connected)))
+                              }
                               onChange={(on) => ctrl.toggle(d.id, on)}
                             />
                           </div>
@@ -745,47 +951,6 @@ export function PlatformsQualityModal({
                 className="fc-om-pane-r"
                 inert={isCompact && mobileStep === 'list' ? true : undefined}
               >
-                {/* Inline Live Toggle Confirmation (replaces nested saver.dialog) */}
-                {ctrl.saver.ask && (
-                  <div
-                    role="alert"
-                    className="mx-5 mt-4 flex flex-col gap-2.5 rounded-[12px] border border-warn/45 bg-warn-soft/35 p-3.5"
-                  >
-                    <div className="flex items-start gap-2">
-                      <Warning
-                        size={17}
-                        weight="fill"
-                        className="mt-0.5 shrink-0 text-warn"
-                        aria-hidden
-                      />
-                      <div className="min-w-0 text-[13px] leading-snug">
-                        <p className="m-0 font-semibold text-text">
-                          {ctrl.saver.last
-                            ? 'Stop sending to your last platform?'
-                            : 'Your upload may not carry this'}
-                        </p>
-                        <p className="m-0 mt-0.5 text-text-2">
-                          {ctrl.saver.ask.message} {ctrl.saver.ask.hint}{' '}
-                          {ctrl.saver.askFailed ?? ''}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-2">
-                      <Button size="xs" variant="outline" onClick={ctrl.saver.dismissAsk}>
-                        {ctrl.saver.last ? 'Keep it on' : 'Not now'}
-                      </Button>
-                      <Button
-                        size="xs"
-                        variant={ctrl.saver.last ? 'danger' : 'primary'}
-                        busy={ctrl.saver.askBusy}
-                        onClick={ctrl.saver.confirmAsk}
-                      >
-                        {ctrl.saver.last ? 'Stop sending' : 'Add it anyway'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
                 {/* Inline Remove Custom Destination Confirm (replaces nested Remove dialog) */}
                 {confirmRemoveDest && (
                   <div
@@ -838,7 +1003,7 @@ export function PlatformsQualityModal({
                       </div>
                     </div>
                     <div className="fc-om-rbody">
-                      <AddDestinationFormBody state={addState} canvas={addCanvas} />
+                      <AddDestinationFormBody state={addState} canvas={addTarget} />
                     </div>
                     <div className="fc-om-rfoot">
                       <span className="flex items-center gap-1.5 text-[12px] text-text-2">
@@ -915,17 +1080,6 @@ export function PlatformsQualityModal({
                         </div>
                       )}
 
-                      {loading && !optionsResponse && (
-                        <div
-                          data-testid="quality-loading"
-                          role="status"
-                          className="mb-3 flex flex-col gap-2.5"
-                        >
-                          <Skeleton className="h-9 w-full rounded-[10px]" />
-                          <Skeleton className="h-24 w-full rounded-[12px]" />
-                        </div>
-                      )}
-
                       {(!selectedDest.connected || selectedDest.blocked) && (
                         <div className="mb-3 flex items-start gap-2 rounded-[10px] border border-line bg-surface-2 px-3 py-2.5 text-[12.5px] text-text-2">
                           <WarningCircle
@@ -936,7 +1090,15 @@ export function PlatformsQualityModal({
                           />
                           <span>
                             {selectedDest.blocked ??
-                              `Connect ${selectedDest.name} in Settings, Accounts to stream there.`}
+                              `Connect ${selectedDest.name} in Settings, Accounts to stream there.`}{' '}
+                            {!selectedDest.connected && selectedDest.kind !== 'custom' && (
+                              <a
+                                href="#/settings/accounts"
+                                className="font-semibold text-accent-text hover:underline"
+                              >
+                                Connect
+                              </a>
+                            )}
                           </span>
                         </div>
                       )}
@@ -1010,38 +1172,43 @@ export function PlatformsQualityModal({
                                 Try again
                               </Button>
                             )}
-                            {apiError.canClamp && (
+                            {apiError.canClamp && clampFix && (
                               <Button
                                 size="xs"
                                 variant="outline"
-                                onClick={() => {
-                                  const clamped = evalResult.hardLimit?.fixedDraft ?? {
-                                    ...draft,
-                                    matchMain: false,
-                                    kbps: Math.min(draft.kbps, model.bitrateHardMaxKbps),
-                                  }
-                                  commitDraft(clamped)
-                                }}
+                                data-clamp-fix=""
+                                onClick={() => commitDraft(clampFix.draft)}
                               >
-                                Use {formatModalRate(model.bitrateHardMaxKbps)}
+                                {clampFix.label}
                               </Button>
                             )}
-                            {apiError.kind === 'budget' && evalResult.budgetExceeded?.peer && (
+                            {apiError.kind === 'budget' && evalResult.peerCandidate && (
                               <Button
                                 size="xs"
                                 variant="outline"
-                                onClick={() =>
-                                  void handleApply(evalResult.budgetExceeded!.peer!.quality)
-                                }
+                                data-match-peer=""
+                                onClick={() => void handleApply(evalResult.peerCandidate!.quality)}
                               >
-                                {evalResult.budgetExceeded.matchLabel}
+                                Match {evalResult.peerCandidate.name} ·{' '}
+                                {evalResult.peerCandidate.label}
                               </Button>
                             )}
                           </div>
                         </div>
                       )}
 
-                      {activeLockedReason ? (
+                      {loading && !optionsResponse && !usesObs ? (
+                        <div
+                          data-testid="quality-loading"
+                          role="status"
+                          aria-label="Loading quality options"
+                          className="flex flex-col gap-4"
+                        >
+                          <Skeleton className="h-9 w-full rounded-[10px]" />
+                          <Skeleton className="h-[132px] w-full rounded-[12px]" />
+                          <Skeleton className="h-16 w-full rounded-[12px]" />
+                        </div>
+                      ) : activeLockedReason ? (
                         <div className="flex flex-col gap-3 rounded-[12px] border border-line bg-surface-2 p-4">
                           <div className="flex items-start gap-2.5">
                             <LockSimple
@@ -1085,13 +1252,20 @@ export function PlatformsQualityModal({
                                 e.key === 'ArrowUp'
                               ) {
                                 e.preventDefault()
-                                commitDraft({ ...draft, matchMain: !draft.matchMain })
+                                const nextMatch = !draft.matchMain
+                                commitDraft({ ...draft, matchMain: nextMatch })
+                                // Focus follows the choice, as in a native radio group.
+                                radioRefs.current[nextMatch ? 'match' : 'own']?.focus()
                               }
                             }}
                           >
                             <button
                               type="button"
                               role="radio"
+                              ref={(el) => {
+                                radioRefs.current.match = el
+                              }}
+                              tabIndex={draft.matchMain ? 0 : -1}
                               aria-checked={draft.matchMain}
                               onClick={() => commitDraft({ ...draft, matchMain: true })}
                               className={cx('fc-om-srcopt', draft.matchMain && 'is-on')}
@@ -1101,6 +1275,10 @@ export function PlatformsQualityModal({
                             <button
                               type="button"
                               role="radio"
+                              ref={(el) => {
+                                radioRefs.current.own = el
+                              }}
+                              tabIndex={draft.matchMain ? -1 : 0}
                               aria-checked={!draft.matchMain}
                               onClick={() => commitDraft({ ...draft, matchMain: false })}
                               className={cx('fc-om-srcopt', !draft.matchMain && 'is-on')}
@@ -1108,6 +1286,22 @@ export function PlatformsQualityModal({
                               Set my own
                             </button>
                           </div>
+
+                          {evalResult.engineBlock && (
+                            <div
+                              role="status"
+                              data-engine-block=""
+                              className="flex items-start gap-2 rounded-[10px] border border-warn/40 bg-warn-soft/50 px-3 py-2 text-[12.5px] text-text"
+                            >
+                              <Warning
+                                size={15}
+                                weight="fill"
+                                className="mt-0.5 shrink-0 text-warn"
+                                aria-hidden
+                              />
+                              <span>{evalResult.engineBlock.reason}</span>
+                            </div>
+                          )}
 
                           {draft.matchMain ? (
                             <div className="flex flex-col gap-3">
@@ -1433,19 +1627,26 @@ export function PlatformsQualityModal({
                                     type="number"
                                     aria-label="Bitrate in Mbps"
                                     min={Number((model.bitrateMinKbps / 1000).toFixed(1))}
-                                    max={51}
+                                    max={MAX_CUSTOM_KBPS / 1000}
                                     step={0.5}
-                                    value={Number((draft.kbps / 1000).toFixed(1))}
+                                    value={
+                                      kbpsText ?? String(Number((draft.kbps / 1000).toFixed(1)))
+                                    }
                                     onChange={(e) => {
-                                      if (e.target.value.trim() === '') return
-                                      const m = Number(e.target.value)
-                                      if (!Number.isFinite(m)) return
-                                      commitDraft({
-                                        ...draft,
-                                        matchMain: false,
-                                        kbps: Math.round(m * 1000),
-                                      })
+                                      // What is typed stays as typed (so it can be cleared and "4."
+                                      // can become "4.5"); only a real number changes the draft.
+                                      const raw = e.target.value
+                                      const m = Number(raw)
+                                      if (raw.trim() !== '' && Number.isFinite(m) && m > 0) {
+                                        commitDraft({
+                                          ...draft,
+                                          matchMain: false,
+                                          kbps: Math.round(m * 1000),
+                                        })
+                                      }
+                                      setKbpsText(raw)
                                     }}
+                                    onBlur={() => setKbpsText(null)}
                                     className={cx(
                                       'h-8 w-24 rounded-[8px] border bg-surface-2 px-2.5 font-mono text-[13px] font-semibold text-text tabular-nums focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
                                       evalResult.hardLimit?.kind === 'bitrate'
@@ -1484,12 +1685,8 @@ export function PlatformsQualityModal({
                                         >
                                           {ceilingPct < 100 && (
                                             <div
-                                              className="absolute inset-y-0 right-0 opacity-75"
-                                              style={{
-                                                left: `${ceilingPct}%`,
-                                                background:
-                                                  'repeating-linear-gradient(-45deg, var(--fc-danger-soft), var(--fc-danger-soft) 4px, transparent 4px, transparent 8px)',
-                                              }}
+                                              className="fc-golive-bitrate-hatch absolute inset-y-0 right-0"
+                                              style={{ left: `${ceilingPct}%` }}
                                             />
                                           )}
                                           <div
@@ -1507,6 +1704,9 @@ export function PlatformsQualityModal({
                                     <input
                                       type="range"
                                       aria-label="Bitrate slider in Mbps"
+                                      aria-valuetext={formatModalRate(
+                                        Math.min(draft.kbps, model.bitrateRangeMaxKbps),
+                                      )}
                                       min={model.bitrateMinKbps}
                                       max={model.bitrateRangeMaxKbps}
                                       step={250}
@@ -1519,7 +1719,11 @@ export function PlatformsQualityModal({
                                           raw > model.bitrateHardMaxKbps
                                         ) {
                                           setSliderShaking(true)
-                                          window.setTimeout(() => setSliderShaking(false), 300)
+                                          window.clearTimeout(sliderTimerRef.current)
+                                          sliderTimerRef.current = window.setTimeout(
+                                            () => setSliderShaking(false),
+                                            300,
+                                          )
                                           setClampNotice(
                                             `Clamped at ${formatModalRate(model.bitrateHardMaxKbps)}, ${selectedDest.name}’s maximum.`,
                                           )
@@ -1535,7 +1739,7 @@ export function PlatformsQualityModal({
                                       }}
                                       className={cx(
                                         'fc-golive-range relative z-10 w-full',
-                                        sliderShaking && 'animate-pulse',
+                                        sliderShaking && 'fc-golive-track-shake',
                                       )}
                                     />
                                   </div>
@@ -1579,7 +1783,11 @@ export function PlatformsQualityModal({
                           size="sm"
                           data-apply-quality=""
                           busy={isSelectedBusy}
-                          disabled={!evalResult.canApply || Boolean(activeLockedReason)}
+                          disabled={
+                            !evalResult.canApply ||
+                            Boolean(activeLockedReason) ||
+                            (loading && !optionsResponse)
+                          }
                           className="[&:not(:disabled)]:!text-white"
                           onClick={() => void handleApply()}
                         >

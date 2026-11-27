@@ -269,8 +269,13 @@ export function useQualityOptions(
 
   const sig = qualityOptionsSig(view)
 
+  const startedAtRef = useRef(0)
   const reload = useCallback(async () => {
     if (!enabled || usesObs || !client || !view) return
+    // Two callers asking in the same moment (a screen turning the feed on and a dialog opening)
+    // share one request.
+    if (Date.now() - startedAtRef.current < 50) return
+    startedAtRef.current = Date.now()
     const id = ++reqIdRef.current
     setLoading(true)
     setError(null)

@@ -35,7 +35,7 @@ export interface DialogProps {
 let scrollLocks = 0
 
 /** Stops the page behind a dialog scrolling (wheel and touch scroll chain to it otherwise). */
-function lockPageScroll(): () => void {
+export function lockPageScroll(): () => void {
   const root = document.documentElement
   if (scrollLocks++ === 0) {
     // Keeps the scrollbar's space, so the page doesn't shift sideways.

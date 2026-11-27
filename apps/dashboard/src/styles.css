@@ -747,15 +747,6 @@ body[data-scene-drag] iframe {
 }
 
 /* Go live List 3b + Quality Modal A surfaces and controls. */
-.fc-golive-hatch {
-  background-color: var(--fc-surface-inset);
-  background-image: repeating-linear-gradient(
-    -45deg,
-    transparent 0 5px,
-    color-mix(in oklab, var(--fc-line-strong) 48%, transparent) 5px 6px
-  );
-}
-
 .fc-golive-bitrate-hatch {
   background-color: color-mix(in oklab, var(--fc-danger) 10%, transparent);
   background-image: repeating-linear-gradient(
@@ -999,7 +990,7 @@ body[data-scene-drag] iframe {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  overscroll-contain: contain;
+  overscroll-behavior: contain;
   margin: 0;
   padding: 10px 12px;
   list-style: none;
@@ -1072,7 +1063,7 @@ body[data-scene-drag] iframe {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  overscroll-contain: contain;
+  overscroll-behavior: contain;
   padding: 16px 18px;
 }
 

@@ -10,6 +10,7 @@ import {
 import { useLive } from '../../lib/store'
 import { buildQualitySummaryText } from './quality-modal-model'
 import { PlatformsQualityModal } from './platforms-quality-modal'
+import { useQualityOptions } from './platform-shared'
 
 let root: Root | null = null
 let host: HTMLDivElement | null = null
@@ -771,5 +772,279 @@ describe('One Modal B PlatformsQualityModal component', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(dialog.querySelector('[role="alert"]')?.textContent).toContain("Couldn't switch Twitch")
     expect(dialog.textContent).toContain('Try again')
+  })
+
+  describe('one session at a time', () => {
+    type ModalProps = React.ComponentProps<typeof PlatformsQualityModal>
+    const base = (over: Partial<ModalProps> = {}): ModalProps => ({
+      open: true,
+      onClose: () => {},
+      view: makeView(),
+      onSaved: () => {},
+      usesObs: false,
+      optionsResponse: OPTS_1440,
+      loading: false,
+      error: null,
+      onReloadOptions: () => {},
+      ...over,
+    })
+    async function show(over: Partial<ModalProps> = {}, request?: (...a: never[]) => unknown) {
+      installDialogPolyfill()
+      useLive.setState({
+        conn: { client: { request: request ?? vi.fn(async () => ({})) } } as never,
+      })
+      ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+      host = document.createElement('div')
+      document.body.appendChild(host)
+      root = createRoot(host)
+      await act(async () => root!.render(<PlatformsQualityModal {...base(over)} />))
+      return document.querySelector<HTMLDialogElement>('dialog[open]')!
+    }
+    const rerender = async (over: Partial<ModalProps>) =>
+      act(async () => root!.render(<PlatformsQualityModal {...base(over)} />))
+    const setOwn = async (dialog: HTMLElement) => {
+      const radio = Array.from(dialog.querySelectorAll<HTMLButtonElement>('[role="radio"]')).find(
+        (b) => b.textContent?.includes('Set my own'),
+      )!
+      await act(async () => radio.click())
+    }
+    const typeMbps = async (dialog: HTMLElement, value: string) => {
+      const input = dialog.querySelector<HTMLInputElement>('input[type="number"]')!
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype,
+          'value',
+        )!.set!
+        setter.call(input, value)
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      return input
+    }
+    const apply = (dialog: HTMLElement) =>
+      Array.from(dialog.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === 'Apply',
+      )!
+
+    it('locks the editor when OBS sets the quality, so Apply cannot send a change', async () => {
+      const dialog = await show({ usesObs: true, optionsResponse: null })
+      expect(dialog.textContent).toContain('OBS sets the resolution')
+      expect(dialog.querySelector('[role="radio"]')).toBeNull()
+      expect(apply(dialog).disabled).toBe(true)
+    })
+
+    it('keeps a paired phone from editing quality, adding or removing from the dialog', async () => {
+      const dialog = await show({ isRemote: true })
+      expect(dialog.textContent).toContain('Change destination quality from your PC.')
+      expect(
+        dialog.querySelector<HTMLButtonElement>('[aria-label="Add a destination"]')!.disabled,
+      ).toBe(true)
+      expect(apply(dialog).disabled).toBe(true)
+    })
+
+    it('keeps edits per platform while the dialog is open and drops them when it reopens', async () => {
+      const dialog = await show({ initialDestId: 'twitch' })
+      await setOwn(dialog)
+      await typeMbps(dialog, '4')
+      const pick = async (id: string) =>
+        act(async () =>
+          dialog.querySelector<HTMLButtonElement>(`[data-select-platform="${id}"]`)!.click(),
+        )
+      await pick('youtube')
+      expect(dialog.textContent).toContain('YouTube quality')
+      await pick('twitch')
+      expect(dialog.querySelector<HTMLInputElement>('input[type="number"]')!.value).toBe('4')
+
+      await rerender({ open: false, initialDestId: 'twitch' })
+      await rerender({ open: true, initialDestId: 'twitch' })
+      // Back to what is saved: Match main, no bitrate box.
+      expect(dialog.querySelector('input[type="number"]')).toBeNull()
+      expect(apply(dialog).disabled).toBe(true)
+    })
+
+    it('lets the bitrate box be cleared and typed with a decimal', async () => {
+      const dialog = await show({ initialDestId: 'twitch' })
+      await setOwn(dialog)
+      const input = await typeMbps(dialog, '')
+      expect(input.value).toBe('')
+      await typeMbps(dialog, '4.5')
+      expect(input.value).toBe('4.5')
+      expect(dialog.textContent).toContain('Twitch gets')
+      expect(dialog.textContent).toContain('4.5 Mbps')
+      // The engine takes up to 60 Mbps for a custom server.
+      expect(input.max).toBe('60')
+    })
+
+    it('does not let a finished save close a dialog that was reopened for another platform', async () => {
+      let finish: (v: unknown) => void = () => {}
+      const request = vi.fn(async (method: string, path: string) => {
+        if (method === 'PUT' && path.includes('/destinations/twitch/quality')) {
+          return new Promise((resolve) => {
+            finish = resolve
+          })
+        }
+        return {}
+      })
+      const onClose = vi.fn()
+      const dialog = await show({ initialDestId: 'twitch', onClose }, request as never)
+      await act(async () =>
+        dialog.querySelector<HTMLButtonElement>('[data-soft-fix="1080p"]')!.click(),
+      )
+      await act(async () => {
+        apply(dialog).click()
+      })
+      await rerender({ open: false, initialDestId: 'twitch', onClose })
+      await rerender({ open: true, initialDestId: 'youtube', onClose })
+      await act(async () => {
+        finish(makeView())
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(onClose).not.toHaveBeenCalled()
+      expect(dialog.textContent).toContain('YouTube quality')
+    })
+
+    it('shows the question about the list above both panes, so a phone sees it on the list step', async () => {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn((q: string) => ({
+          matches: q.includes('max-width: 820px'),
+          media: q,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+        })),
+      )
+      const request = vi.fn(async (method: string, path: string) => {
+        if (method === 'PUT' && path.endsWith('/golive/destinations')) {
+          throw new ApiError(409, 'golive_last_destination', 'That is the last one.', 'Confirm.')
+        }
+        return {}
+      })
+      const dialog = await show({ view: makeView({ live: true }) }, request as never)
+      expect(dialog.querySelector('[data-step]')!.getAttribute('data-step')).toBe('list')
+      const toggles = dialog.querySelectorAll<HTMLInputElement>('.fc-om-pane-l [role="switch"]')
+      await act(async () => {
+        toggles[0]!.click()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      const ask = dialog.querySelector('[data-save-question]')
+      expect(ask).not.toBeNull()
+      expect(ask!.closest('.fc-om-pane-r')).toBeNull()
+      // Closing drops the question; reopening does not bring it back.
+      await rerender({ open: false })
+      await rerender({ open: true })
+      expect(dialog.querySelector('[data-save-question]')).toBeNull()
+    })
+
+    it('goes back from the add form with Escape, and lets an open tip take its own Escape', async () => {
+      const onClose = vi.fn()
+      const dialog = await show({ onClose })
+      await act(async () =>
+        dialog.querySelector<HTMLButtonElement>('[aria-label="Add a destination"]')!.click(),
+      )
+      expect(dialog.textContent).toContain('Paste a server address')
+      await act(async () => {
+        dialog.dispatchEvent(new Event('cancel', { cancelable: true }))
+      })
+      expect(onClose).not.toHaveBeenCalled()
+      expect(dialog.textContent).not.toContain('Paste a server address')
+
+      // A tip that is open keeps Escape for itself.
+      const tipBtn = dialog.querySelector<HTMLButtonElement>('button[aria-label]')!
+      tipBtn.setAttribute('aria-expanded', 'true')
+      await act(async () => {
+        dialog.dispatchEvent(new Event('cancel', { cancelable: true }))
+      })
+      expect(onClose).not.toHaveBeenCalled()
+      tipBtn.setAttribute('aria-expanded', 'false')
+      await act(async () => {
+        dialog.dispatchEvent(new Event('cancel', { cancelable: true }))
+      })
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    it('adds to the picture the list belongs to, and a plain Add after a vertical add goes to main', async () => {
+      const typeUrl = async (dialog: HTMLElement, value: string) => {
+        const input = dialog.querySelector<HTMLInputElement>('input[name="url"]')!
+        await act(async () => {
+          const setter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype,
+            'value',
+          )!.set!
+          setter.call(input, value)
+          input.dispatchEvent(new Event('input', { bubbles: true }))
+        })
+      }
+      const onlyMain = 'sends the main picture only'
+      // Vertical list: the form targets the vertical picture, which cannot take SRT.
+      let dialog = await show({ canvasFilter: 'vertical', addCanvas: 'vertical' })
+      await act(async () =>
+        dialog.querySelector<HTMLButtonElement>('[aria-label="Add a destination"]')!.click(),
+      )
+      await typeUrl(dialog, 'srt://host:9000')
+      expect(dialog.textContent).toContain(onlyMain)
+      await act(async () => root!.unmount())
+      host!.remove()
+      document.body.innerHTML = ''
+
+      // Opened to add a vertical one, cancelled, then a plain Add: back to the main picture.
+      dialog = await show({ initialMode: 'add', addCanvas: 'vertical' })
+      await typeUrl(dialog, 'srt://host:9000')
+      expect(dialog.textContent).toContain(onlyMain)
+      await act(async () =>
+        Array.from(dialog.querySelectorAll<HTMLButtonElement>('button'))
+          .find((b) => b.textContent?.trim() === 'Cancel')!
+          .click(),
+      )
+      await act(async () =>
+        dialog.querySelector<HTMLButtonElement>('[aria-label="Add a destination"]')!.click(),
+      )
+      await typeUrl(dialog, 'srt://host:9000')
+      expect(dialog.textContent).not.toContain(onlyMain)
+    })
+
+    it('gives the bitrate slider a spoken value in Mbps and keeps one radio in the tab order', async () => {
+      const dialog = await show({ initialDestId: 'twitch' })
+      await setOwn(dialog)
+      const range = dialog.querySelector<HTMLInputElement>('input[type="range"]')!
+      expect(range.getAttribute('aria-valuetext')).toMatch(/Mbps$/)
+      const radios = Array.from(dialog.querySelectorAll<HTMLButtonElement>('[role="radio"]'))
+      expect(radios.map((r) => r.tabIndex)).toEqual([-1, 0])
+    })
+  })
+
+  it('shares one options request between callers that ask in the same moment', async () => {
+    installDialogPolyfill()
+    const request = vi.fn(async () => OPTS_1440)
+    useLive.setState({ conn: { client: { request } } as never })
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    function Probe() {
+      const q = useQualityOptions(makeView(), true, false)
+      return (
+        <button
+          onClick={() => {
+            void q.reload()
+            void q.reload()
+          }}
+        >
+          reload twice
+        </button>
+      )
+    }
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    await act(async () => root!.render(<Probe />))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    request.mockClear()
+    await new Promise((r) => setTimeout(r, 60))
+    await act(async () => host!.querySelector('button')!.click())
+    expect(request).toHaveBeenCalledTimes(1)
   })
 })
