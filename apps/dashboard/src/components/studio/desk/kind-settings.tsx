@@ -527,7 +527,9 @@ function ItsSound({
   return (
     <div className="flex h-9 items-center gap-2 border-b border-line pr-2.5 pl-3 text-[12.5px]">
       <span className="w-[7.75rem] shrink-0 font-semibold text-text-2">Its sound</span>
-      <span className="min-w-0 flex-1 truncate font-semibold text-text">{match}</span>
+      <span className="min-w-0 flex-1 truncate font-semibold text-text" title={match}>
+        {match}
+      </span>
       <button
         type="button"
         aria-label={`Open ${match}`}
@@ -625,7 +627,7 @@ function LastRead({ name, values }: { name: string; values: EngineSettings }) {
   if (!st) return null
   if (!r)
     return (
-      <div className="flex h-9 items-center gap-2 border-b border-line px-3 text-[12px] text-text-3">
+      <div className="flex min-h-9 items-center gap-2 border-b border-line px-3 py-1.5 text-[12px] text-text-3">
         <span aria-hidden className="size-1.5 rounded-full bg-text-3" /> Not read yet
       </div>
     )
@@ -633,10 +635,10 @@ function LastRead({ name, values }: { name: string; values: EngineSettings }) {
     <div
       role="status"
       title={r.error}
-      className="flex h-9 items-center gap-2 border-b border-[color-mix(in_oklab,var(--fc-danger)_30%,transparent)] bg-danger-soft px-3 text-[12px] font-semibold text-danger"
+      className="flex min-h-9 items-center gap-2 border-b border-[color-mix(in_oklab,var(--fc-danger)_30%,transparent)] bg-danger-soft px-3 py-1.5 text-[12px] font-semibold text-danger"
     >
       <WarningCircle size={14} weight="bold" aria-hidden className="shrink-0" />
-      <span className="truncate">Couldn’t read it: {r.error}</span>
+      <span className="min-w-0 break-words">Couldn’t read it: {r.error}</span>
       <span className="ml-auto shrink-0 font-mono text-[11px] font-normal">
         {ago(r.at_ms, now)}
       </span>
@@ -644,7 +646,7 @@ function LastRead({ name, values }: { name: string; values: EngineSettings }) {
   ) : (
     <div
       role="status"
-      className="flex h-9 items-center gap-2 border-b border-line px-3 text-[12px] text-text-2"
+      className="flex min-h-9 items-center gap-2 border-b border-line px-3 py-1.5 text-[12px] text-text-2"
     >
       <span
         aria-hidden
@@ -982,7 +984,9 @@ function KeyLayouts({
               ) : (
                 <Keyboard size={22} aria-hidden className="text-text-3" />
               )}
-              <span className="max-w-full truncate">{label}</span>
+              <span className="max-w-full truncate" title={label}>
+                {label}
+              </span>
             </button>
           )
         })}

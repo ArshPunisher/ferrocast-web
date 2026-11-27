@@ -68,7 +68,7 @@ export function Prop({
 }) {
   const id = useId()
   return (
-    <div className="grid h-9 grid-cols-[7.75rem_minmax(0,1fr)] items-center gap-x-2.5 border-b border-line pr-2.5 pl-3">
+    <div className="grid min-h-9 grid-cols-[7.75rem_minmax(0,1fr)] items-center gap-x-2.5 border-b border-line pr-2.5 pl-3">
       <span className="flex min-w-0 items-center gap-1">
         <label
           htmlFor={id}
@@ -123,11 +123,11 @@ export function Seg<T extends string | number>({
             disabled={disabled}
             onClick={() => onChange(o.value)}
             className={cx(
-              'flex min-w-0 flex-1 items-center justify-center gap-1 truncate rounded-[4px] px-1.5 text-[12px] font-semibold whitespace-nowrap outline-none transition-colors focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50',
+              'flex min-w-0 flex-1 items-center justify-center gap-1 rounded-[4px] px-1.5 text-[12px] font-semibold whitespace-nowrap outline-none transition-colors focus-visible:shadow-[var(--fc-focus)] disabled:opacity-50',
               on ? 'fc-picked' : 'text-text-2 hover:bg-surface-3 hover:text-text',
             )}
           >
-            {o.label}
+            <span className="min-w-0 truncate">{o.label}</span>
           </button>
         )
       })}
@@ -578,24 +578,26 @@ export function PositionTab({ scene, item }: { scene: string; item: EngineItem }
       )}
       <Band icon={Crop} tone="var(--fc-warn)" title="Crop" />
       <Prop label="Edges" hint="Cuts this much off each side of it, in the source's own pixels.">
-        {(
-          [
-            ['crop_left', 'L', 'Crop left'],
-            ['crop_top', 'T', 'Crop top'],
-            ['crop_right', 'R', 'Crop right'],
-            ['crop_bottom', 'B', 'Crop bottom'],
-          ] as const
-        ).map(([key, letter, label]) => (
-          <NumBox
-            key={key}
-            label={label}
-            letter={letter}
-            value={t[key]}
-            min={0}
-            disabled={off}
-            onChange={(n) => set({ [key]: Math.round(n) })}
-          />
-        ))}
+        <div className="grid w-full grid-cols-2 gap-1.5 py-1.5">
+          {(
+            [
+              ['crop_left', 'L', 'Crop left'],
+              ['crop_top', 'T', 'Crop top'],
+              ['crop_right', 'R', 'Crop right'],
+              ['crop_bottom', 'B', 'Crop bottom'],
+            ] as const
+          ).map(([key, letter, label]) => (
+            <NumBox
+              key={key}
+              label={label}
+              letter={letter}
+              value={t[key]}
+              min={0}
+              disabled={off}
+              onChange={(n) => set({ [key]: Math.round(n) })}
+            />
+          ))}
+        </div>
       </Prop>
       {off && (
         <p className="m-0 px-3 py-2.5 text-[12px] text-text-3">

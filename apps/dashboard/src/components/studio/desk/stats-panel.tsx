@@ -429,10 +429,15 @@ export function StatsDialog({
                 {busiest.map((b, i) => {
                   const heavy = i === 0 && hint !== null
                   return (
-                    <li key={b.name} className="flex items-center gap-3 py-2 text-[14px]">
-                      <span className="flex w-44 min-w-0 items-center gap-2">
+                    <li
+                      key={b.name}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[14px]"
+                    >
+                      <span className="flex min-w-0 flex-1 basis-40 items-center gap-2 sm:w-44 sm:flex-none sm:basis-auto">
                         <KindTile kind={kinds.get(b.name)} size={22} />
-                        <span className="min-w-0 truncate font-semibold">{b.name}</span>
+                        <span className="min-w-0 truncate font-semibold" title={b.name}>
+                          {b.name}
+                        </span>
                         {heavy && (
                           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warn-soft px-2 py-0.5 text-[11.5px] font-bold text-warn">
                             <Lightning size={11} weight="fill" aria-hidden />
@@ -440,7 +445,7 @@ export function StatsDialog({
                           </span>
                         )}
                       </span>
-                      <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-3">
+                      <span className="h-1.5 min-w-16 flex-1 overflow-hidden rounded-full bg-surface-3">
                         <span
                           className={cx(
                             'block h-full rounded-full',
@@ -451,7 +456,10 @@ export function StatsDialog({
                           }}
                         />
                       </span>
-                      <span className="shrink-0 font-mono text-[13px] text-text-2 tabular-nums">
+                      <span
+                        className="shrink-0 font-mono text-[13px] text-text-2 tabular-nums"
+                        title={`${b.width}×${b.height} · ${Math.round(b.fps)} fps`}
+                      >
                         {b.width}×{b.height} · {Math.round(b.fps)} fps
                       </span>
                     </li>

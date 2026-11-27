@@ -104,7 +104,7 @@ describe('settings laid out per kind (design A)', () => {
       { every: 30 },
     )
     expect(html.match(/role="radio"/g)).toHaveLength(3)
-    expect(html).toMatch(/aria-checked="true"[^>]*>30 s</)
+    expect(html).toMatch(/aria-checked="true"[^>]*><span[^>]*>30 s</)
   })
 
   it('falls back to one Settings section for a kind without a layout', () => {

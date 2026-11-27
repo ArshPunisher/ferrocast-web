@@ -141,7 +141,9 @@ function Pick({ overlay, onClose }: { overlay: Overlay; onClose: () => void }) {
                     )}
                   >
                     <CardsThree size={16} aria-hidden className="shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                    <span className="min-w-0 flex-1 truncate" title={s.name}>
+                      {s.name}
+                    </span>
                     {on && <Check size={14} weight="bold" aria-hidden />}
                   </button>
                 )
@@ -153,8 +155,16 @@ function Pick({ overlay, onClose }: { overlay: Overlay; onClose: () => void }) {
         <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
-        <Button variant="primary" busy={busy === 'add'} disabled={!scene} onClick={add}>
-          Add to {scene ?? 'scene'}
+        <Button
+          variant="primary"
+          className="min-w-0! shrink!"
+          busy={busy === 'add'}
+          disabled={!scene}
+          onClick={add}
+        >
+          <span className="min-w-0 truncate" title={scene ? `Add to ${scene}` : undefined}>
+            Add to {scene ?? 'scene'}
+          </span>
         </Button>
       </div>
     </div>

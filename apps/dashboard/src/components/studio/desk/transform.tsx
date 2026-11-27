@@ -290,7 +290,7 @@ function Editor({
             value={t.rotation}
             onChange={(r) => set({ rotation: ((r % 360) + 360) % 360 })}
           />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {[
               { label: 'Turn left', d: -90, icon: ArrowCounterClockwise },
               { label: 'Turn right', d: 90, icon: ArrowClockwise },

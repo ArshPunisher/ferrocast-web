@@ -494,7 +494,9 @@ function DeviceTile({
           ) : (
             <KindTile icon={Icon} tone={tone} size={30} />
           )}
-          <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-text">{label}</span>
+          <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-text" title={label}>
+            {label}
+          </span>
           {check}
         </button>
         {capable && stillStatus === 'error' && (
@@ -522,7 +524,7 @@ function DeviceTile({
         type="button"
         aria-pressed={on}
         onClick={onSelect}
-        className="flex flex-1 flex-col text-left active:scale-[0.98] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+        className="flex flex-1 flex-col text-left active:scale-[0.98] focus-visible:shadow-[var(--fc-focus-inset)] focus-visible:outline-none"
       >
         <span
           className="relative grid aspect-video w-full place-items-center overflow-hidden"
@@ -545,7 +547,9 @@ function DeviceTile({
           )}
         </span>
         <span className="flex w-full items-center gap-2 px-3 py-2.5">
-          <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-text">{label}</span>
+          <span className="min-w-0 flex-1 truncate text-[13.5px] font-bold text-text" title={label}>
+            {label}
+          </span>
           {check}
         </span>
       </button>

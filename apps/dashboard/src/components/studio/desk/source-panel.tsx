@@ -332,7 +332,14 @@ function Panel({
               if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
             }}
           />
-          <span className="truncate text-[11.5px] text-text-3">
+          <span
+            className="truncate text-[11.5px] text-text-3"
+            title={
+              [kindName, a?.channel ? 'Every scene' : item ? scene : null]
+                .filter(Boolean)
+                .join(' · ') || '\u00a0'
+            }
+          >
             {[kindName, a?.channel ? 'Every scene' : item ? scene : null]
               .filter(Boolean)
               .join(' · ') || '\u00a0'}
@@ -514,7 +521,7 @@ function Panel({
           <Button
             size="xs"
             variant="ghost"
-            className="text-danger hover:bg-danger-soft"
+            className="min-w-0! shrink! text-danger hover:bg-danger-soft"
             busy={busy === 'remove'}
             onBlur={() => setSure(false)}
             onClick={() =>
@@ -529,7 +536,10 @@ function Panel({
                   )
             }
           >
-            <Trash size={15} /> {sure ? `Sure? Remove from ${scene}` : `Remove from ${scene}`}
+            <Trash size={15} className="shrink-0" />
+            <span className="min-w-0 truncate" title={`Remove from ${scene}`}>
+              {sure ? `Sure? Remove from ${scene}` : `Remove from ${scene}`}
+            </span>
           </Button>
         ) : a?.channel ? (
           <Button
@@ -644,7 +654,9 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
         on ? 'fc-picked' : 'text-text-2 hover:bg-surface-3 hover:text-text',
       )}
     >
-      <span className="truncate">{label}</span>
+      <span className="truncate" title={label}>
+        {label}
+      </span>
     </button>
   )
   return (
@@ -691,7 +703,9 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
                   >
                     {on && <Check size={11} weight="bold" />}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{n}</span>
+                  <span className="min-w-0 flex-1 truncate" title={n}>
+                    {n}
+                  </span>
                 </button>
               )
             })}
@@ -699,12 +713,14 @@ function EverywhereIn({ sound }: { sound: EngineAudio }) {
           <Button
             size="xs"
             variant="primary"
-            className="self-start"
+            className="min-w-0! shrink! self-start"
             disabled={picked.length === 0}
             busy={busy === 'in:some'}
             onClick={() => void move()}
           >
-            Play only in {picked.length === 1 ? picked[0] : `${picked.length} scenes`}
+            <span className="min-w-0 truncate">
+              Play only in {picked.length === 1 ? picked[0] : `${picked.length} scenes`}
+            </span>
           </Button>
         </>
       )}
@@ -764,7 +780,9 @@ function PlaysIn({ name }: { name: string }) {
         on ? 'fc-picked' : 'text-text-2 hover:bg-surface-3 hover:text-text',
       )}
     >
-      <span className="truncate">{label}</span>
+      <span className="truncate" title={label}>
+        {label}
+      </span>
       {extra}
     </button>
   )
@@ -831,7 +849,9 @@ function PlaysIn({ name }: { name: string }) {
                     >
                       {on && <Check size={11} weight="bold" />}
                     </span>
-                    <span className="min-w-0 flex-1 truncate">{s.label}</span>
+                    <span className="min-w-0 flex-1 truncate" title={s.label}>
+                      {s.label}
+                    </span>
                     {s.name === current && (
                       <span
                         aria-label="on air"
@@ -1052,7 +1072,10 @@ function Filters({
             data-testid="filter-scope"
             className="flex items-center gap-1.5 border-b border-line px-3 py-2"
           >
-            <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-text">
+            <span
+              className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-text"
+              title={own ? 'This picture only' : 'Everywhere this source is used'}
+            >
               {own ? 'This picture only' : 'Everywhere this source is used'}
             </span>
             <InfoTip label="About these filters">
@@ -1167,7 +1190,9 @@ function Filters({
                       className="flex min-w-0 flex-1 flex-col items-start text-left"
                     >
                       <span className="flex w-full min-w-0 items-center gap-1 text-[13px] leading-tight font-semibold">
-                        <span className="truncate">{f.name}</span>
+                        <span className="truncate" title={f.name}>
+                          {f.name}
+                        </span>
                         {/* Opens its settings: says so before it's clicked. */}
                         {!NO_FORM.has(f.kind) && (
                           <CaretDown
@@ -1344,9 +1369,13 @@ function AddFilter({
         >
           <Icon size={12} weight="bold" />
         </span>
-        <span className="shrink-0 truncate text-[12.5px] font-semibold">{p.label}</span>
+        <span className="max-w-[55%] shrink-0 truncate text-[12.5px] font-semibold" title={p.label}>
+          {p.label}
+        </span>
         {p.help && (
-          <span className="min-w-0 flex-1 truncate text-[11px] text-text-3">{p.help}</span>
+          <span className="min-w-0 flex-1 truncate text-[11px] text-text-3" title={p.help}>
+            {p.help}
+          </span>
         )}
         {!p.help && <span className="flex-1" />}
         {p.on ? (

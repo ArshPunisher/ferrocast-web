@@ -266,7 +266,7 @@ function CompactNumber({
       <span
         className={cx(
           'flex h-7 shrink-0 items-center rounded-[7px] bg-surface-3 pr-1.5 focus-within:shadow-[var(--fc-focus)]',
-          slider ? 'w-[3.75rem]' : 'w-24',
+          slider ? 'min-w-[4.5rem]' : 'w-24',
         )}
       >
         <input
@@ -717,7 +717,7 @@ function OptionField({
                   max={1000}
                   disabled={off}
                   value={font.size ?? ''}
-                  className="h-7! w-16! shrink-0 rounded-[5px]! px-2! text-right font-mono text-[12px]! tabular-nums"
+                  className="h-7! w-20! shrink-0 rounded-[5px]! px-2! text-right font-mono text-[12px]! tabular-nums"
                   onChange={(e) => {
                     const n = e.target.valueAsNumber
                     if (Number.isFinite(n) && n > 0) set({ ...font, size: Math.round(n) })
@@ -858,9 +858,11 @@ function OptionField({
     default:
       // frame_rate and the rest: shown, edited in a later step.
       return (
-        <Field label={label} hint="Not editable here yet." hintVisible={false}>
-          {(p) => <Input {...p} disabled value={v === undefined ? '' : JSON.stringify(v)} />}
-        </Field>
+        <Block>
+          <Field label={label} hint="Not editable here yet." hintVisible={false}>
+            {(p) => <Input {...p} disabled value={v === undefined ? '' : JSON.stringify(v)} />}
+          </Field>
+        </Block>
       )
   }
 }
