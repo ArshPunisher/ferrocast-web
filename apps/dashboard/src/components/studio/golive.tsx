@@ -84,6 +84,7 @@ import {
   type DestinationRateDisplay,
 } from './bitrate-summary'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
+import { DestinationQualityPicker, useQualityOptions } from './destination-quality-picker'
 import { useSaveOrder } from './save-order'
 import { useStudio } from './common'
 import { useObsHealth } from './obs'
@@ -789,6 +790,19 @@ export function Platforms({
   const ignoreServiceLimits = Boolean(view.advanced?.ignore_service_limits)
   const [mode] = useMode('studio')
   const usesObs = useUsesObs()
+  const isRemote = useLive((s) => s.remote !== null)
+  const qualityOpts = useQualityOptions(view, Boolean(view), usesObs, onSaved)
+  const destinationsById = useMemo(
+    () =>
+      Object.fromEntries(
+        view.destinations.map((dest) => [dest.id, { name: dest.name, kind: dest.kind }]),
+      ),
+    [view.destinations],
+  )
+  const handleQualityUpdated = (nextView: GoLiveView) => {
+    useLive.getState().setGoLiveView(nextView)
+    onSaved()
+  }
   const conn = useLive((s) => s.conn)
   const resyncs = useLive((s) => s.resyncs)
   const [fetchedSettings, setFetchedSettings] = useState<{
@@ -942,6 +956,7 @@ export function Platforms({
                   <div className="min-w-0 flex-1">
                     <RowText
                       d={d}
+                      hideRateBadges={Boolean(d.resolved_quality)}
                       statusBadge={
                         <span
                           className={cx(
@@ -954,6 +969,17 @@ export function Platforms({
                         </span>
                       }
                       rateInfo={rateInfo}
+                    />
+                    <DestinationQualityPicker
+                      dest={d}
+                      qualityResponse={qualityOpts.data}
+                      optionsLoading={qualityOpts.loading}
+                      optionsError={qualityOpts.error}
+                      onReloadOptions={qualityOpts.reload}
+                      onUpdated={handleQualityUpdated}
+                      destinationsById={destinationsById}
+                      usesObs={usesObs}
+                      isRemote={isRemote}
                     />
                     {!streaming &&
                       d.enabled &&
@@ -1321,6 +1347,7 @@ export function RowText({
   compact = false,
   rateInfo,
   statusBadge,
+  hideRateBadges = false,
 }: {
   d: DestinationView
   /** The Studio streams: a button sets its video bitrate to what the warning asks for. */
@@ -1331,6 +1358,8 @@ export function RowText({
   rateInfo?: DestinationRateDisplay | undefined
   /** Explicit status indicator badge on tile rows. */
   statusBadge?: React.ReactNode
+  /** Hide legacy static rate pills when the interactive quality picker chip is shown. */
+  hideRateBadges?: boolean
 }) {
   const platform = d.kind !== 'custom' ? NAMES[d.kind] : null
   const notices = rowNotices(d)
@@ -1405,7 +1434,7 @@ export function RowText({
           Backup for {d.standby_for}: sends only if it can’t
         </span>
       )}
-      {capBadge && (
+      {!hideRateBadges && capBadge && (
         <InfoLine detail={capBadge.detail} label={`About ${d.name} limits`} className="mt-1">
           <span
             className={cx(
@@ -1417,7 +1446,7 @@ export function RowText({
           </span>
         </InfoLine>
       )}
-      {rateInfo?.heldBackNote && (
+      {!hideRateBadges && rateInfo?.heldBackNote && (
         <InfoLine
           detail={rateInfo.heldBackNote.detail}
           label={`About ${d.name} stream rate`}

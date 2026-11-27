@@ -1179,3 +1179,365 @@ describe('U2 Platforms and RowText shared-bitrate explanation', () => {
     expect(el.textContent).toContain('6.2 Mbps')
   })
 })
+
+describe('per-destination quality integration in GoLiveDock and Platforms', () => {
+  const mkView = (overrides: Partial<GoLiveView> = {}): GoLiveView =>
+    ({
+      ingest: null,
+      obs: {
+        connected: false,
+        points_here: false,
+        streaming: false,
+        before: null,
+        aitum: null,
+        vertical: null,
+      },
+      live: false,
+      stats: { kbps: 0, fps: 0, dropped: 0 },
+      vertical_live: false,
+      vertical_stats: { kbps: 0, fps: 0, dropped: 0 },
+      encode_groups: [],
+      encode_budget: {
+        status: 'ok',
+        source: 'apple_silicon',
+        used_mpx_s: 120,
+        limit_mpx_s: 400,
+        used_sessions: 2,
+        max_sessions: 4,
+      },
+      destinations: [
+        {
+          id: 'twitch',
+          name: 'Twitch',
+          kind: 'twitch',
+          canvas: 'main',
+          account: 'streamer',
+          enabled: true,
+          connected: true,
+          health: null,
+          blocked: null,
+          rules: [],
+          issues: [],
+          capped: {
+            kbps: 6000,
+            summary: 'Capped at 6,000 kbps for Twitch',
+            detail: 'Twitch cap detail',
+          },
+          quality: { mode: 'same_as_main' },
+          resolved_quality: {
+            width: 1920,
+            height: 1080,
+            fps: 60,
+            kbps: 6000,
+            codec: 'h264',
+            audio_kbps: 160,
+            auto_fitted: true,
+            separate_encode: true,
+            group_id: 'g-twitch',
+            shared_with: [],
+          },
+        },
+        {
+          id: 'youtube',
+          name: 'YouTube',
+          kind: 'youtube',
+          canvas: 'main',
+          account: 'channel',
+          enabled: true,
+          connected: true,
+          health: null,
+          blocked: null,
+          rules: [],
+          issues: [],
+          quality: { mode: 'same_as_main' },
+          resolved_quality: {
+            width: 2560,
+            height: 1440,
+            fps: 60,
+            kbps: 12000,
+            codec: 'h264',
+            audio_kbps: 160,
+            auto_fitted: false,
+            separate_encode: false,
+            group_id: 'g-main',
+            shared_with: [],
+          },
+        },
+      ],
+      upload: null,
+      protect: true,
+      aitum_ok: false,
+      cut: {
+        source: 'canvas',
+        config: { layout: 'split', source: null },
+        state: null,
+        ffmpeg: 'ready',
+      },
+      advanced: {
+        ignore_service_limits: false,
+        per: {},
+        server: { ip: 'auto', network: 'auto', low_latency: false, tcp_nodelay: false },
+      },
+      auto_quality: true,
+      ...overrides,
+    }) as unknown as GoLiveView
+
+  it('renders interactive quality chips in GoLiveDock, shows footer encode summary, and updates view on selection', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    setPictureSource('ferrocast')
+    const view = mkView()
+    const nextView = mkView({
+      destinations: view.destinations.map((d) =>
+        d.id === 'twitch'
+          ? {
+              ...d,
+              quality: { mode: 'custom', width: 1280, height: 720, fps: 30, kbps: 3000 },
+              resolved_quality: {
+                ...d.resolved_quality!,
+                width: 1280,
+                height: 720,
+                fps: 30,
+                kbps: 3000,
+                auto_fitted: false,
+              },
+            }
+          : d,
+      ),
+    })
+
+    const request = vi.fn(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/api/v1/golive/quality-options') {
+        return {
+          source: 'studio',
+          main: { width: 2560, height: 1440, fps: 60, kbps: 12000, codec: 'h264', audio_kbps: 160 },
+          vertical: null,
+          budget: {
+            status: 'ok',
+            source: 'apple_silicon',
+            used_mpx_s: 120,
+            limit_mpx_s: 400,
+            used_sessions: 2,
+            max_sessions: 4,
+          },
+          destinations: {
+            twitch: {
+              id: 'twitch',
+              canvas: 'main',
+              locked_reason: null,
+              current: { mode: 'same_as_main' },
+              resolved: view.destinations[0]!.resolved_quality!,
+              options: [
+                {
+                  id: 'same_as_main',
+                  label: 'Same as main',
+                  quality: { mode: 'same_as_main' },
+                  resolved: { width: 1920, height: 1080, fps: 60, kbps: 6000, codec: 'h264' },
+                  auto_fitted: true,
+                  recommended: false,
+                  note: null,
+                  shares_encoder_with: [],
+                  allowed: true,
+                  disabled_reason: null,
+                },
+                {
+                  id: '720p30',
+                  label: '720p30 · 3 Mbps',
+                  quality: {
+                    mode: 'custom',
+                    width: 1280,
+                    height: 720,
+                    fps: 30,
+                    kbps: 3000,
+                    codec: 'h264',
+                  },
+                  resolved: { width: 1280, height: 720, fps: 30, kbps: 3000, codec: 'h264' },
+                  auto_fitted: false,
+                  recommended: false,
+                  note: null,
+                  shares_encoder_with: [],
+                  allowed: true,
+                  disabled_reason: null,
+                },
+              ],
+              custom_limits: null,
+            },
+            youtube: {
+              id: 'youtube',
+              canvas: 'main',
+              locked_reason: null,
+              current: { mode: 'same_as_main' },
+              resolved: view.destinations[1]!.resolved_quality!,
+              options: [],
+              custom_limits: null,
+            },
+          },
+        }
+      }
+      if (method === 'PUT' && path === '/api/v1/golive/destinations/twitch/quality') {
+        return nextView
+      }
+      if (method === 'GET' && path === '/api/v1/studio/settings') {
+        return { video_kbps: 12000, audio_kbps: 160 }
+      }
+      return {}
+    })
+
+    useLive.setState({ conn: { client: { request } } as never })
+    const res = { data: view, error: null, loading: false, reload: vi.fn(), set: vi.fn() }
+    const desk = {
+      scenes: { data: null, error: null, loading: false, reload: vi.fn(), set: vi.fn() },
+      preflight: { data: null, error: null, loading: false, reload: vi.fn(), set: vi.fn() },
+      prefs: {
+        data: { video_kbps: 12000, audio_kbps: 160 },
+        error: null,
+        loading: false,
+        reload: vi.fn(),
+        set: vi.fn(),
+      },
+    } as unknown as Desk
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root: Root = createRoot(host)
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((q: string) => ({
+        matches: false,
+        media: q,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    )
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    )
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk}>
+            <DockWorkspace
+              stage={null}
+              docks={(id) =>
+                id === 'golive' ? <GoLiveDock res={res as never} view={view} /> : null
+              }
+            />
+          </DeskProvider>,
+        )
+        setPictureSource('ferrocast')
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(host.textContent).toContain('1080p60 · 6 Mbps · auto')
+      expect(host.textContent).toContain('Same as main')
+      expect(host.textContent).not.toContain('Capped at 6,000 kbps for Twitch')
+      const summary = host.querySelector('[data-golive-encode-summary]')
+      expect(summary?.textContent).toContain('2 places · 18.3 Mbps · 2 encodes')
+
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!.click()
+        await new Promise((r) => setTimeout(r, 0))
+      })
+      const opt720 = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[role="option"]'),
+      ).find((b) => b.textContent?.includes('720p30 · 3 Mbps'))!
+      await act(async () => {
+        opt720.click()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(res.set).toHaveBeenCalledWith(nextView)
+      expect(res.reload).toHaveBeenCalled()
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+      vi.unstubAllGlobals()
+      useLive.setState({ conn: null })
+      setPictureSource('ferrocast')
+    }
+  })
+
+  it('renders quality chips inside Platforms dialog tiles and locks to Same as OBS when OBS is selected', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const view = mkView()
+    const request = vi.fn(async (method: string, path: string) => {
+      if (method === 'GET' && path === '/api/v1/golive/quality-options') {
+        return {
+          source: 'studio',
+          main: { width: 2560, height: 1440, fps: 60, kbps: 12000, codec: 'h264', audio_kbps: 160 },
+          vertical: null,
+          budget: {
+            status: 'ok',
+            source: 'apple_silicon',
+            used_mpx_s: 120,
+            limit_mpx_s: 400,
+            used_sessions: 2,
+            max_sessions: 4,
+          },
+          destinations: {},
+        }
+      }
+      if (method === 'GET' && path === '/api/v1/studio/settings') {
+        return { video_kbps: 12000, audio_kbps: 160 }
+      }
+      return {}
+    })
+    useLive.setState({ conn: { client: { request } } as never })
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root: Root = createRoot(host)
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((q: string) => ({
+        matches: false,
+        media: q,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    )
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    )
+    try {
+      await act(async () => {
+        root.render(<Platforms view={view} onSaved={vi.fn()} />)
+        setPictureSource('ferrocast')
+        await Promise.resolve()
+      })
+      expect(host.textContent).toContain('1080p60 · 6 Mbps · auto')
+      expect(host.textContent).not.toContain('Capped at 6,000 kbps for Twitch')
+
+      await act(async () => {
+        setPictureSource('obs')
+        await Promise.resolve()
+      })
+      const twitchTrigger = host.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')
+      expect(twitchTrigger?.disabled).toBe(true)
+      expect(twitchTrigger?.textContent).toContain('Same as OBS')
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+      vi.unstubAllGlobals()
+      useLive.setState({ conn: null })
+      setPictureSource('ferrocast')
+    }
+  })
+})

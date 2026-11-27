@@ -8,14 +8,33 @@ import {
   reconnectingText,
   type DestinationView,
   type GoLiveView,
+  type ResolvedQuality,
   type StudioSettings,
 } from '@ferrocast/api'
 import { DeviceMobile, Gauge, GearSix, Plus } from '@phosphor-icons/react'
-import { IconButton, Button, Dialog, InfoLine, Skeleton, Switch, cx, toast } from '@ferrocast/ui'
+import {
+  IconButton,
+  Button,
+  Dialog,
+  InfoLine,
+  InfoTip,
+  Skeleton,
+  Switch,
+  cx,
+  toast,
+} from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { useAction, type Resource } from '../../../lib/hooks'
+import { useLive } from '../../../lib/store'
+import { useUsesObs } from '../../../lib/picture'
 import { AllFailedBanner, Logo, Platforms, RowText, useGoLive } from '../golive'
 import { describeDestinationRate, describeStreamCapFromView } from '../bitrate-summary'
+import {
+  DestinationQualityPicker,
+  formatRate,
+  formatResFps,
+  useQualityOptions,
+} from '../destination-quality-picker'
 import { useSaveOrder } from '../save-order'
 import { DockHeader } from './layout'
 import { useDesk, useDeskStats } from './common'
@@ -149,6 +168,48 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         : 6000 + audioKbps)
     : 6000 + audioKbps
   const vertStreamKbps = view ? view.vertical_stats.kbps || 4500 + audioKbps : 4500 + audioKbps
+  const usesObs = useUsesObs()
+  const isRemote = useLive((s) => s.remote !== null)
+  const qualityOpts = useQualityOptions(view, Boolean(view), usesObs, res.reload)
+  const destinationsById = Object.fromEntries(
+    (view?.destinations ?? []).map((dest) => [dest.id, { name: dest.name, kind: dest.kind }]),
+  )
+  const handleQualityUpdated = (nextView: GoLiveView) => {
+    res.set(nextView)
+    useLive.getState().setGoLiveView(nextView)
+    res.reload()
+  }
+
+  const enabledDests = (view?.destinations ?? []).filter((d) => d.enabled && !d.blocked)
+  const encodeGroupSummary = (() => {
+    if (!view || usesObs || enabledDests.length === 0) return null
+    const groups = new Map<string, { resolved: ResolvedQuality; names: string[] }>()
+    for (const d of enabledDests) {
+      const rq = d.resolved_quality
+      if (!rq) continue
+      const existing = groups.get(rq.group_id)
+      if (existing) existing.names.push(d.name)
+      else groups.set(rq.group_id, { resolved: rq, names: [d.name] })
+    }
+    if (groups.size === 0) return null
+    const totalKbps = Array.from(groups.values()).reduce(
+      (sum, g) => sum + g.resolved.kbps + g.resolved.audio_kbps,
+      0,
+    )
+    const breakdown = Array.from(groups.values())
+      .map(
+        (g) =>
+          `${g.names.join(', ')}: ${formatResFps(g.resolved.width, g.resolved.height, g.resolved.fps)} at ${formatRate(g.resolved.kbps)}`,
+      )
+      .join(' | ')
+    return {
+      places: enabledDests.length,
+      encodes: groups.size,
+      totalKbps,
+      breakdown,
+    }
+  })()
+
   const row = (d: DestinationView) => (
     <li key={d.id} className="flex items-start gap-2.5 border-b border-line py-1.5 pr-2 pl-3">
       <div className="mt-0.5 shrink-0">
@@ -159,6 +220,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           d={d}
           fixBitrate={fixBitrate}
           compact
+          hideRateBadges={Boolean(d.resolved_quality)}
           rateInfo={
             capSummary
               ? describeDestinationRate(d, capSummary, {
@@ -171,6 +233,18 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
                 })
               : undefined
           }
+        />
+        <DestinationQualityPicker
+          dest={d}
+          qualityResponse={qualityOpts.data}
+          optionsLoading={qualityOpts.loading}
+          optionsError={qualityOpts.error}
+          onReloadOptions={qualityOpts.reload}
+          onUpdated={handleQualityUpdated}
+          destinationsById={destinationsById}
+          usesObs={usesObs}
+          isRemote={isRemote}
+          compact
         />
         <LiveLine
           d={d}
@@ -273,6 +347,19 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
                 Add a vertical destination
               </button>
             </section>
+            {encodeGroupSummary && (
+              <div
+                data-golive-encode-summary=""
+                className="flex items-center justify-between gap-2 border-t border-line px-3 py-2 text-[11.5px] font-medium text-text-3"
+              >
+                <span className="truncate">
+                  {encodeGroupSummary.places} {encodeGroupSummary.places === 1 ? 'place' : 'places'}{' '}
+                  · {formatRate(encodeGroupSummary.totalKbps)} · {encodeGroupSummary.encodes}{' '}
+                  {encodeGroupSummary.encodes === 1 ? 'encode' : 'encodes'}
+                </span>
+                <InfoTip label="Stream encode breakdown">{encodeGroupSummary.breakdown}</InfoTip>
+              </div>
+            )}
           </>
         )}
       </div>

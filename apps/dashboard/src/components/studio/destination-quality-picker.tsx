@@ -37,7 +37,7 @@ import {
   type VideoCodec,
 } from '@ferrocast/api'
 import { Button, InfoTip, Select, Skeleton, cx } from '@ferrocast/ui'
-import { useClient } from '../../lib/hooks'
+import { useLive } from '../../lib/store'
 import { HOLES_CHANGED } from './desk/snap-overlay'
 
 type DestKind = DestinationView['kind']
@@ -419,10 +419,10 @@ export function useQualityOptions(
   usesObs = false,
   onPollView?: () => void,
 ): QualityOptionsState {
-  const client = useClient()
+  const client = useLive((s) => s.conn?.client ?? null)
   const [data, setData] = useState<GoLiveQualityOptionsResponse | null>(null)
   const [error, setError] = useState<unknown>(null)
-  const [loading, setLoading] = useState(enabled)
+  const [loading, setLoading] = useState(enabled && client !== null)
   const [nonce, setNonce] = useState(0)
 
   const sig = signatureOfView(view, usesObs)
@@ -431,7 +431,7 @@ export function useQualityOptions(
   pollRef.current = onPollView
 
   useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !client) {
       setLoading(false)
       return
     }
@@ -441,8 +441,10 @@ export function useQualityOptions(
       .qualityOptions()
       .then((res) => {
         if (!alive) return
-        setData(res)
-        setError(null)
+        if (res && typeof res === 'object' && 'destinations' in res && res.destinations) {
+          setData(res)
+          setError(null)
+        }
       })
       .catch((err: unknown) => {
         if (alive) setError(err)
@@ -598,7 +600,7 @@ export function DestinationQualityPicker({
   isRemote = false,
   compact = false,
 }: DestinationQualityPickerProps) {
-  const client = useClient()
+  const client = useLive((s) => s.conn?.client ?? null)
   const headingId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -616,7 +618,7 @@ export function DestinationQualityPicker({
     maxHeight: number
   } | null>(null)
 
-  const destOpts = qualityResponse?.destinations[dest.id] ?? null
+  const destOpts = qualityResponse?.destinations?.[dest.id] ?? null
   const chip = useMemo(
     () => formatQualityChip(dest, destOpts, { usesObs, isRemote }),
     [dest, destOpts, usesObs, isRemote],
@@ -757,7 +759,7 @@ export function DestinationQualityPicker({
   }, [open, close])
 
   const submitQuality = async (next: DestinationQuality) => {
-    if (saving) return
+    if (saving || !client) return
     setSaving(true)
     setSaveError(null)
     try {

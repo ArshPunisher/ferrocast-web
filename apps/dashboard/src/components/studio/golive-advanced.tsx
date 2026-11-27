@@ -339,24 +339,6 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
             </>
           ) : (
             <>
-              {dest && !dest.direct && (
-                <Row
-                  label="Lighter stream"
-                  hint="720p, up to 3,000 kbps (the Ferrocast Studio). For a slow route."
-                >
-                  <Switch
-                    label="Lighter stream"
-                    hideLabel
-                    checked={!!dest.light}
-                    disabled={busy === 'light'}
-                    onChange={(on) =>
-                      void run('light', () => api.setLight(dest.id, on).then(() => true)).then(
-                        (x) => x && onSaved(),
-                      )
-                    }
-                  />
-                </Row>
-              )}
               {dest?.kind === 'twitch' && dest.canvas !== 'vertical' && (
                 <Row
                   label="Enhanced Broadcasting"
