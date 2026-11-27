@@ -162,6 +162,7 @@ function Tile({
           <h3
             id={titleId}
             className="min-w-0 flex-1 truncate font-display text-[18px] font-extrabold tracking-tight"
+            title={design.name}
           >
             {design.name}
           </h3>
@@ -178,7 +179,7 @@ function Tile({
           <p className="text-[14px] font-medium text-accent-text">Plays your alerts now</p>
         )}
       </div>
-      <div className="mt-auto flex gap-2 px-3.5 pt-2.5 pb-3.5">
+      <div className="mt-auto flex flex-wrap gap-2 px-3.5 pt-2.5 pb-3.5">
         {design.built_in ? (
           <>
             <Button size="sm" variant="secondary" onClick={onUse} className="flex-1">

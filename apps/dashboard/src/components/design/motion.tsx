@@ -436,7 +436,7 @@ export function MotionSection({
           <button
             type="button"
             onClick={stage.play}
-            className="fc-press inline-flex min-h-12 flex-1 basis-full items-center justify-center gap-2 rounded-[12px] bg-[linear-gradient(180deg,#b25600_0%,#9a4c00_100%)] px-5 text-[17px] font-semibold text-white shadow-[0_1px_0_rgb(255_255_255/0.22)_inset,0_10px_24px_-12px_rgb(178_86_0/0.9)] hover:bg-[linear-gradient(180deg,#a85100_0%,#8e4600_100%)] focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            className="fc-press inline-flex min-h-12 flex-1 basis-full items-center justify-center gap-2 rounded-[12px] bg-btn-primary px-5 text-[17px] font-semibold text-on-btn-primary shadow-[0_1px_0_rgb(255_255_255/0.22)_inset] hover:bg-btn-primary-hover focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
           >
             <Play size={17} weight="fill" aria-hidden="true" />
             Play alert
@@ -493,7 +493,7 @@ export function MotionSection({
                 value={String(stage.amount ?? usual.amount)}
                 options={presets.map((p) => ({ value: String(p), label: formatPreset(p, usual) }))}
                 onChange={(v) => stage.onAmount(Number(v))}
-                className="max-w-full self-start overflow-x-auto"
+                className="fc-focus-inset max-w-full self-start overflow-x-auto"
               />
             </div>
           )}
@@ -629,7 +629,7 @@ export function MotionSection({
                 aria-pressed={m.colors === c}
                 onClick={() => setM({ colors: c })}
                 className={cx(
-                  'size-[30px] rounded-full shadow-[inset_0_0_0_1px_rgb(255_255_255/0.18)] focus-visible:outline-2 focus-visible:outline-offset-[6px] focus-visible:outline-accent-text',
+                  'size-[30px] rounded-full shadow-[inset_0_0_0_1px_rgb(255_255_255/0.18)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-text',
                   m.colors === c &&
                     'shadow-[0_0_0_2px_var(--fc-surface-1),0_0_0_4px_var(--fc-arc)]',
                 )}

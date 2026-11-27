@@ -194,7 +194,7 @@ export function SceneDesigner({
               role="tablist"
               aria-label="Scenes"
               aria-orientation="vertical"
-              className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] xl:mx-0 xl:flex-col xl:overflow-visible xl:px-0"
+              className="fc-focus-inset -mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] xl:mx-0 xl:flex-col xl:overflow-visible xl:px-0"
             >
               {scenes.map((s) => (
                 <SceneTab

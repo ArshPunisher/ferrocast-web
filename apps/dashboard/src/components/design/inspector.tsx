@@ -628,7 +628,9 @@ export function TextSection({ look, set, advanced }: SectionProps) {
               >
                 Aa
               </span>
-              <span className="w-full truncate text-[13.5px] text-text-3">{f}</span>
+              <span className="w-full truncate text-[13.5px] text-text-3" title={f}>
+                {f}
+              </span>
             </button>
           ))}
         </div>
@@ -757,7 +759,7 @@ export function StyleSection({ look, set }: SectionProps) {
   )
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         {color('text', 'Text')}
         {color('highlight', 'Name and amount')}
         {color('plate', 'Plate')}
@@ -775,7 +777,7 @@ export function StyleSection({ look, set }: SectionProps) {
         ]}
         onChange={(shadow) => set({ shadow })}
       />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <Range
           label="Outline"
           value={look.outline}
@@ -976,7 +978,7 @@ export function WhenSection({
               )}
             </div>
             {i === selected && v.condition !== null && (
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-2">
                 <Field label="Name">
                   {(p) => (
                     <Input

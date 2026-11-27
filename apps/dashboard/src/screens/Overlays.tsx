@@ -221,7 +221,7 @@ export function Overlays() {
               <div className="group relative">
                 <div
                   aria-hidden
-                  className="transition-transform duration-200 group-hover:scale-[1.01] group-has-[a:focus-visible]:shadow-[var(--fc-focus)]"
+                  className="rounded-[12px] transition-transform duration-200 group-hover:scale-[1.01] group-has-[a:focus-visible]:shadow-[var(--fc-focus)]"
                 >
                   <LayoutThumb overlay={o} />
                 </div>
@@ -233,7 +233,10 @@ export function Overlays() {
               </div>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h2 className="truncate font-display text-[18px] font-extrabold tracking-tight">
+                  <h2
+                    className="truncate font-display text-[18px] font-extrabold tracking-tight"
+                    title={o.name}
+                  >
                     {o.name}
                   </h2>
                   <p className="mt-0.5 truncate text-[14.5px] text-text-2">

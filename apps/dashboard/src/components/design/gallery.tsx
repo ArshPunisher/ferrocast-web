@@ -156,10 +156,16 @@ function FeaturedCard({
       {/* Under the picture, not on it: every scene has its own text near the bottom. */}
       <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1">
-          <h3 id={titleId} className="truncate font-display text-lg font-extrabold tracking-tight">
+          <h3
+            id={titleId}
+            className="truncate font-display text-lg font-extrabold tracking-tight"
+            title={theme.name}
+          >
             {theme.name}
           </h3>
-          <p className="truncate text-[14.5px] font-medium text-text-3">{bundleLine(theme)}</p>
+          <p className="truncate text-[14.5px] font-medium text-text-3" title={bundleLine(theme)}>
+            {bundleLine(theme)}
+          </p>
         </div>
         <div className="flex shrink-0 gap-2">
           <Button size="sm" variant="secondary" icon={<Play size={13} />} onClick={onOpen}>
@@ -219,12 +225,18 @@ export function ThemeCard({
           <h3
             id={titleId}
             className="min-w-0 flex-1 truncate font-display text-[18px] font-extrabold tracking-tight"
+            title={theme.name}
           >
             {theme.name}
           </h3>
           {theme.built_in ? <BrandChip /> : <Badge tone="accent">Mine</Badge>}
         </div>
-        <p className="line-clamp-2 text-[14.5px] leading-snug text-text-3">{theme.description}</p>
+        <p
+          className="line-clamp-2 text-[14.5px] leading-snug text-text-3"
+          title={theme.description}
+        >
+          {theme.description}
+        </p>
         <Tags design={theme} />
       </div>
       <div className="mt-auto flex gap-2 px-3.5 pt-3 pb-3.5">
@@ -357,7 +369,7 @@ export function ThemeSheet({
         <div
           role="tablist"
           aria-label={`${theme.name} scenes`}
-          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-flow-col sm:auto-cols-fr sm:overflow-visible sm:px-0"
+          className="fc-focus-inset -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-flow-col sm:auto-cols-fr sm:overflow-visible sm:px-0"
         >
           {views.map((v, i) => (
             <button
@@ -384,7 +396,10 @@ export function ThemeSheet({
                   <span className="block aspect-video animate-pulse bg-surface-3" />
                 )}
               </span>
-              <span className="truncate px-0.5 text-[13.5px] font-semibold text-text">
+              <span
+                className="truncate px-0.5 text-[13.5px] font-semibold text-text"
+                title={v.label}
+              >
                 {v.label}
               </span>
             </button>

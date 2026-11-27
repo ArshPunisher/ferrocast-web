@@ -443,7 +443,7 @@ function AlertDesigner({ design, onSaved }: { design: AlertDesign; onSaved: (d: 
     <div
       role="group"
       aria-label="Variations"
-      className="flex min-w-0 gap-1 overflow-x-auto [scrollbar-width:none]"
+      className="fc-focus-inset flex min-w-0 gap-1 overflow-x-auto [scrollbar-width:none]"
     >
       {variations.map((v, i) => (
         <button
@@ -1034,7 +1034,7 @@ function GuidedView({
       <div
         role="group"
         aria-label="Which event is this for?"
-        className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
+        className="fc-focus-inset -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
       >
         {EVENT_KEYS.map((k) => {
           const I = EVENT_ICON[k]
@@ -1061,7 +1061,10 @@ function GuidedView({
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]">
         <div className="flex min-w-0 flex-col gap-2.5 max-lg:order-2">
           {variationTabs}
-          <nav aria-label="Steps" className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
+          <nav
+            aria-label="Steps"
+            className="fc-focus-inset flex gap-1.5 overflow-x-auto [scrollbar-width:none]"
+          >
             {STEPS.map((s, i) => (
               <button
                 key={s.id}

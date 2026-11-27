@@ -148,6 +148,7 @@ export function Timeline({
         cls,
       )}
       style={{ left: pct(from), width: pct(len) }}
+      title={label}
     >
       {label}
     </div>
@@ -260,7 +261,8 @@ export function Timeline({
       </div>
       <div className="grid grid-cols-[52px_minmax(0,1fr)] gap-x-2.5 gap-y-1.5 sm:grid-cols-[64px_minmax(0,1fr)]">
         <span />
-        <div className="relative h-4 font-mono text-[11.5px] text-text-3">
+        {/* The hit marker rises 14px above the first lane; the room under the ruler keeps it off the labels. */}
+        <div className="relative mb-2.5 h-4 font-mono text-[11.5px] text-text-3">
           {ruler.map((s) => (
             <span
               key={s}

@@ -735,7 +735,7 @@ function LayersPanel({
           <li
             key={w.id}
             className={cx(
-              'group flex items-center gap-0.5 rounded-control pr-1',
+              'group relative flex items-center gap-0.5 rounded-control pr-1',
               w.id === selected ? 'bg-accent-soft' : 'hover:bg-surface-2',
             )}
           >
@@ -760,12 +760,15 @@ function LayersPanel({
               }
             >
               {mark ? <SparkGlyph /> : <Icon size={15} className="shrink-0" />}
-              <span className="truncate">{layerName(w)}</span>
+              <span className="truncate" title={layerName(w)}>
+                {layerName(w)}
+              </span>
             </button>
             {!fixed && (
               // Row actions stay out of the way until the row is hovered or focused; a hidden
-              // or locked layer keeps its icon showing so its state is visible.
-              <span className="hidden items-center group-focus-within:flex group-hover:flex [@media(hover:none)]:flex">
+              // or locked layer keeps its icon showing so its state is visible. They float over
+              // the row's end, so the layer's name never changes width as the pointer passes.
+              <span className="absolute top-1/2 right-1 hidden -translate-y-1/2 items-center rounded-control bg-surface-2 shadow-1 group-focus-within:flex group-hover:flex [@media(hover:none)]:static [@media(hover:none)]:flex [@media(hover:none)]:translate-y-0 [@media(hover:none)]:bg-transparent [@media(hover:none)]:shadow-none">
                 <IconButton
                   size="sm"
                   label={w.hidden ? `Show ${layerName(w)}` : `Hide ${layerName(w)}`}
@@ -1391,7 +1394,7 @@ function LayerSettings({
           ]}
           onChange={(shape) => set({ shape })}
         />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <ColorField
             label="Fill"
             value={c.fill ?? '#16191e'}
@@ -1411,7 +1414,7 @@ function LayerSettings({
           unit="°"
           onChange={(v, m) => set({ angle: v }, m)}
         />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <ColorField
             label="Edge"
             value={c.stroke ?? '#343a44'}
@@ -1496,7 +1499,7 @@ function LayerSettings({
             </Select>
           )}
         </Field>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <ColorField
             label="Colour"
             value={c.color ?? '#ffa424'}

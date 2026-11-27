@@ -749,7 +749,7 @@ export function WidgetSettings({
         <summary className="cursor-pointer list-none px-3 py-2.5 text-[14.5px] font-semibold text-text-2 hover:text-text">
           Exact position
         </summary>
-        <div className="grid grid-cols-4 gap-2 px-3 pb-3">
+        <div className="grid grid-cols-2 gap-2 px-3 pb-3">
           {num('x')}
           {num('y')}
           {num('w')}

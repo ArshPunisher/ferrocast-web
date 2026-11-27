@@ -538,7 +538,9 @@ function Screens({
                     data-screen-check
                     className={cx(
                       'absolute top-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-[5px] border transition-colors',
-                      on ? 'border-arc bg-arc text-white shadow-sm' : 'border-white/75 bg-black/55',
+                      on
+                        ? 'border-pick bg-pick text-on-pick shadow-sm'
+                        : 'border-white/75 bg-black/55',
                     )}
                   >
                     {on && <Check size={12} weight="bold" />}
@@ -873,66 +875,81 @@ function Table({
               </span>
               <span className="text-[13px] font-semibold text-text-2">{s.name}</span>
             </div>
-            <Select
-              aria-label={`${s.name}: in OBS`}
-              className="h-9 text-[14px]"
-              value={placeValue(p.place)}
-              onChange={(e) => {
-                const place = fromValue(e.target.value)
-                setScreen(
-                  p.key,
-                  place.kind === 'skip' ? { place, under: null, role: null } : { place },
-                )
-              }}
-            >
-              <option value={PLACE_NEW}>New: {s.name}</option>
-              {ownScenes.map((n) => (
-                <option key={`t${n}`} value={`on_top:${n}`}>
-                  On top of {n}
-                </option>
-              ))}
-              {ownScenes.map((n) => (
-                <option key={`r${n}`} value={`replace:${n}`}>
-                  Replace {n}’s look
-                </option>
-              ))}
-              <option value={PLACE_SKIP}>Leave out</option>
-            </Select>
-            <Select
-              aria-label={`${s.name}: under it`}
-              className="h-9 text-[14px]"
-              disabled={off}
-              value={p.under ?? ''}
-              onChange={(e) => setScreen(p.key, { under: e.target.value || null })}
-            >
-              <option value="">Nothing</option>
-              {ownScenes.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-              {data.obs_cameras.map((n) => (
-                <option key={`c${n}`} value={n}>
-                  {n} (camera)
-                </option>
-              ))}
-            </Select>
-            <Select
-              aria-label={`${s.name}: Start show uses it for`}
-              className="h-9 text-[14px]"
-              disabled={off}
-              value={p.role ?? ''}
-              onChange={(e) =>
-                setScreen(p.key, { role: (e.target.value || null) as ThemeRole | null })
-              }
-            >
-              <option value="">Nothing</option>
-              {(Object.keys(ROLE_LABEL) as ThemeRole[]).map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_LABEL[r]}
-                </option>
-              ))}
-            </Select>
+            <div className="flex min-w-0 flex-col gap-1">
+              <span aria-hidden="true" className="text-[12px] text-text-3 sm:hidden">
+                In OBS
+              </span>
+              <Select
+                aria-label={`${s.name}: in OBS`}
+                className="h-9 text-[14px]"
+                value={placeValue(p.place)}
+                onChange={(e) => {
+                  const place = fromValue(e.target.value)
+                  setScreen(
+                    p.key,
+                    place.kind === 'skip' ? { place, under: null, role: null } : { place },
+                  )
+                }}
+              >
+                <option value={PLACE_NEW}>New: {s.name}</option>
+                {ownScenes.map((n) => (
+                  <option key={`t${n}`} value={`on_top:${n}`}>
+                    On top of {n}
+                  </option>
+                ))}
+                {ownScenes.map((n) => (
+                  <option key={`r${n}`} value={`replace:${n}`}>
+                    Replace {n}’s look
+                  </option>
+                ))}
+                <option value={PLACE_SKIP}>Leave out</option>
+              </Select>
+            </div>
+            <div className="flex min-w-0 flex-col gap-1">
+              <span aria-hidden="true" className="text-[12px] text-text-3 sm:hidden">
+                Under it
+              </span>
+              <Select
+                aria-label={`${s.name}: under it`}
+                className="h-9 text-[14px]"
+                disabled={off}
+                value={p.under ?? ''}
+                onChange={(e) => setScreen(p.key, { under: e.target.value || null })}
+              >
+                <option value="">Nothing</option>
+                {ownScenes.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+                {data.obs_cameras.map((n) => (
+                  <option key={`c${n}`} value={n}>
+                    {n} (camera)
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex min-w-0 flex-col gap-1">
+              <span aria-hidden="true" className="text-[12px] text-text-3 sm:hidden">
+                Start show
+              </span>
+              <Select
+                aria-label={`${s.name}: Start show uses it for`}
+                className="h-9 text-[14px]"
+                disabled={off}
+                value={p.role ?? ''}
+                onChange={(e) =>
+                  setScreen(p.key, { role: (e.target.value || null) as ThemeRole | null })
+                }
+              >
+                <option value="">Nothing</option>
+                {(Object.keys(ROLE_LABEL) as ThemeRole[]).map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABEL[r]}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
         )
       })}
@@ -1256,7 +1273,12 @@ export function MakeItYoursDialog({
               </Button>
               {r.logo && (
                 <>
-                  <span className="max-w-40 truncate text-[13.5px] text-text-3">{logoName}</span>
+                  <span
+                    className="max-w-40 truncate text-[13.5px] text-text-3"
+                    title={logoName ?? undefined}
+                  >
+                    {logoName}
+                  </span>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -1373,7 +1395,9 @@ export function ThemeInObsCard() {
               )}
             </span>
             <div className="min-w-0">
-              <p className="m-0 truncate text-[16px] font-semibold text-text">{t.design_name}</p>
+              <p className="m-0 truncate text-[16px] font-semibold text-text" title={t.design_name}>
+                {t.design_name}
+              </p>
               <p
                 className={cx(
                   'm-0 text-[14px]',
