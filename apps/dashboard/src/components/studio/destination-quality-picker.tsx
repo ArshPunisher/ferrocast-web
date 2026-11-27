@@ -173,8 +173,10 @@ export function formatQualityChip(
     }
   }
 
-  const mode = dest.quality?.mode ?? destOpts?.current.mode ?? 'same_as_main'
-  const resolved = dest.resolved_quality ?? destOpts?.resolved
+  const mode = destOpts?.current.mode ?? dest.quality?.mode ?? 'same_as_main'
+  const resolved = dest.switching_quality
+    ? (dest.resolved_quality ?? destOpts?.resolved)
+    : (destOpts?.resolved ?? dest.resolved_quality)
   const remoteLock = opts?.isRemote ? 'Change destination quality from your PC.' : null
 
   if (!resolved) {
@@ -627,9 +629,11 @@ export function DestinationQualityPicker({
 
   const curated = useMemo(() => (destOpts ? curateQualityOptions(destOpts) : []), [destOpts])
   const sharedNames = useMemo(() => {
-    const entries = dest.resolved_quality?.shared_with ?? destOpts?.resolved.shared_with ?? []
+    const entries = dest.switching_quality
+      ? (dest.resolved_quality?.shared_with ?? destOpts?.resolved.shared_with ?? [])
+      : (destOpts?.resolved.shared_with ?? dest.resolved_quality?.shared_with ?? [])
     return formatSharedWith(entries, destinationsById)
-  }, [destOpts, dest.resolved_quality, destinationsById])
+  }, [destOpts, dest.resolved_quality, dest.switching_quality, destinationsById])
 
   const tipText = useMemo(
     () => buildChipTooltip(dest, destOpts, chip, sharedNames, curated),
@@ -823,45 +827,54 @@ export function DestinationQualityPicker({
   const atEncodeLimit = isBudgetAtLimit(qualityResponse?.budget)
 
   return (
-    <div className={cx('mt-1 flex flex-wrap items-center gap-1.5', compact && 'mt-0.5')}>
-      <button
-        ref={triggerRef}
-        type="button"
-        disabled={locked}
-        aria-haspopup={locked ? undefined : 'dialog'}
-        aria-expanded={locked ? undefined : open}
-        aria-label={`Quality for ${dest.name}: ${chip.text}`}
-        data-quality-trigger={dest.id}
-        onClick={() => {
-          if (locked) return
-          if (open) close(false)
-          else {
-            setSaveError(null)
-            setOpen(true)
-          }
-        }}
-        className={cx(
-          'inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11.5px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-[var(--fc-focus)]',
-          chipToneClass,
-        )}
-      >
-        {chip.tone === 'pending' && (
-          <ArrowsClockwise size={11} weight="bold" aria-hidden className="shrink-0 animate-spin" />
-        )}
-        {chip.tone === 'locked' && (
-          <Lock size={11} weight="bold" aria-hidden className="shrink-0" />
-        )}
-        <span className="truncate">{chip.text}</span>
-        {!locked && (
-          <CaretDown size={10} weight="bold" aria-hidden className="shrink-0 opacity-75" />
-        )}
-      </button>
+    <div
+      className={cx('mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5', compact && 'mt-0.5')}
+    >
+      <span className="inline-flex max-w-full items-center gap-1">
+        <button
+          ref={triggerRef}
+          type="button"
+          disabled={locked}
+          aria-haspopup={locked ? undefined : 'dialog'}
+          aria-expanded={locked ? undefined : open}
+          aria-label={`Quality for ${dest.name}: ${chip.text}`}
+          data-quality-trigger={dest.id}
+          onClick={() => {
+            if (locked) return
+            if (open) close(false)
+            else {
+              setSaveError(null)
+              setOpen(true)
+            }
+          }}
+          className={cx(
+            'inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11.5px] font-medium transition-colors focus-visible:outline-none focus-visible:shadow-[var(--fc-focus)]',
+            chipToneClass,
+          )}
+        >
+          {chip.tone === 'pending' && (
+            <ArrowsClockwise
+              size={11}
+              weight="bold"
+              aria-hidden
+              className="shrink-0 animate-spin"
+            />
+          )}
+          {chip.tone === 'locked' && (
+            <Lock size={11} weight="bold" aria-hidden className="shrink-0" />
+          )}
+          <span className="truncate">{chip.text}</span>
+          {!locked && (
+            <CaretDown size={10} weight="bold" aria-hidden className="shrink-0 opacity-75" />
+          )}
+        </button>
+
+        {tipText && <InfoTip label={`Quality details for ${dest.name}`}>{tipText}</InfoTip>}
+      </span>
 
       {sharedNames && !locked && (
         <span className="text-[11px] font-medium text-text-3">shared with {sharedNames}</span>
       )}
-
-      {tipText && <InfoTip label={`Quality details for ${dest.name}`}>{tipText}</InfoTip>}
 
       {open &&
         portalHost &&
@@ -923,7 +936,12 @@ export function DestinationQualityPicker({
                   {curated.map((opt) => {
                     const selected = matchesQualitySelection(opt.quality, destOpts.current)
                     const optShared = formatSharedWith(opt.shares_encoder_with, destinationsById)
-                    const primary = opt.quality.mode === 'same_as_main' ? 'Same as main' : opt.label
+                    const primary =
+                      opt.quality.mode === 'same_as_main'
+                        ? 'Same as main'
+                        : /\b(?:Mbps|kbps)\b/i.test(opt.label)
+                          ? opt.label
+                          : `${opt.label} · ${formatRate(opt.resolved.kbps)}`
                     const subLine = !opt.allowed
                       ? opt.disabled_reason || 'PC limit'
                       : optShared

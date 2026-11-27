@@ -140,8 +140,8 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       ...(v ?? view),
       destinations: (v ?? view).destinations.map((x) => (x.id === d.id ? { ...x, enabled } : x)),
     }))
-    void run(`on:${d.id}`, () => saver.request(all)).then((r) => {
-      if (!r) res.reload()
+    void run(`on:${d.id}`, () => saver.request(all)).then(() => {
+      res.reload()
     })
   }
   const retry = (d: DestinationView) =>
@@ -171,6 +171,19 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
   const usesObs = useUsesObs()
   const isRemote = useLive((s) => s.remote !== null)
   const qualityOpts = useQualityOptions(view, Boolean(view), usesObs, res.reload)
+  const reloadOptsRef = useRef(qualityOpts.reload)
+  reloadOptsRef.current = qualityOpts.reload
+  const prefsSig = desk.prefs.data
+    ? `${desk.prefs.data.video_kbps}:${desk.prefs.data.width}x${desk.prefs.data.height}@${desk.prefs.data.fps}:${desk.prefs.data.scale?.join('x') ?? ''}:${desk.prefs.data.encoder}`
+    : null
+  const seenPrefsSig = useRef<string | null>(null)
+  useEffect(() => {
+    if (!prefsSig) return
+    if (seenPrefsSig.current === prefsSig) return
+    seenPrefsSig.current = prefsSig
+    reloadView()
+    reloadOptsRef.current()
+  }, [prefsSig, reloadView])
   const destinationsById = Object.fromEntries(
     (view?.destinations ?? []).map((dest) => [dest.id, { name: dest.name, kind: dest.kind }]),
   )
