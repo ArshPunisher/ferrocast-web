@@ -139,6 +139,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
     ? describeStreamCapFromView(view.destinations, videoKbps, {
         ignoreServiceLimits,
         live: view.live,
+        encodeBudget: view.encode_budget,
       })
     : null
   const mainStreamKbps = view

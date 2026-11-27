@@ -141,6 +141,8 @@ export function useMerged(view: GoLiveView | null): GoLiveView | null {
       vertical_live: frame.vertical_live ?? view.vertical_live,
       vertical_stats: frame.vertical_stats ?? view.vertical_stats,
       destinations: frame.destinations,
+      ...(frame.encode_groups ? { encode_groups: frame.encode_groups } : {}),
+      ...(frame.encode_budget ? { encode_budget: frame.encode_budget } : {}),
       cut: {
         ...view.cut,
         state: frame.cut_state === undefined ? view.cut.state : frame.cut_state,
@@ -828,8 +830,9 @@ export function Platforms({
       describeStreamCapFromView(merged, chosenVideoKbps, {
         ignoreServiceLimits,
         live: streaming,
+        encodeBudget: view.encode_budget,
       }),
-    [merged, chosenVideoKbps, ignoreServiceLimits, streaming],
+    [merged, chosenVideoKbps, ignoreServiceLimits, streaming, view.encode_budget],
   )
   const fallbackMainKbps =
     capSummary.capped && capSummary.effectiveVideoKbps

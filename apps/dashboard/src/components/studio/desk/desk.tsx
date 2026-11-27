@@ -381,6 +381,31 @@ function Running({
   const audio = useResource(() => (scene ? api.audio(scene) : Promise.resolve([])), [api, scene])
   const kinds = useResource(() => api.kinds(), [api])
   const prefs = useResource(() => api.studioSettings(), [api])
+  const reloadGoLive = res.reload
+  const prefsSig = prefs.data
+    ? JSON.stringify([
+        prefs.data.video_kbps,
+        prefs.data.audio_kbps,
+        prefs.data.width,
+        prefs.data.height,
+        prefs.data.scale,
+        prefs.data.fps,
+        prefs.data.encoder,
+        prefs.data.video_encoder,
+      ])
+    : null
+  const seenPrefsSig = useRef<string | null>(null)
+  useEffect(() => {
+    if (prefsSig === null) return
+    if (seenPrefsSig.current === null) {
+      seenPrefsSig.current = prefsSig
+      return
+    }
+    if (prefsSig !== seenPrefsSig.current) {
+      seenPrefsSig.current = prefsSig
+      reloadGoLive()
+    }
+  }, [prefsSig, reloadGoLive])
   // Projectors are the app's own windows: no displays to offer in a plain browser.
   const screens = useResource(() => (inDesktopApp() ? api.screens() : Promise.resolve([])), [api])
   const [picked, setPicked] = useState<{ id: number | null; also: number[] }>({

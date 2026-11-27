@@ -39,6 +39,8 @@ import {
   writtenFormat,
   type AudioCare,
   type DestinationView,
+  type EncodeBudgetCheck,
+  type QualitySource,
   type WrittenRecordFormat,
   type PrivacyGuard,
   type StudioSettings,
@@ -59,7 +61,7 @@ import {
 import { LoadError } from '../../Panel'
 import { useResource } from '../../../lib/hooks'
 import { useLive } from '../../../lib/store'
-import { describeStreamCap } from '../bitrate-summary'
+import { describeSettingsBitrates, describeStreamCap } from '../bitrate-summary'
 import { useDesk, type EngineApi } from './common'
 import { sharedNote } from './record-notes'
 import { AutoConfigDialog } from './auto-config'
@@ -192,6 +194,14 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
       loaded.set(r.settings)
       prefs.set(r.settings)
       setDraft(r.settings)
+      const conn = useLive.getState().conn
+      if (conn) {
+        const askedAt = Date.now()
+        void goliveApi(conn.client)
+          .view()
+          .then((v) => useLive.getState().setGoLiveView(v, askedAt))
+          .catch(() => undefined)
+      }
       toast(
         r.restart
           ? {
@@ -390,20 +400,27 @@ function Choice({
 function Row({
   label,
   sub,
+  subInfo,
   children,
   info,
 }: {
   label: string
-  sub?: string | undefined
+  sub?: ReactNode
+  subInfo?: { label: string; detail: string } | undefined
   children: ReactNode
   info?: string
 }) {
   return (
-    <div className="grid min-h-9 grid-cols-1 items-center gap-2 border-t border-line py-1 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,260px)] sm:gap-4">
-      <div className="flex items-center gap-1 text-[13px]">
-        <span>
+    <div className="grid min-h-9 grid-cols-1 items-center gap-2 border-t border-line py-1.5 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,260px)] sm:gap-4">
+      <div className="flex min-w-0 items-center gap-1 text-[13px]">
+        <span className="min-w-0">
           {label}
-          {sub && <span className="block text-[11.5px] text-text-3">{sub}</span>}
+          {sub && (
+            <span className="flex flex-wrap items-center gap-1 text-[11.5px] text-text-3">
+              <span className="min-w-0 break-words">{sub}</span>
+              {subInfo && <InfoTip label={subInfo.label}>{subInfo.detail}</InfoTip>}
+            </span>
+          )}
         </span>
         {info && <InfoTip label={`About ${label.toLowerCase()}`}>{info}</InfoTip>}
       </div>
@@ -613,26 +630,38 @@ export function StreamPage({
   destinations,
   ignoreServiceLimits,
   live,
+  encodeBudget,
+  qualitySource,
 }: PageProps & {
   onSynced?: (next: StudioSettings) => void
   destinations?: DestinationView[]
   ignoreServiceLimits?: boolean
   live?: boolean
+  encodeBudget?: EncodeBudgetCheck | null
+  qualitySource?: QualitySource
 }) {
   const [wizard, setWizard] = useState(false)
   const [more, setMore] = useState(false)
-  const sent = s.scale ?? [s.width, s.height]
+  const sentW = s.scale?.[0] ?? s.width
+  const sentH = s.scale?.[1] ?? s.height
+  const sent: [number, number] = [sentW, sentH]
   const quality = streamQuality(s)
   const conn = useLive((st) => st.conn)
   const goliveView = useLive((st) => st.goliveView)
   const storeFrame = useLive((st) => st.studio.golive)
   const liveDests = goliveView?.destinations ?? storeFrame?.destinations
+  const [fetchRev, setFetchRev] = useState(0)
   const [fetched, setFetched] = useState<{
     conn: typeof conn
+    rev: number
     dests: DestinationView[]
     ignoreServiceLimits: boolean
     live: boolean
+    encodeBudget: EncodeBudgetCheck | null
+    source: QualitySource
+    error: boolean
   } | null>(null)
+  const needsFetch = !destinations && !goliveView && !liveDests && !!conn
   useEffect(() => {
     if (
       (destinations && ignoreServiceLimits !== undefined && live !== undefined) ||
@@ -648,31 +677,124 @@ export function StreamPage({
           alive &&
           setFetched({
             conn,
+            rev: fetchRev,
             dests: v.destinations,
             ignoreServiceLimits: Boolean(v.advanced?.ignore_service_limits),
             live: Boolean(v.live),
+            encodeBudget: v.encode_budget ?? null,
+            source: v.obs.streaming && v.obs.points_here && !v.live ? 'obs' : 'studio',
+            error: false,
           }),
       )
-      .catch(() => undefined)
+      .catch(
+        () =>
+          alive &&
+          setFetched({
+            conn,
+            rev: fetchRev,
+            dests: [],
+            ignoreServiceLimits: false,
+            live: false,
+            encodeBudget: null,
+            source: 'studio',
+            error: true,
+          }),
+      )
     return () => {
       alive = false
     }
-  }, [conn, destinations, goliveView, ignoreServiceLimits, live])
-  const fetchedData = fetched && fetched.conn === conn ? fetched : null
+  }, [conn, destinations, fetchRev, goliveView, ignoreServiceLimits, live])
+  const fetchedData =
+    fetched && fetched.conn === conn && fetched.rev === fetchRev ? fetched : null
+  const fetchLoading = needsFetch && !fetchedData
+  const fetchFailed = Boolean(needsFetch && fetchedData?.error)
   const ignoreLimits =
     ignoreServiceLimits ??
     goliveView?.advanced?.ignore_service_limits ??
     fetchedData?.ignoreServiceLimits ??
     false
   const isLive = live ?? goliveView?.live ?? storeFrame?.live ?? fetchedData?.live ?? false
+  const effectiveDests = useMemo(
+    () => destinations ?? liveDests ?? fetchedData?.dests ?? [],
+    [destinations, liveDests, fetchedData],
+  )
+  const effectiveBudget =
+    encodeBudget !== undefined
+      ? encodeBudget
+      : (goliveView?.encode_budget ?? storeFrame?.encode_budget ?? fetchedData?.encodeBudget ?? null)
+  const effectiveSource =
+    qualitySource ??
+    (goliveView
+      ? goliveView.obs.streaming && goliveView.obs.points_here && !goliveView.live
+        ? 'obs'
+        : 'studio'
+      : fetchedData && !fetchedData.error
+        ? fetchedData.source
+        : undefined)
+  const hasDestContext = Boolean(destinations || liveDests || (fetchedData && !fetchedData.error))
   const capSummary = useMemo(
     () =>
-      describeStreamCap(s.video_kbps, destinations ?? liveDests ?? fetchedData?.dests ?? [], {
+      describeStreamCap(s.video_kbps, effectiveDests, {
         ignoreServiceLimits: ignoreLimits,
         live: isLive,
+        encodeBudget: effectiveBudget,
+        source: effectiveSource,
+        draftWidth: sentW,
+        draftHeight: sentH,
+        draftFps: s.fps,
       }),
-    [s.video_kbps, destinations, liveDests, fetchedData, ignoreLimits, isLive],
+    [
+      s.video_kbps,
+      effectiveDests,
+      ignoreLimits,
+      isLive,
+      effectiveBudget,
+      effectiveSource,
+      sentW,
+      sentH,
+      s.fps,
+    ],
   )
+  const bitrateBreakdown = useMemo(
+    () =>
+      describeSettingsBitrates(
+        { videoKbps: s.video_kbps, width: sentW, height: sentH, fps: s.fps },
+        effectiveDests,
+        {
+          ignoreServiceLimits: ignoreLimits,
+          encodeBudget: effectiveBudget,
+          source: effectiveSource,
+        },
+      ),
+    [s.video_kbps, sentW, sentH, s.fps, effectiveDests, ignoreLimits, effectiveBudget, effectiveSource],
+  )
+  const bitrateSub: ReactNode = fetchLoading ? (
+    'Checking platform limits…'
+  ) : fetchFailed ? (
+    <span>
+      Couldn’t check platform limits.{' '}
+      <button
+        type="button"
+        onClick={() => setFetchRev((r) => r + 1)}
+        className="underline text-accent-text hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+      >
+        Retry
+      </button>
+    </span>
+  ) : hasDestContext ? (
+    (bitrateBreakdown.line ?? 'No platforms enabled')
+  ) : (
+    'Video sent to each platform'
+  )
+  const bitrateSubInfo =
+    !fetchLoading && !fetchFailed && hasDestContext
+      ? bitrateBreakdown.line && bitrateBreakdown.detail
+        ? { label: 'About bitrate per platform', detail: bitrateBreakdown.detail }
+        : {
+            label: 'About platform bitrates',
+            detail: 'Turn on a platform in Go live to see how your bitrate applies to each one.',
+          }
+      : undefined
   return (
     <>
       <button
@@ -726,10 +848,13 @@ export function StreamPage({
       {capSummary.settingsNote && (
         <p
           role="status"
-          className="flex items-start gap-2 rounded-control border border-line bg-surface-2 px-3 py-2 text-[13.5px] leading-snug text-text-2"
+          className="flex flex-wrap items-center gap-2 rounded-control border border-line bg-surface-2 px-3 py-2 text-[13.5px] leading-snug text-text-2"
         >
-          <Info size={16} weight="fill" aria-hidden className="mt-0.5 shrink-0 text-accent-text" />
-          <span>{capSummary.settingsNote}</span>
+          <Info size={16} weight="fill" aria-hidden className="shrink-0 text-accent-text" />
+          <span className="min-w-0 flex-1">{capSummary.settingsNote}</span>
+          {capSummary.settingsDetail && (
+            <InfoTip label="About bitrate caps">{capSummary.settingsDetail}</InfoTip>
+          )}
         </p>
       )}
       <Heading
@@ -768,7 +893,7 @@ export function StreamPage({
           More options
         </summary>
         <div className="border-t border-line px-3.5 py-1">
-          <Row label="Bitrate" sub="Video sent to each platform">
+          <Row label="Bitrate" sub={bitrateSub} subInfo={bitrateSubInfo}>
             <NumberBox
               label="Bitrate"
               value={s.video_kbps}
@@ -819,7 +944,7 @@ export function StreamPage({
             <Switch
               label="B-frames"
               hideLabel
-              checked={s.b_frames}
+              checked={Boolean(s.b_frames)}
               onChange={(b_frames) => set({ b_frames })}
             />
           </Row>

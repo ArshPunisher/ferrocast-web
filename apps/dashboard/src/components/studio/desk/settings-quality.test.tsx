@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { StudioSettings } from '@ferrocast/api'
+import { useLive } from '../../../lib/store'
 import {
   PicturePage,
   RecordPage,
@@ -28,6 +29,7 @@ let host: HTMLElement | null = null
 
 afterEach(async () => {
   await act(async () => root?.unmount())
+  useLive.setState({ conn: null, goliveView: null })
   host?.remove()
   root = null
   host = null
@@ -279,5 +281,191 @@ describe('Stream quality bitrate cap note (U2)', () => {
     )
     expect(host?.textContent).not.toContain('Twitch takes at most')
     expect(host?.textContent).not.toContain('Will send 6.0 Mbps')
+  })
+
+  it('shows one-line per-platform bitrate breakdown with (i) next to Bitrate in Studio separate-encode mode and empty state', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+
+    const studioDests = [
+      {
+        ...capDests[1]!,
+        resolved_quality: {
+          width: 2560,
+          height: 1440,
+          fps: 60,
+          kbps: 18000,
+          codec: 'h264' as const,
+          audio_kbps: 160,
+          auto_fitted: false,
+          separate_encode: false,
+          group_id: 'main',
+          shared_with: [],
+        },
+      },
+      {
+        ...capDests[0]!,
+        resolved_quality: {
+          width: 2560,
+          height: 1440,
+          fps: 60,
+          kbps: 6000,
+          codec: 'h264' as const,
+          audio_kbps: 160,
+          auto_fitted: true,
+          separate_encode: true,
+          group_id: 'g_1',
+          shared_with: [],
+        },
+      },
+      {
+        id: 'kick',
+        kind: 'kick' as const,
+        canvas: 'main' as const,
+        name: 'Kick',
+        account: 'arsh',
+        enabled: true,
+        connected: true,
+        health: null,
+        blocked: null,
+        rules: [],
+        resolved_quality: {
+          width: 1920,
+          height: 1080,
+          fps: 60,
+          kbps: 8000,
+          codec: 'h264' as const,
+          audio_kbps: 160,
+          auto_fitted: true,
+          separate_encode: true,
+          group_id: 'g_2',
+          shared_with: [],
+        },
+      },
+    ]
+
+    await act(async () =>
+      root?.render(
+        <StreamPage
+          s={mk({ width: 2560, height: 1440, fps: 60, video_kbps: 18000 })}
+          set={() => {}}
+          destinations={studioDests}
+          encodeBudget={{
+            status: 'ok',
+            source: 'apple_silicon',
+            used_mpx_s: 566,
+            limit_mpx_s: 995,
+            used_sessions: 3,
+            max_sessions: 8,
+          }}
+        />,
+      ),
+    )
+
+    expect(host?.textContent).toContain('YouTube 18 · Twitch 6 · Kick 8 (1080p)')
+    expect(host?.textContent).not.toContain('Will send 6.0 Mbps')
+    expect(host?.querySelector('[aria-label="About bitrate per platform"]')).not.toBeNull()
+
+    // Empty enabled destinations state.
+    await act(async () =>
+      root?.render(
+        <StreamPage
+          s={mk({ video_kbps: 6000 })}
+          set={() => {}}
+          destinations={studioDests.map((d) => ({ ...d, enabled: false }))}
+        />,
+      ),
+    )
+    expect(host?.textContent).toContain('No platforms enabled')
+    expect(host?.querySelector('[aria-label="About platform bitrates"]')).not.toBeNull()
+  })
+
+  it('handles loading, fetch error with Retry, and success recovery cleanly', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+
+    let resolveReq!: (v: unknown) => void
+    let rejectReq!: (e: unknown) => void
+    let calls = 0
+    const mockClient = {
+      request: () => {
+        calls++
+        return new Promise((res, rej) => {
+          resolveReq = res
+          rejectReq = rej
+        })
+      },
+    }
+    useLive.setState({
+      conn: { client: mockClient } as unknown as NonNullable<
+        ReturnType<typeof useLive.getState>['conn']
+      >,
+      goliveView: null,
+    })
+
+    await act(async () =>
+      root?.render(<StreamPage s={mk({ video_kbps: 12000 })} set={() => {}} />),
+    )
+    expect(host?.textContent).toContain('Checking platform limits…')
+
+    await act(async () => {
+      rejectReq(new Error('offline'))
+    })
+    expect(host?.textContent).toContain('Couldn’t check platform limits.')
+    const retry = Array.from(host?.querySelectorAll('button') ?? []).find(
+      (b) => b.textContent?.trim() === 'Retry',
+    )
+    expect(retry).toBeTruthy()
+
+    await act(async () => {
+      retry?.click()
+    })
+    expect(calls).toBe(2)
+
+    await act(async () => {
+      resolveReq({
+        ingest: null,
+        obs: { state: 'disconnected', streaming: false, points_here: false },
+        live: false,
+        stats: {
+          kbps: 0,
+          keyframe_interval_ms: null,
+          video_codec: null,
+          width: null,
+          height: null,
+          fps: null,
+        },
+        vertical_live: false,
+        vertical_stats: {
+          kbps: 0,
+          keyframe_interval_ms: null,
+          video_codec: null,
+          width: null,
+          height: null,
+          fps: null,
+        },
+        destinations: [capDests[1]!, capDests[0]!],
+        encode_budget: {
+          status: 'ok',
+          source: 'apple_silicon',
+          used_mpx_s: 248.8,
+          limit_mpx_s: 995,
+          used_sessions: 2,
+          max_sessions: 8,
+        },
+        upload: null,
+        protect: false,
+        aitum_ok: false,
+        auto_quality: false,
+        cut: { source: 'none', config: {}, state: null, ffmpeg: { state: 'ready' } },
+        advanced: { protect_order: [], per: {} },
+      })
+    })
+    expect(host?.textContent).toContain('YouTube 12 · Twitch 6 Mbps')
+    expect(host?.querySelector('[aria-label="About bitrate per platform"]')).not.toBeNull()
   })
 })
