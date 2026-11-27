@@ -1,62 +1,127 @@
-// The "Go live to" panel: the platforms the Studio's picture goes to, each switched on or off
-// here; adding, ordering and the rest open Go live's full list.
+// The "Go live to" panel: List 3b rows (fixed two lines, state tag, matching icon pip,
+// status popover, compact footer summary/strip) + Modal A quality picker.
 
 import { useEffect, useRef, useState } from 'react'
 import {
   healthText,
   onCanvas,
   reconnectingText,
+  type DestinationQuality,
   type DestinationView,
   type GoLiveView,
-  type ResolvedQuality,
   type StudioSettings,
 } from '@ferrocast/api'
-import { DeviceMobile, Gauge, GearSix, Plus } from '@phosphor-icons/react'
 import {
-  IconButton,
+  CaretDown,
+  CaretRight,
+  CircleNotch,
+  DeviceMobile,
+  Gauge,
+  GearSix,
+  Plus,
+  Warning,
+} from '@phosphor-icons/react'
+import {
   Button,
   Dialog,
+  IconButton,
   InfoLine,
   InfoTip,
+  PopoverSurface,
   Skeleton,
   Switch,
   cx,
   toast,
 } from '@ferrocast/ui'
-import { LoadError } from '../../Panel'
 import { useAction, type Resource } from '../../../lib/hooks'
-import { useLive } from '../../../lib/store'
 import { useUsesObs } from '../../../lib/picture'
-import { AllFailedBanner, Logo, Platforms, RowText, useGoLive } from '../golive'
-import { describeDestinationRate, describeStreamCapFromView } from '../bitrate-summary'
+import { useLive } from '../../../lib/store'
+import { LoadError } from '../../Panel'
+import { DestinationQualityModal, useQualityOptions } from '../destination-quality-picker'
+import { Logo, Platforms, useGoLive } from '../golive'
 import {
-  DestinationQualityPicker,
-  formatRate,
-  formatResFps,
-  useQualityOptions,
-} from '../destination-quality-picker'
+  buildGoLiveDockVM,
+  type DestinationRowVM,
+  type FooterAction,
+  type ListPipTone,
+  type ListTagKind,
+  type RowAction,
+} from '../golive-list-model'
 import { useSaveOrder } from '../save-order'
-import { DockHeader } from './layout'
-import { useDesk, useDeskStats } from './common'
 import { AutoConfigDialog } from './auto-config'
+import { useDesk, useDeskStats } from './common'
+import { DockHeader } from './layout'
 import { useReadyCheckState } from './ready-check-state'
+
+function tagBadgeClass(kind: ListTagKind): string {
+  switch (kind) {
+    case 'live':
+      return 'bg-[var(--fc-ok-soft)] text-[var(--fc-ok)]'
+    case 'reconnecting':
+      return 'bg-[var(--fc-warn-soft)] text-[var(--fc-warn)]'
+    case 'error':
+      return 'bg-[var(--fc-danger-soft)] text-[var(--fc-danger)]'
+    case 'switching':
+      return 'bg-[var(--fc-accent-soft)] text-[var(--fc-accent-text)]'
+    case 'off':
+    default:
+      return 'bg-surface-3 text-text-3'
+  }
+}
+
+function pipToneClass(tone: ListPipTone, pulse: boolean): string {
+  const base =
+    tone === 'live'
+      ? 'bg-[var(--fc-ok)] text-[var(--fc-ok)]'
+      : tone === 'warn'
+        ? 'bg-[var(--fc-warn)] text-[var(--fc-warn)]'
+        : tone === 'error'
+          ? 'bg-[var(--fc-danger)] text-[var(--fc-danger)]'
+          : tone === 'work'
+            ? 'bg-[var(--fc-accent-text)] text-[var(--fc-accent-text)]'
+            : 'bg-text-3 text-text-3 opacity-55'
+  return cx(
+    'pointer-events-none absolute -top-1 -right-1 size-2.5 rounded-full ring-2 ring-[var(--fc-surface-1)]',
+    base,
+    pulse && 'fc-golive-pip-pulse',
+  )
+}
 
 export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoLiveView | null }) {
   const api = useGoLive()
   const { run, busy } = useAction()
   const readyState = useReadyCheckState()
   const hasFloatingReady = Boolean(readyState?.active && !readyState.dismissed)
-  // Which platforms Manage edits: the wide picture's or the vertical one's.
   const [managing, setManaging] = useState<'main' | 'vertical' | null>(null)
   const [optimizing, setOptimizing] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const lastFailedOrderRef = useRef<{ id: string; enabled: boolean }[] | null>(null)
+
+  const [switchingTargets, setSwitchingTargets] = useState<Record<string, string>>({})
+  const [modalTarget, setModalTarget] = useState<{
+    destId: string
+    triggerEl: HTMLElement | null
+  } | null>(null)
+  const [statusPop, setStatusPop] = useState<{
+    destId: string
+    anchorEl: HTMLElement
+  } | null>(null)
+  const [reachFeedback, setReachFeedback] = useState<
+    Record<string, { ok: boolean; message: string } | undefined>
+  >({})
+  const [needsLookOpen, setNeedsLookOpen] = useState(false)
+  const needsLookAnchorRef = useRef<HTMLButtonElement>(null)
+  const statusPopRef = useRef<HTMLDivElement>(null)
+  const needsLookPopRef = useRef<HTMLDivElement>(null)
+  const statusAnchorRef = useRef<HTMLElement | null>(null)
+  statusAnchorRef.current = statusPop?.anchorEl ?? null
+
   const desk = useDesk()
-  // While live, the stream on air takes it at once (frame rate, size, encoder, bitrate).
   const live = !!view?.live
-  // On air, each destination's own line ("Live · 6.5 Mbps") comes from this reading, which no
-  // frame brings for the Studio's own stream: read again now and then (S18 B5).
   const onAir = useDeskStats((s) => !!s?.stream && !s.stream.failed)
   const wasOnAir = useRef(onAir)
   const { reload } = res
+
   useEffect(() => {
     if (!onAir) {
       if (wasOnAir.current) reload()
@@ -75,6 +140,27 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       document.removeEventListener('visibilitychange', poll)
     }
   }, [onAir, reload])
+
+  // Clear finished optimistic switching labels once backend clears switching_quality.
+  useEffect(() => {
+    if (!view) return
+    setSwitchingTargets((prev) => {
+      const keys = Object.keys(prev)
+      if (keys.length === 0) return prev
+      const next: Record<string, string> = {}
+      let changed = false
+      for (const k of keys) {
+        const match = view.destinations.find((d) => d.id === k)
+        if (match?.switching_quality) {
+          next[k] = prev[k]!
+        } else {
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [view])
+
   const applyOptimized = (patch: Partial<StudioSettings>) =>
     void run('optimize', async () => {
       const cur = await desk.api.studioSettings()
@@ -94,12 +180,12 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
             },
       )
     })
+
   const mine = view ? onCanvas(view.destinations, 'main') : []
-  // Owner's pick G1: the vertical platforms in their own group under the wide ones.
   const tall = view ? onCanvas(view.destinations, 'vertical') : []
-  // With the Studio, the vertical stream is always its vertical picture (cutting is for OBS).
   const cutting = view?.cut.source === 'cut'
   const reloadView = res.reload
+
   useEffect(() => {
     if (!cutting) return
     void api
@@ -107,31 +193,35 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       .then(reloadView)
       .catch(() => undefined)
   }, [cutting, api, reloadView])
+
   const hasPicture = !!desk.scenes.data?.vertical
-  /** A platform says the video is too much: the Studio's bitrate down to what it asks. */
-  const fixBitrate = (kbps: number) =>
-    void run('bitrate', async () => {
-      const cur = await desk.api.studioSettings()
-      const r = await desk.api.setStudioSettings({ ...cur, video_kbps: kbps })
-      desk.prefs.set(r.settings)
-      return r
-    }).then((r) => {
-      if (!r) return
-      toast(
-        r.restart
-          ? {
-              tone: 'warn',
-              message: `Video bitrate set to ${kbps.toLocaleString()} kbps.`,
-              hint: r.restart,
-              detail: r.restart_detail,
-            }
-          : { tone: 'ok', message: `Video bitrate set to ${kbps.toLocaleString()} kbps.` },
-      )
+  const saver = useSaveOrder(api, () => {
+    setSaveError(null)
+    lastFailedOrderRef.current = null
+    res.reload()
+  })
+
+  const submitOrder = (all: { id: string; enabled: boolean }[], tagKey: string) => {
+    void run(tagKey, async () => {
+      try {
+        const result = await saver.request(all)
+        if (result !== null) {
+          setSaveError(null)
+          lastFailedOrderRef.current = null
+        }
+        return result
+      } catch (e) {
+        lastFailedOrderRef.current = all
+        setSaveError(e instanceof Error ? e.message : 'Save failed.')
+        throw e
+      }
+    }).then(() => {
+      res.reload()
     })
-  const saver = useSaveOrder(api, () => res.reload())
+  }
+
   const toggle = (d: DestinationView, enabled: boolean) => {
     if (!view) return
-    // The engine wants every destination, in order, both pictures.
     const all = view.destinations.map((x) => ({
       id: x.id,
       enabled: x.id === d.id ? enabled : x.enabled,
@@ -140,39 +230,15 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       ...(v ?? view),
       destinations: (v ?? view).destinations.map((x) => (x.id === d.id ? { ...x, enabled } : x)),
     }))
-    void run(`on:${d.id}`, () => saver.request(all)).then(() => {
-      res.reload()
-    })
+    submitOrder(all, `on:${d.id}`)
   }
-  const retry = (d: DestinationView) =>
-    void run(`retry:${d.id}`, () => api.resume(d.id).then(() => true), {
-      success: `Retrying ${d.name}.`,
-    }).then((r) => {
-      if (r) res.reload()
-    })
-  const canRetry = onAir || live
-  const ignoreServiceLimits = Boolean(view?.advanced?.ignore_service_limits)
-  const audioKbps = desk.prefs.data?.audio_kbps ?? 160
-  const videoKbps = desk.prefs.data?.video_kbps ?? null
-  const capSummary = view
-    ? describeStreamCapFromView(view.destinations, videoKbps, {
-        ignoreServiceLimits,
-        live: view.live,
-        encodeBudget: view.encode_budget,
-      })
-    : null
-  const mainStreamKbps = view
-    ? view.stats.kbps ||
-      (capSummary?.effectiveVideoKbps
-        ? capSummary.effectiveVideoKbps + audioKbps
-        : 6000 + audioKbps)
-    : 6000 + audioKbps
-  const vertStreamKbps = view ? view.vertical_stats.kbps || 4500 + audioKbps : 4500 + audioKbps
+
   const usesObs = useUsesObs()
   const isRemote = useLive((s) => s.remote !== null)
   const qualityOpts = useQualityOptions(view, Boolean(view), usesObs, res.reload)
   const reloadOptsRef = useRef(qualityOpts.reload)
   reloadOptsRef.current = qualityOpts.reload
+
   const prefsSig = desk.prefs.data
     ? `${desk.prefs.data.video_kbps}:${desk.prefs.data.width}x${desk.prefs.data.height}@${desk.prefs.data.fps}:${desk.prefs.data.scale?.join('x') ?? ''}:${desk.prefs.data.encoder}`
     : null
@@ -184,100 +250,253 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
     reloadView()
     reloadOptsRef.current()
   }, [prefsSig, reloadView])
-  const destinationsById = Object.fromEntries(
-    (view?.destinations ?? []).map((dest) => [dest.id, { name: dest.name, kind: dest.kind }]),
-  )
+
   const handleQualityUpdated = (nextView: GoLiveView) => {
     res.set(nextView)
     useLive.getState().setGoLiveView(nextView)
     res.reload()
+    reloadOptsRef.current()
   }
 
-  const enabledDests = (view?.destinations ?? []).filter((d) => d.enabled && !d.blocked)
-  const encodeGroupSummary = (() => {
-    if (!view || usesObs || enabledDests.length === 0) return null
-    const groups = new Map<string, { resolved: ResolvedQuality; names: string[] }>()
-    for (const d of enabledDests) {
-      const rq = d.resolved_quality
-      if (!rq) continue
-      const existing = groups.get(rq.group_id)
-      if (existing) existing.names.push(d.name)
-      else groups.set(rq.group_id, { resolved: rq, names: [d.name] })
-    }
-    if (groups.size === 0) return null
-    const totalKbps = Array.from(groups.values()).reduce(
-      (sum, g) => sum + g.resolved.kbps + g.resolved.audio_kbps,
-      0,
-    )
-    const breakdown = Array.from(groups.values())
-      .map(
-        (g) =>
-          `${g.names.join(', ')}: ${formatResFps(g.resolved.width, g.resolved.height, g.resolved.fps)} at ${formatRate(g.resolved.kbps)}`,
-      )
-      .join(' | ')
-    return {
-      places: enabledDests.length,
-      encodes: groups.size,
-      totalKbps,
-      breakdown,
-    }
-  })()
+  const applyDestinationQuality = (destId: string, quality: DestinationQuality) =>
+    void run(`quality:${destId}`, async () => {
+      const nextView = await api.setQuality(destId, quality)
+      handleQualityUpdated(nextView)
+      return true
+    })
 
-  const row = (d: DestinationView) => (
-    <li key={d.id} className="flex items-start gap-2.5 border-b border-line py-1.5 pr-2 pl-3">
-      <div className="mt-0.5 shrink-0">
-        <Logo kind={d.kind} size={20} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <RowText
-          d={d}
-          fixBitrate={fixBitrate}
-          compact
-          hideRateBadges={Boolean(d.resolved_quality)}
-          rateInfo={
-            capSummary
-              ? describeDestinationRate(d, capSummary, {
-                  streamKbps: mainStreamKbps,
-                  verticalKbps: vertStreamKbps,
-                  videoKbps,
-                  audioKbps,
-                  ignoreServiceLimits,
-                  live: Boolean(d.canvas === 'vertical' ? view?.vertical_live : view?.live),
-                })
-              : undefined
+  const runRowAction = (d: DestinationView, action: RowAction, sourceEl?: HTMLElement | null) => {
+    switch (action.kind) {
+      case 'connect':
+        setStatusPop(null)
+        setNeedsLookOpen(false)
+        if (typeof window !== 'undefined') {
+          window.location.hash = '#/settings/accounts'
+        }
+        return
+      case 'manage':
+        setStatusPop(null)
+        setNeedsLookOpen(false)
+        setManaging(d.canvas === 'vertical' ? 'vertical' : 'main')
+        return
+      case 'open_quality':
+        setStatusPop(null)
+        setNeedsLookOpen(false)
+        setModalTarget({
+          destId: d.id,
+          triggerEl: sourceEl ?? statusAnchorRef.current ?? needsLookAnchorRef.current,
+        })
+        return
+      case 'set_quality':
+        setStatusPop(null)
+        setNeedsLookOpen(false)
+        applyDestinationQuality(d.id, action.quality)
+        return
+      case 'retry':
+        setStatusPop(null)
+        setNeedsLookOpen(false)
+        void run(`retry:${d.id}`, () => api.resume(d.id).then(() => true), {
+          success: `Retrying ${d.name}.`,
+        }).then((r) => {
+          if (r) res.reload()
+        })
+        return
+      case 'test_connection':
+        void run(`reach:${d.id}`, async () => {
+          const r = await api.testDestination(d.id)
+          setReachFeedback((prev) => ({ ...prev, [d.id]: r }))
+          return r
+        })
+        return
+    }
+  }
+
+  const runFooterAction = (action: FooterAction) => {
+    switch (action.kind) {
+      case 'retry_save':
+        if (lastFailedOrderRef.current) {
+          submitOrder(lastFailedOrderRef.current, 'retry-save')
+        } else {
+          setSaveError(null)
+          res.reload()
+        }
+        return
+      case 'match_to_share':
+        applyDestinationQuality(action.destId, action.quality)
+        return
+      case 'retry_all':
+        void run('retry-all', async () => {
+          for (const id of action.destIds) {
+            await api.resume(id)
           }
+          res.reload()
+          return true
+        })
+        return
+      case 'manage':
+        setManaging('main')
+        return
+    }
+  }
+
+  const vm = view
+    ? buildGoLiveDockVM(view, {
+        usesObs,
+        qualityOptionsById: qualityOpts.data?.destinations ?? {},
+        optionsResponse: qualityOpts.data,
+        switchingTargets,
+        saveError,
+      })
+    : null
+
+  const row = (r: DestinationRowVM) => {
+    const d = r.dest
+    const isStatusOpen = statusPop?.destId === d.id
+    return (
+      <li
+        key={d.id}
+        data-golive-row={d.id}
+        className={cx(
+          'min-h-[62px] grid grid-cols-[auto_minmax(0,1fr)_36px_auto] items-center gap-2.5 border-b border-line px-3 py-2 transition-colors',
+          r.rowTint === 'warn' && 'bg-[color-mix(in_oklab,var(--fc-warn-soft)_42%,transparent)]',
+          r.rowTint === 'error' && 'bg-[color-mix(in_oklab,var(--fc-danger-soft)_38%,transparent)]',
+        )}
+      >
+        <div className="relative shrink-0">
+          <Logo kind={d.kind} />
+          <span
+            aria-hidden
+            data-golive-pip={d.id}
+            className={pipToneClass(r.pipTone, r.pipPulse)}
+          />
+        </div>
+
+        <div className="min-w-0 flex flex-col gap-0.5">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <b className="truncate text-[14px] leading-tight font-bold text-text">{d.name}</b>
+            <span
+              data-golive-tag={d.id}
+              className={cx(
+                'inline-flex h-[18px] shrink-0 items-center rounded-full px-[7px] text-[10px] font-bold tracking-[0.06em] uppercase',
+                tagBadgeClass(r.tagKind),
+              )}
+            >
+              {r.tagLabel}
+            </span>
+          </div>
+
+          {r.line2.kind === 'quality' ? (
+            <button
+              type="button"
+              data-quality-trigger={d.id}
+              disabled={r.line2.disabled}
+              aria-haspopup="dialog"
+              aria-expanded={modalTarget?.destId === d.id}
+              aria-label={`Change quality for ${d.name}: ${r.line2.text}`}
+              onClick={(e) => {
+                if (r.line2.kind !== 'quality' || r.line2.disabled) return
+                setStatusPop(null)
+                setNeedsLookOpen(false)
+                setModalTarget({ destId: d.id, triggerEl: e.currentTarget })
+              }}
+              className="inline-flex h-[20px] max-w-full items-center gap-1 truncate text-left text-[12px] font-medium text-text-2 hover:text-text disabled:cursor-default disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fc-accent)]"
+            >
+              <span className="truncate">{r.line2.text}</span>
+              {!r.line2.disabled && (
+                <CaretDown size={11} weight="bold" className="shrink-0 opacity-75" aria-hidden />
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-status-trigger={d.id}
+              aria-haspopup="dialog"
+              aria-expanded={isStatusOpen}
+              aria-label={`${d.name} status: ${r.line2.text}`}
+              onClick={(e) => {
+                setNeedsLookOpen(false)
+                setStatusPop((prev) =>
+                  prev?.destId === d.id ? null : { destId: d.id, anchorEl: e.currentTarget },
+                )
+              }}
+              className={cx(
+                'inline-flex h-[20px] max-w-full items-center gap-1 truncate text-left text-[12px] font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fc-accent)]',
+                r.line2.tone === 'error' && 'text-[var(--fc-danger)]',
+                r.line2.tone === 'warn' && 'text-[var(--fc-warn)]',
+                r.line2.tone === 'work' && 'text-[var(--fc-accent-text)]',
+                r.line2.tone === 'muted' && 'text-text-3 hover:text-text',
+              )}
+            >
+              {r.line2.icon === 'spin' && (
+                <CircleNotch
+                  size={12}
+                  weight="bold"
+                  className="shrink-0 animate-spin"
+                  aria-hidden
+                />
+              )}
+              {r.line2.icon === 'warn' && (
+                <Warning size={12} weight="bold" className="shrink-0" aria-hidden />
+              )}
+              <span className="truncate">{r.line2.text}</span>
+              <CaretRight size={11} weight="bold" className="shrink-0 opacity-75" aria-hidden />
+            </button>
+          )}
+        </div>
+
+        <div
+          role="img"
+          aria-label={r.barLabel}
+          title={r.barLabel}
+          className={cx(
+            'h-[5px] w-full overflow-hidden rounded-full bg-surface-3',
+            r.barDimmed && 'opacity-45',
+          )}
+        >
+          <div
+            className={cx(
+              'h-full rounded-full transition-[width] duration-200',
+              r.barMode === 'progress' || r.tagKind === 'live'
+                ? 'bg-[var(--fc-pick)]'
+                : r.tagKind === 'error'
+                  ? 'bg-[var(--fc-danger)]'
+                  : r.tagKind === 'reconnecting'
+                    ? 'bg-[var(--fc-warn)]'
+                    : r.tagKind === 'switching'
+                      ? 'bg-[var(--fc-accent)]'
+                      : 'bg-text-3',
+            )}
+            style={{ width: `${r.barPct}%` }}
+          />
+        </div>
+
+        <Switch
+          hideLabel
+          checked={d.enabled}
+          disabled={busy === `on:${d.id}` || r.switchDisabled}
+          label={`Go live on ${d.name}`}
+          onChange={(on) => toggle(d, on)}
         />
-        <DestinationQualityPicker
-          dest={d}
-          qualityResponse={qualityOpts.data}
-          optionsLoading={qualityOpts.loading}
-          optionsError={qualityOpts.error}
-          onReloadOptions={qualityOpts.reload}
-          onUpdated={handleQualityUpdated}
-          destinationsById={destinationsById}
-          usesObs={usesObs}
-          isRemote={isRemote}
-          compact
-        />
-        <LiveLine
-          d={d}
-          canRetry={canRetry}
-          retrying={busy === `retry:${d.id}`}
-          onRetry={() => retry(d)}
-        />
-      </div>
-      {/* At the top, lined up with the name, however long the notes below. */}
-      <Switch
-        label={`Go live on ${d.name}`}
-        hideLabel
-        checked={d.enabled}
-        disabled={busy !== null || (!!d.blocked && !d.enabled)}
-        onChange={(on) => toggle(d, on)}
-      />
-    </li>
-  )
+      </li>
+    )
+  }
+
+  const activeStatusRow =
+    statusPop && vm
+      ? ([...vm.mainRows, ...vm.verticalRows].find((r) => r.dest.id === statusPop.destId) ?? null)
+      : null
+  const activeModalDest =
+    modalTarget && view
+      ? (view.destinations.find((d) => d.id === modalTarget.destId) ?? null)
+      : null
+  const footerStrip = vm?.footer.mode === 'strip' ? vm.footer : null
+  const footerSummary = vm?.footer.mode === 'summary' ? vm.footer : null
+
   return (
-    <section aria-label="Go live to" className="flex min-h-0 flex-1 flex-col">
+    <section
+      aria-label="Go live to"
+      className={cx('flex min-h-0 flex-1 flex-col', hasFloatingReady && 'pb-12')}
+    >
       {desk.prefs.data && (
         <AutoConfigDialog
           open={optimizing}
@@ -310,25 +529,16 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           </>
         }
       />
-      <div className={cx('min-h-0 flex-1 overflow-y-auto', hasFloatingReady && 'pb-14')}>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {res.error && !view ? (
           <div className="p-3">
             <LoadError error={res.error} onRetry={res.reload} />
           </div>
-        ) : !view ? (
+        ) : !view || !vm ? (
           <Skeleton className="m-3 h-28" />
         ) : (
           <>
-            {!onAir && <AllFailedBanner view={view} compact />}
-            {live && mine.length > 0 && !view.destinations.some((d) => d.enabled) && (
-              <p
-                role="status"
-                className="m-0 border-b border-line px-3 py-2 text-[13.5px] text-text-2"
-              >
-                <b className="text-text">Live, not sending to any platform.</b> The stream and the
-                recording keep going: End stream is in the bar above.
-              </p>
-            )}
             {mine.length === 0 ? (
               <div className="flex flex-col items-start gap-3 p-3">
                 <p className="m-0 text-[14.5px] text-text-2">No platforms yet.</p>
@@ -338,19 +548,19 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               </div>
             ) : (
               <ul className="flex flex-col" aria-label="Platforms">
-                {mine.map(row)}
+                {vm.mainRows.map(row)}
               </ul>
             )}
-            {/* Shown whatever the wide list holds: the Vertical tab sends people here. */}
+
             <section aria-label="Vertical platforms">
-              <h3 className="m-0 flex items-center gap-1.5 border-b border-line px-3 pt-2 pb-1.5 text-[12px] font-bold text-text-2">
+              <h3 className="m-0 flex items-center gap-1.5 border-b border-line px-3 pt-2.5 pb-1.5 text-[12px] font-bold text-text-2">
                 <DeviceMobile size={14} weight="bold" aria-hidden />
                 Vertical
                 <span className="ml-auto font-semibold text-text-2">
                   {hasPicture ? 'On vertical picture' : 'Under picture'}
                 </span>
               </h3>
-              {tall.length > 0 && <ul className="flex flex-col">{tall.map(row)}</ul>}
+              {tall.length > 0 && <ul className="flex flex-col">{vm.verticalRows.map(row)}</ul>}
               <button
                 type="button"
                 onClick={() => setManaging('vertical')}
@@ -360,22 +570,261 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
                 Add a vertical destination
               </button>
             </section>
-            {encodeGroupSummary && (
-              <div
-                data-golive-encode-summary=""
-                className="flex items-center justify-between gap-2 border-t border-line px-3 py-2 text-[11.5px] font-medium text-text-3"
-              >
-                <span className="truncate">
-                  {encodeGroupSummary.places} {encodeGroupSummary.places === 1 ? 'place' : 'places'}{' '}
-                  · {formatRate(encodeGroupSummary.totalKbps)} · {encodeGroupSummary.encodes}{' '}
-                  {encodeGroupSummary.encodes === 1 ? 'encode' : 'encodes'}
-                </span>
-                <InfoTip label="Stream encode breakdown">{encodeGroupSummary.breakdown}</InfoTip>
-              </div>
-            )}
           </>
         )}
       </div>
+
+      {/* List 3b Footer: Compact Problem Strip or Calm Summary + Problem Count */}
+      {footerStrip && (
+        <div
+          data-golive-footer-strip=""
+          role="alert"
+          className="flex shrink-0 items-center justify-between gap-2.5 border-t border-[color-mix(in_oklab,var(--fc-danger)_38%,transparent)] bg-[var(--fc-danger-soft)] px-3 py-2.5 text-[12.5px]"
+        >
+          <span className="flex min-w-0 items-center gap-1.5 font-semibold text-[var(--fc-danger)]">
+            <Warning size={14} weight="bold" className="shrink-0" aria-hidden />
+            <span className="truncate">{footerStrip.text}</span>
+          </span>
+          <Button
+            size="xs"
+            variant="outline"
+            busy={busy === 'retry-all' || busy === 'retry-save'}
+            className="shrink-0 border-[color-mix(in_oklab,var(--fc-danger)_45%,transparent)] text-[var(--fc-danger)]"
+            onClick={() => runFooterAction(footerStrip.action)}
+          >
+            {footerStrip.action.label}
+          </Button>
+        </div>
+      )}
+      {footerSummary && (
+        <div
+          data-golive-encode-summary=""
+          className="flex shrink-0 items-center justify-between gap-2 border-t border-line px-3 py-2 text-[11.5px] font-medium text-text-3"
+        >
+          <div className="flex min-w-0 items-center gap-1.5 truncate">
+            <span className="truncate">{footerSummary.summaryText}</span>
+            {footerSummary.problemLinkText && (
+              <button
+                ref={needsLookAnchorRef}
+                type="button"
+                data-golive-problems-trigger=""
+                aria-haspopup="dialog"
+                aria-expanded={needsLookOpen}
+                onClick={() => {
+                  setStatusPop(null)
+                  setNeedsLookOpen((v) => !v)
+                }}
+                className={cx(
+                  'shrink-0 font-bold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fc-accent)]',
+                  footerSummary.problemLinkTone === 'error'
+                    ? 'text-[var(--fc-danger)]'
+                    : 'text-[var(--fc-warn)]',
+                )}
+              >
+                {footerSummary.problemLinkText}
+              </button>
+            )}
+          </div>
+          {footerSummary.breakdown && (
+            <InfoTip label="Stream encode breakdown">{footerSummary.breakdown}</InfoTip>
+          )}
+        </div>
+      )}
+
+      {/* Single-Row Status Popover */}
+      <PopoverSurface
+        open={Boolean(activeStatusRow?.popover)}
+        closeOnScroll={false}
+        onClose={(reason) => {
+          const anchor = statusAnchorRef.current
+          setStatusPop(null)
+          if (reason === 'escape' || reason === 'tab') {
+            anchor?.focus()
+          }
+        }}
+        anchorRef={statusAnchorRef}
+        surfaceRef={statusPopRef}
+        placement="bottom"
+        align="start"
+        gap={6}
+        edgePadding={8}
+        role="dialog"
+        aria-label={activeStatusRow ? `${activeStatusRow.dest.name} status` : 'Status'}
+        className="w-[min(300px,calc(100vw-24px))] rounded-[12px] border border-line-strong bg-surface-1 p-3 shadow-pop"
+      >
+        {activeStatusRow?.popover && (
+          <div data-golive-status-popover={activeStatusRow.dest.id} className="flex flex-col gap-2">
+            <div className="flex items-center gap-1.5">
+              {activeStatusRow.line2.kind === 'status' && activeStatusRow.line2.icon === 'spin' && (
+                <CircleNotch
+                  size={14}
+                  weight="bold"
+                  className={cx(
+                    'shrink-0 animate-spin',
+                    activeStatusRow.popover.tone === 'warn'
+                      ? 'text-[var(--fc-warn)]'
+                      : 'text-[var(--fc-accent-text)]',
+                  )}
+                  aria-hidden
+                />
+              )}
+              {activeStatusRow.line2.kind === 'status' && activeStatusRow.line2.icon === 'warn' && (
+                <Warning
+                  size={14}
+                  weight="bold"
+                  className={cx(
+                    'shrink-0',
+                    activeStatusRow.popover.tone === 'error'
+                      ? 'text-[var(--fc-danger)]'
+                      : 'text-[var(--fc-warn)]',
+                  )}
+                  aria-hidden
+                />
+              )}
+              <p className="m-0 text-[13.5px] font-bold text-text">
+                {activeStatusRow.popover.title}
+              </p>
+            </div>
+            <p className="m-0 text-[12.5px] leading-snug text-text-2">
+              {activeStatusRow.popover.body}
+            </p>
+            {reachFeedback[activeStatusRow.dest.id] && (
+              <p
+                role="status"
+                className={cx(
+                  'm-0 text-[12px] font-semibold',
+                  reachFeedback[activeStatusRow.dest.id]!.ok
+                    ? 'text-[var(--fc-ok)]'
+                    : 'text-[var(--fc-danger)]',
+                )}
+              >
+                {reachFeedback[activeStatusRow.dest.id]!.message}
+              </p>
+            )}
+            {activeStatusRow.popover.primaryAction && (
+              <div className="pt-0.5">
+                <Button
+                  size="xs"
+                  variant={activeStatusRow.popover.tone === 'warn' ? 'primary' : 'outline'}
+                  busy={busy === `reach:${activeStatusRow.dest.id}`}
+                  onClick={() =>
+                    runRowAction(
+                      activeStatusRow.dest,
+                      activeStatusRow.popover!.primaryAction!,
+                      statusAnchorRef.current,
+                    )
+                  }
+                >
+                  {activeStatusRow.popover.primaryAction.label}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </PopoverSurface>
+
+      {/* Footer "Needs a look" Summary Popover */}
+      <PopoverSurface
+        open={Boolean(needsLookOpen && footerSummary && footerSummary.problems.length > 0)}
+        closeOnScroll={false}
+        onClose={(reason) => {
+          setNeedsLookOpen(false)
+          if (reason === 'escape' || reason === 'tab') {
+            needsLookAnchorRef.current?.focus()
+          }
+        }}
+        anchorRef={needsLookAnchorRef}
+        surfaceRef={needsLookPopRef}
+        placement="top"
+        align="start"
+        gap={6}
+        edgePadding={8}
+        role="dialog"
+        aria-label="Needs a look"
+        className="w-[min(340px,calc(100vw-24px))] rounded-[12px] border border-line-strong bg-surface-1 p-3 shadow-pop"
+      >
+        {footerSummary && (
+          <div data-golive-needs-look="" className="flex flex-col gap-2.5">
+            <h3 className="m-0 text-[13px] font-bold text-text">Needs a look</h3>
+            <ul className="flex flex-col gap-2">
+              {footerSummary.problems.map((p) => {
+                const targetDest = view?.destinations.find((d) => d.id === p.destId)
+                return (
+                  <li
+                    key={p.destId}
+                    className="flex items-center justify-between gap-2.5 text-[12.5px]"
+                  >
+                    <div className="min-w-0">
+                      <p className="m-0 truncate font-bold text-text">{p.destName}</p>
+                      <p
+                        className={cx(
+                          'm-0 truncate font-medium',
+                          p.tone === 'error' ? 'text-[var(--fc-danger)]' : 'text-[var(--fc-warn)]',
+                        )}
+                      >
+                        {p.reason}
+                      </p>
+                    </div>
+                    {targetDest && (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        className="shrink-0"
+                        onClick={() => runRowAction(targetDest, p.action)}
+                      >
+                        {p.action.label}
+                      </Button>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        )}
+      </PopoverSurface>
+
+      {/* Shared Modal A for Row Quality or Popover "Open quality" */}
+      {view && activeModalDest && (
+        <DestinationQualityModal
+          open
+          onClose={() => setModalTarget(null)}
+          triggerEl={modalTarget?.triggerEl ?? null}
+          dest={activeModalDest}
+          allDestinations={view.destinations}
+          usesObs={usesObs}
+          isRemote={isRemote}
+          live={activeModalDest.canvas === 'vertical' ? view.vertical_live : view.live}
+          ffmpegDownloading={
+            activeModalDest.canvas === 'vertical' &&
+            view.cut.source === 'cut' &&
+            view.cut.ffmpeg.state === 'downloading'
+          }
+          ffmpegPercent={
+            activeModalDest.canvas === 'vertical' &&
+            view.cut.source === 'cut' &&
+            view.cut.ffmpeg.state === 'downloading'
+              ? view.cut.ffmpeg.percent
+              : undefined
+          }
+          ignoreServiceLimits={Boolean(view.advanced?.ignore_service_limits)}
+          optionsResponse={qualityOpts.data}
+          loading={qualityOpts.loading}
+          error={qualityOpts.error}
+          onReloadOptions={qualityOpts.reload}
+          onUpdated={handleQualityUpdated}
+          onOptimisticSwitch={(destId, label) =>
+            setSwitchingTargets((prev) => {
+              if (label === null) {
+                const copy = { ...prev }
+                delete copy[destId]
+                return copy
+              }
+              return { ...prev, [destId]: label }
+            })
+          }
+        />
+      )}
+
       <Dialog
         compact
         open={managing !== null}

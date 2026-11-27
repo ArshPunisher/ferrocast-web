@@ -1,65 +1,124 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ApiError,
-  type CustomQualityLimits,
-  type DestinationQualityOptions,
-  type DestinationView,
-  type GoLiveQualityOptionsResponse,
-  type GoLiveView,
-  type QualityOption,
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type {
+  DestinationQualityOptions,
+  DestinationView,
+  GoLiveQualityOptionsResponse,
+  GoLiveView,
 } from '@ferrocast/api'
-import {
-  Dialog,
-  PREVIEW_OVERLAYS_EVENT,
-  getPreviewOverlays,
-  resetPreviewOverlayRegistry,
-  subscribePreviewOverlays,
-} from '@ferrocast/ui'
 import { useLive } from '../../lib/store'
 import {
+  buildQualitySummaryText,
   DestinationQualityPicker,
-  buildCustomBitrates,
-  buildCustomResolutions,
-  curateQualityOptions,
-  formatQualityChip,
+  formatRate,
+  formatResFps,
+  useQualityOptions,
 } from './destination-quality-picker'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-function makeLimits(overrides: Partial<CustomQualityLimits> = {}): CustomQualityLimits {
-  return {
-    max_width: 2560,
-    max_height: 1440,
-    min_kbps: 1500,
-    max_kbps: 10000,
-    fps_choices: [30, 60],
-    codecs: ['h264'],
-    recommended_width: 1920,
-    recommended_height: 1080,
-    recommended_fps: 60,
-    recommended_kbps: 6000,
-    ...overrides,
+function installDialogMock() {
+  if (typeof HTMLDialogElement === 'undefined') return
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.setAttribute('open', '')
+    Object.defineProperty(this, 'open', { value: true, configurable: true })
+  }
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.removeAttribute('open')
+    Object.defineProperty(this, 'open', { value: false, configurable: true })
+    this.dispatchEvent(new Event('close'))
   }
 }
 
-function makeOption(overrides: Partial<QualityOption> = {}): QualityOption {
-  return {
-    id: 'opt',
-    label: '1080p60 · 6 Mbps',
-    quality: { mode: 'custom', width: 1920, height: 1080, fps: 60, kbps: 6000, codec: 'h264' },
-    resolved: { width: 1920, height: 1080, fps: 60, kbps: 6000, codec: 'h264' },
-    auto_fitted: false,
-    recommended: false,
-    note: null,
-    shares_encoder_with: [],
-    allowed: true,
-    disabled_reason: null,
-    ...overrides,
-  }
-}
+describe('quality summary formatting helpers', () => {
+  it('formats kbps and Mbps cleanly', () => {
+    expect(formatRate(6000)).toBe('6 Mbps')
+    expect(formatRate(4500)).toBe('4.5 Mbps')
+    expect(formatRate(800)).toBe('800 kbps')
+  })
+
+  it('formats landscape and portrait short-edge resolution labels cleanly', () => {
+    expect(formatResFps(1920, 1080, 60)).toBe('1080p60')
+    expect(formatResFps(2560, 1440, 60)).toBe('1440p60')
+    expect(formatResFps(1080, 1920, 60)).toBe('1080p60')
+    expect(formatResFps(1280, 720, 30)).toBe('720p30')
+  })
+
+  it('builds concise trigger readout for Same as main, auto-fit, OBS, and Custom', () => {
+    const base: DestinationView = {
+      id: 'twitch',
+      name: 'Twitch',
+      kind: 'twitch',
+      canvas: 'main',
+      account: 'a',
+      enabled: true,
+      connected: true,
+      health: null,
+      blocked: null,
+      rules: [],
+      issues: [],
+      quality: { mode: 'same_as_main' },
+      resolved_quality: {
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        kbps: 6000,
+        codec: 'h264',
+        audio_kbps: 160,
+        auto_fitted: true,
+        separate_encode: true,
+        group_id: 'g-twitch',
+        shared_with: [],
+      },
+    }
+
+    expect(buildQualitySummaryText(base, false)).toBe('1080p60 · 6 Mbps · auto')
+    expect(buildQualitySummaryText(base, true)).toBe('Same as OBS')
+
+    expect(
+      buildQualitySummaryText(
+        {
+          ...base,
+          id: 'youtube',
+          resolved_quality: {
+            ...base.resolved_quality!,
+            auto_fitted: false,
+            separate_encode: false,
+            width: 2560,
+            height: 1440,
+            kbps: 12000,
+          },
+        },
+        false,
+      ),
+    ).toBe('Same as main')
+
+    expect(
+      buildQualitySummaryText(
+        {
+          ...base,
+          id: 'kick',
+          quality: { mode: 'custom', width: 1280, height: 720, fps: 30, kbps: 3000, codec: 'h264' },
+          resolved_quality: {
+            width: 1280,
+            height: 720,
+            fps: 30,
+            kbps: 3000,
+            codec: 'h264',
+            audio_kbps: 160,
+            auto_fitted: false,
+            separate_encode: true,
+            group_id: 'g-kick',
+            shared_with: [],
+          },
+        },
+        false,
+      ),
+    ).toBe('720p30 · 3 Mbps')
+  })
+})
 
 function makeDest(overrides: Partial<DestinationView> = {}): DestinationView {
   return {
@@ -76,8 +135,8 @@ function makeDest(overrides: Partial<DestinationView> = {}): DestinationView {
     issues: [],
     quality: { mode: 'same_as_main' },
     resolved_quality: {
-      width: 1920,
-      height: 1080,
+      width: 2560,
+      height: 1440,
       fps: 60,
       kbps: 6000,
       codec: 'h264',
@@ -87,488 +146,413 @@ function makeDest(overrides: Partial<DestinationView> = {}): DestinationView {
       group_id: 'g-twitch',
       shared_with: [],
     },
-    switching_quality: false,
     ...overrides,
   }
 }
 
-function makeDestOpts(
-  overrides: Partial<DestinationQualityOptions> = {},
-): DestinationQualityOptions {
+function makeOpts(overrides: Partial<DestinationQualityOptions> = {}): DestinationQualityOptions {
   return {
     id: 'twitch',
     canvas: 'main',
     locked_reason: null,
     current: { mode: 'same_as_main' },
-    resolved: {
-      width: 1920,
-      height: 1080,
-      fps: 60,
-      kbps: 6000,
-      codec: 'h264',
-      audio_kbps: 160,
-      auto_fitted: true,
-      separate_encode: true,
-      group_id: 'g-twitch',
-      shared_with: [],
-    },
+    resolved: makeDest().resolved_quality!,
     options: [
-      makeOption({
+      {
         id: 'same_as_main',
         label: 'Same as main',
         quality: { mode: 'same_as_main' },
+        resolved: { width: 2560, height: 1440, fps: 60, kbps: 6000, codec: 'h264' },
         auto_fitted: true,
-      }),
-      makeOption({
-        id: '1440p60',
-        label: '1440p60 · 8 Mbps',
-        quality: { mode: 'custom', width: 2560, height: 1440, fps: 60, kbps: 8000, codec: 'h264' },
-        resolved: {
-          width: 2560,
-          height: 1440,
-          fps: 60,
-          kbps: 8000,
-          codec: 'h264',
-        },
+        recommended: true,
         note: "Above Twitch's recommended 1080p",
-      }),
-      makeOption({
+        shares_encoder_with: [],
+        allowed: true,
+        disabled_reason: null,
+      },
+      {
         id: '1080p60',
         label: '1080p60 · 6 Mbps',
+        quality: { mode: 'custom', width: 1920, height: 1080, fps: 60, kbps: 6000, codec: 'h264' },
+        resolved: { width: 1920, height: 1080, fps: 60, kbps: 6000, codec: 'h264' },
+        auto_fitted: false,
         recommended: true,
-      }),
-      makeOption({
-        id: '720p30',
-        label: '720p30 · 3 Mbps',
-        quality: { mode: 'custom', width: 1280, height: 720, fps: 30, kbps: 3000, codec: 'h264' },
-        resolved: {
-          width: 1280,
-          height: 720,
-          fps: 30,
-          kbps: 3000,
-          codec: 'h264',
-        },
-      }),
+        note: null,
+        shares_encoder_with: [],
+        allowed: true,
+        disabled_reason: null,
+      },
     ],
-    custom_limits: makeLimits(),
+    custom_limits: {
+      max_width: 2560,
+      max_height: 1440,
+      min_kbps: 500,
+      max_kbps: 6000,
+      fps_choices: [24, 30, 48, 60],
+      codecs: ['h264'],
+      recommended_width: 1920,
+      recommended_height: 1080,
+      recommended_fps: 60,
+      recommended_kbps: 6000,
+    },
     ...overrides,
   }
 }
 
 function makeResponse(
-  destOpts: DestinationQualityOptions = makeDestOpts(),
+  destOpts: Record<string, DestinationQualityOptions> = { twitch: makeOpts() },
+  overrides: Partial<GoLiveQualityOptionsResponse> = {},
 ): GoLiveQualityOptionsResponse {
   return {
     source: 'studio',
-    main: { width: 2560, height: 1440, fps: 60, kbps: 12000, codec: 'h264', audio_kbps: 160 },
-    vertical: null,
+    main: { width: 2560, height: 1440, fps: 60, kbps: 16000, codec: 'h264', audio_kbps: 160 },
+    vertical: { width: 1080, height: 1920, fps: 60, kbps: 6000, codec: 'h264', audio_kbps: 160 },
     budget: {
       status: 'ok',
-      source: 'nvenc_default',
+      source: 'apple_silicon',
       used_mpx_s: 120,
-      limit_mpx_s: 360,
+      limit_mpx_s: 400,
       used_sessions: 2,
-      max_sessions: 3,
-      note: null,
+      max_sessions: 4,
     },
-    destinations: { [destOpts.id]: destOpts },
+    destinations: destOpts,
+    ...overrides,
   }
 }
 
-function makeMinimalView(destinations: DestinationView[]): GoLiveView {
-  return {
-    live: true,
-    vertical_live: false,
-    destinations,
-    encode_groups: [],
-  } as unknown as GoLiveView
-}
-
-function flush(): Promise<void> {
-  return new Promise((r) => window.setTimeout(r, 0))
-}
-
-let root: Root | null = null
-let host: HTMLDivElement | null = null
-let requestMock: ReturnType<typeof vi.fn>
-
-beforeEach(() => {
-  resetPreviewOverlayRegistry()
-  host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  requestMock = vi.fn(async () => ({}))
-  useLive.setState({
-    conn: {
-      client: { request: requestMock },
-    } as never,
-  })
-})
-
-afterEach(async () => {
-  const prev = root
-  root = null
-  await act(async () => prev?.unmount())
-  host?.remove()
-  host = null
-  resetPreviewOverlayRegistry()
-  useLive.setState({ conn: null })
-})
-
-describe('quality helpers', () => {
-  it('formats active, auto-fitted, custom, switching, and locked chips accurately', () => {
-    const ytDest = makeDest({
-      id: 'yt',
-      name: 'YouTube',
-      kind: 'youtube',
-      resolved_quality: {
-        width: 1920,
-        height: 1080,
-        fps: 60,
-        kbps: 10000,
-        codec: 'h264',
-        audio_kbps: 160,
-        auto_fitted: false,
-        separate_encode: false,
-        group_id: 'g-main',
-        shared_with: [],
-      },
-    })
-    expect(formatQualityChip(ytDest).text).toBe('Same as main')
-
-    expect(formatQualityChip(makeDest()).text).toBe('1080p60 · 6 Mbps · auto')
-
-    const customDest = makeDest({
-      quality: { mode: 'custom', width: 1280, height: 720, fps: 30, kbps: 3000 },
-      resolved_quality: {
-        width: 1280,
-        height: 720,
-        fps: 30,
-        kbps: 3000,
-        codec: 'h264',
-        audio_kbps: 160,
-        auto_fitted: false,
-        separate_encode: true,
-        group_id: 'g-720',
-        shared_with: [],
-      },
-    })
-    expect(formatQualityChip(customDest).text).toBe('720p30 · 3 Mbps')
-
-    expect(formatQualityChip(makeDest({ switching_quality: true })).text).toBe('Switching…')
-    expect(
-      formatQualityChip(makeDest(), makeDestOpts({ locked_reason: 'Enhanced Broadcast (auto)' }))
-        .text,
-    ).toBe('Enhanced (auto)')
-    expect(formatQualityChip(makeDest(), null, { usesObs: true }).text).toBe('Same as OBS')
-    expect(formatQualityChip(makeDest({ direct: 'srt' })).text).toBe('Full stream')
+describe('Modal A DestinationQualityPicker component', () => {
+  afterEach(() => {
+    useLive.setState({ conn: null })
+    document.body.innerHTML = ''
+    vi.restoreAllMocks()
   })
 
-  it('curates large option lists to at most 4 while keeping recommended, current, and shared', () => {
-    const opts = makeDestOpts({
-      current: { mode: 'custom', width: 1280, height: 720, fps: 60, kbps: 4500 },
-      options: [
-        makeOption({
-          id: 'same_as_main',
-          label: 'Same as main',
-          quality: { mode: 'same_as_main' },
-        }),
-        makeOption({ id: '1440p60', label: '1440p60 · 8 Mbps' }),
-        makeOption({ id: '1080p60', label: '1080p60 · 6 Mbps', recommended: true }),
-        makeOption({ id: '1080p30', label: '1080p30 · 4.5 Mbps' }),
-        makeOption({
-          id: '720p60',
-          label: '720p60 · 4.5 Mbps',
-          quality: { mode: 'custom', width: 1280, height: 720, fps: 60, kbps: 4500 },
-          shares_encoder_with: ['Kick'],
-        }),
-        makeOption({ id: '720p30', label: '720p30 · 3 Mbps' }),
-      ],
-    })
-    const curated = curateQualityOptions(opts)
-    expect(curated).toHaveLength(4)
-    expect(curated.map((o) => o.id)).toContain('same_as_main')
-    expect(curated.map((o) => o.id)).toContain('1080p60')
-    expect(curated.map((o) => o.id)).toContain('720p60')
-  })
+  it('opens Modal A with resolution/fps/bitrate controls, Match main switch, and restores focus on Escape', async () => {
+    installDialogMock()
+    const request = vi.fn(async () => ({}))
+    useLive.setState({ conn: { client: { request } } as never })
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root: Root = createRoot(host)
 
-  it('bounds custom resolutions and bitrates by platform hard max and vertical orientation', () => {
-    const kickLimits = makeLimits({ max_width: 1920, max_height: 1080, max_kbps: 8000 })
-    const kickRes = buildCustomResolutions(kickLimits, 'main', 1920, 1080, 'kick')
-    expect(kickRes.some((r) => r.height > 1080)).toBe(false)
-    expect(buildCustomBitrates(kickLimits).every((k) => k <= 8000)).toBe(true)
-
-    const twitchRes = buildCustomResolutions(makeLimits(), 'main', 1920, 1080, 'twitch')
-    const r1440 = twitchRes.find((r) => r.height === 1440)
-    expect(r1440?.softNote).toBe("Above Twitch's recommended 1080p")
-
-    const vertRes = buildCustomResolutions(
-      makeLimits({
-        max_width: 1080,
-        max_height: 1920,
-        recommended_width: 1080,
-        recommended_height: 1920,
-      }),
-      'vertical',
-      1080,
-      1920,
-      'tiktok',
-    )
-    expect(vertRes.map((r) => r.value)).toEqual(['1080x1920', '720x1280', '540x960'])
-  })
-})
-
-describe('DestinationQualityPicker component', () => {
-  it('opens in a PopoverSurface inside Dialog/body, registers in PreviewOverlayRegistry, and Escape keeps outer Dialog open', async () => {
-    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
-      this.setAttribute('open', '')
-    }
-    HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
-      this.removeAttribute('open')
-    }
-    const overlayEvents = vi.fn()
-    const notifyEvents = vi.fn()
-    const onDialogClose = vi.fn()
-    const onDialogKey = vi.fn()
-    window.addEventListener(PREVIEW_OVERLAYS_EVENT, overlayEvents)
-    const unsub = subscribePreviewOverlays(notifyEvents)
-
-    const resp = makeResponse()
     try {
+      const dest = makeDest()
       await act(async () => {
-        root!.render(
-          <Dialog open onClose={onDialogClose} title="Your platforms">
-            <div onKeyDown={onDialogKey}>
-              <DestinationQualityPicker
-                dest={makeDest()}
-                qualityResponse={resp}
-                onUpdated={vi.fn()}
-              />
-            </div>
-          </Dialog>,
+        root.render(
+          <DestinationQualityPicker
+            dest={dest}
+            allDestinations={[dest]}
+            usesObs={false}
+            live={true}
+            optionsResponse={makeResponse()}
+            loading={false}
+            onUpdated={vi.fn()}
+          />,
         )
       })
 
-      const dialog = document.querySelector<HTMLDialogElement>('dialog[open]')!
-      const trigger = dialog.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!
-      expect(trigger.textContent).toContain('1080p60 · 6 Mbps · auto')
-      expect(
-        getPreviewOverlays().some((e) => e.target === dialog.querySelector('[data-over-preview]')),
-      ).toBe(true)
+      const trigger = host.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!
+      expect(trigger.textContent).toContain('1440p60 · 6 Mbps · auto')
 
       await act(async () => {
+        trigger.focus()
         trigger.click()
-        await flush()
-        await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)))
       })
 
-      const popover = dialog.querySelector<HTMLElement>('[data-quality-popover="twitch"]')
-      expect(popover).not.toBeNull()
-      expect(popover?.parentElement).toBe(dialog)
-      expect(popover?.hasAttribute('data-over-preview')).toBe(true)
-      expect(getPreviewOverlays().some((e) => e.target === popover)).toBe(true)
-      expect(notifyEvents).toHaveBeenCalled()
-      expect(overlayEvents).toHaveBeenCalled()
+      const modal = document.querySelector<HTMLDialogElement>('[data-quality-modal="twitch"]')
+      expect(modal).not.toBeNull()
+      expect(modal?.open).toBe(true)
+      expect(modal?.textContent).toContain('Twitch quality')
+      expect(modal?.textContent).toContain('Switches only Twitch. Your stream keeps going.')
 
-      // Escape while focused inside popover closes only the popover, keeping Dialog open.
-      const firstOption = popover?.querySelector<HTMLButtonElement>('[role="option"]')
-      firstOption?.focus()
+      // Turn off Match main stream and pick 720p + 30 fps.
+      const matchSwitch = modal!.querySelector<HTMLButtonElement>('button[role="switch"]')!
+      expect(matchSwitch.getAttribute('aria-checked')).toBe('true')
       await act(async () => {
-        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-        await flush()
+        matchSwitch.click()
       })
+      expect(matchSwitch.getAttribute('aria-checked')).toBe('false')
 
-      expect(dialog.querySelector('[data-quality-popover="twitch"]')).toBeNull()
-      expect(getPreviewOverlays().some((e) => e.target === popover)).toBe(false)
-      expect(onDialogClose).not.toHaveBeenCalled()
-      expect(onDialogKey).not.toHaveBeenCalled()
+      const res720 = Array.from(modal!.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === '720p',
+      )!
+      const fps30 = Array.from(modal!.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === '30',
+      )!
+      await act(async () => {
+        res720.click()
+        fps30.click()
+      })
+      expect(modal!.textContent).toContain('Twitch gets 720p30 at 6 Mbps')
+
+      // Escape closes modal and restores focus to the trigger button.
+      await act(async () => {
+        modal!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      })
+      expect(document.querySelector('[data-quality-modal="twitch"]')).toBeNull()
       expect(document.activeElement).toBe(trigger)
     } finally {
-      unsub()
-      window.removeEventListener(PREVIEW_OVERLAYS_EVENT, overlayEvents)
+      await act(async () => root.unmount())
+      host.remove()
     }
   })
 
-  it('supports keyboard traversal across disabled options, submits allowed choice, and exposes shared/soft-limit hints', async () => {
-    const returnedView = makeMinimalView([makeDest({ switching_quality: true })])
-    requestMock.mockResolvedValueOnce(returnedView)
+  it('shows hard limit banner and one-tap fix when bitrate exceeds max_kbps, and disables Apply until fixed', async () => {
+    installDialogMock()
+    const request = vi.fn(async () => ({}))
+    useLive.setState({ conn: { client: { request } } as never })
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root: Root = createRoot(host)
 
-    const opts = makeDestOpts({
-      resolved: {
-        ...makeDest().resolved_quality!,
-        shared_with: ['YouTube'],
-      },
-      options: [
-        makeOption({
-          id: 'same_as_main',
-          label: 'Same as main',
-          quality: { mode: 'same_as_main' },
-          allowed: false,
-          disabled_reason: 'PC encode limit',
-        }),
-        makeOption({
-          id: '1440p60',
-          label: '1440p60 · 8 Mbps',
-          note: "Above Twitch's recommended 1080p",
-        }),
-        makeOption({
-          id: '1080p60',
-          label: '1080p60 · 6 Mbps',
-          recommended: true,
-          shares_encoder_with: ['YouTube'],
-        }),
-      ],
-    })
+    try {
+      const dest = makeDest({
+        quality: { mode: 'custom', width: 1920, height: 1080, fps: 60, kbps: 6000, codec: 'h264' },
+        resolved_quality: {
+          width: 1920,
+          height: 1080,
+          fps: 60,
+          kbps: 6000,
+          codec: 'h264',
+          audio_kbps: 160,
+          auto_fitted: false,
+          separate_encode: true,
+          group_id: 'g-tw',
+          shared_with: [],
+        },
+      })
+      await act(async () => {
+        root.render(
+          <DestinationQualityPicker
+            dest={dest}
+            allDestinations={[dest]}
+            usesObs={false}
+            live={false}
+            optionsResponse={makeResponse({
+              twitch: makeOpts({ current: dest.quality!, resolved: dest.resolved_quality! }),
+            })}
+            loading={false}
+            onUpdated={vi.fn()}
+          />,
+        )
+      })
 
-    const onUpdated = vi.fn()
-    await act(async () => {
-      root!.render(
-        <DestinationQualityPicker
-          dest={makeDest({
-            resolved_quality: {
-              ...makeDest().resolved_quality!,
-              shared_with: ['YouTube'],
-            },
-          })}
-          qualityResponse={makeResponse(opts)}
-          onUpdated={onUpdated}
-        />,
-      )
-    })
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!.click()
+      })
 
-    expect(host!.textContent).toContain('shared with YouTube')
-    await act(async () => {
-      host!.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!.click()
-      await flush()
-    })
+      const modal = document.querySelector<HTMLDialogElement>('[data-quality-modal="twitch"]')!
+      const mbpsInput = modal.querySelector<HTMLInputElement>('input[type="number"]')!
+      const applyBtn = Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === 'Apply',
+      )!
 
-    const options = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="option"]'))
-    expect(options).toHaveLength(3)
-    const [opt0, opt1, opt2] = options
-    expect(opt0?.getAttribute('aria-disabled')).toBe('true')
-    expect(opt1?.textContent).toContain("Above Twitch's recommended 1080p")
-    expect(opt2?.textContent).toContain('Best for Twitch')
-    expect(opt2?.textContent).toContain('shared with YouTube')
+      // Enter 8 Mbps (> Twitch 6 Mbps ceiling).
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype,
+          'value',
+        )!.set!
+        setter.call(mbpsInput, '8')
+        mbpsInput.dispatchEvent(new Event('input', { bubbles: true }))
+        mbpsInput.dispatchEvent(new Event('change', { bubbles: true }))
+      })
 
-    await act(async () => {
-      opt0?.focus()
-      opt0?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
-    })
-    expect(document.activeElement).toBe(opt1)
+      expect(modal.textContent).toContain('Twitch closes streams above 6 Mbps.')
+      expect(applyBtn.disabled).toBe(true)
 
-    await act(async () => {
-      opt1?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
-    })
-    expect(document.activeElement).toBe(opt2)
+      const fixBtn = Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+        b.textContent?.includes('Use 1080p60 · 6 Mbps'),
+      )!
+      expect(fixBtn).toBeTruthy()
+      await act(async () => {
+        fixBtn.click()
+      })
 
-    await act(async () => {
-      opt0?.click()
-    })
-    expect(requestMock).not.toHaveBeenCalled()
-
-    await act(async () => {
-      opt2?.click()
-      await flush()
-    })
-    expect(requestMock).toHaveBeenCalledWith(
-      'PUT',
-      '/api/v1/golive/destinations/twitch/quality',
-      opts.options[2]!.quality,
-    )
-    expect(onUpdated).toHaveBeenCalledWith(returnedView)
+      expect(modal.textContent).not.toContain('Twitch closes streams above 6 Mbps.')
+      expect(mbpsInput.value).toBe('6')
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
   })
 
-  it('submits custom resolution/fps/bitrate/codec and keeps popover open with dismissible alert on 422', async () => {
+  it('shows soft limit warning on 1440p Twitch while keeping Apply enabled, and calls PUT quality on Apply', async () => {
+    installDialogMock()
+    const nextView = { live: false, destinations: [] } as unknown as GoLiveView
+    const request = vi.fn(async (method: string, path: string, body?: unknown) => {
+      if (method === 'PUT' && path === '/api/v1/golive/destinations/twitch/quality') {
+        expect(body).toEqual({
+          mode: 'custom',
+          width: 2560,
+          height: 1440,
+          fps: 60,
+          kbps: 6000,
+          codec: null,
+        })
+        return nextView
+      }
+      return {}
+    })
+    useLive.setState({ conn: { client: { request } } as never })
     const onUpdated = vi.fn()
-    const opts = makeDestOpts({
-      custom_limits: makeLimits({ codecs: ['h264', 'hevc'] }),
-    })
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root: Root = createRoot(host)
 
-    await act(async () => {
-      root!.render(
-        <DestinationQualityPicker
-          dest={makeDest()}
-          qualityResponse={makeResponse(opts)}
-          onUpdated={onUpdated}
-        />,
-      )
-    })
+    try {
+      const dest = makeDest({
+        quality: { mode: 'custom', width: 1920, height: 1080, fps: 60, kbps: 6000, codec: 'h264' },
+      })
+      await act(async () => {
+        root.render(
+          <DestinationQualityPicker
+            dest={dest}
+            allDestinations={[dest]}
+            usesObs={false}
+            live={false}
+            optionsResponse={makeResponse({
+              twitch: makeOpts({ current: dest.quality! }),
+            })}
+            loading={false}
+            onUpdated={onUpdated}
+          />,
+        )
+      })
 
-    await act(async () => {
-      host!.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!.click()
-      await flush()
-    })
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!.click()
+      })
+      const modal = document.querySelector<HTMLDialogElement>('[data-quality-modal="twitch"]')!
+      const res1440 = Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+        b.textContent?.includes('1440p'),
+      )!
+      await act(async () => {
+        res1440.click()
+      })
 
-    const customBtn = Array.from(document.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes('Custom'),
-    )!
-    await act(async () => {
-      customBtn.click()
-    })
+      expect(modal.textContent).toContain("Above Twitch's recommended 1080p")
+      const applyBtn = Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === 'Apply',
+      )!
+      expect(applyBtn.disabled).toBe(false)
 
-    const codecSelect = document.querySelector<HTMLSelectElement>('select[aria-label="Codec"]')!
-    expect(codecSelect).not.toBeNull()
-
-    requestMock.mockRejectedValueOnce(
-      new ApiError(422, 'invalid', 'Bitrate too high for destination', null),
-    )
-
-    const applyBtn = Array.from(document.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Apply',
-    )!
-    await act(async () => {
-      applyBtn.click()
-      await flush()
-    })
-
-    const alert = document.querySelector('[role="alert"]')
-    expect(alert?.textContent).toContain('Bitrate too high for destination')
-    expect(document.querySelector('[data-quality-popover="twitch"]')).not.toBeNull()
-    expect(onUpdated).not.toHaveBeenCalled()
-
-    const dismiss = document.querySelector<HTMLButtonElement>('button[aria-label="Dismiss error"]')!
-    await act(async () => {
-      dismiss.click()
-    })
-    expect(document.querySelector('[role="alert"]')).toBeNull()
+      await act(async () => {
+        applyBtn.click()
+        await Promise.resolve()
+      })
+      expect(onUpdated).toHaveBeenCalledWith(nextView)
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
   })
 
-  it('shows loading skeleton and fetch error retry states cleanly', async () => {
-    const onReload = vi.fn()
-    await act(async () => {
-      root!.render(
-        <DestinationQualityPicker
-          dest={makeDest()}
-          qualityResponse={null}
-          optionsLoading
-          onUpdated={vi.fn()}
-        />,
-      )
+  it('locks destination on server/OBS locked_reason and renders 422 golive_switch_timeout with Try again', async () => {
+    installDialogMock()
+    const { ApiError } = await import('@ferrocast/api')
+    const request = vi.fn(async (method: string) => {
+      if (method === 'PUT') {
+        throw new ApiError(422, 'golive_switch_timeout', 'Switch timed out waiting for a keyframe.')
+      }
+      return {}
     })
+    useLive.setState({ conn: { client: { request } } as never })
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root: Root = createRoot(host)
 
-    await act(async () => {
-      host!.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!.click()
-      await flush()
-    })
-    expect(document.querySelector('[role="status"]')).not.toBeNull()
+    try {
+      const dest = makeDest()
+      await act(async () => {
+        root.render(
+          <DestinationQualityPicker
+            dest={dest}
+            allDestinations={[dest]}
+            usesObs={false}
+            live={true}
+            optionsResponse={makeResponse()}
+            loading={false}
+            onUpdated={vi.fn()}
+          />,
+        )
+      })
 
-    await act(async () => {
-      root!.render(
-        <DestinationQualityPicker
-          dest={makeDest()}
-          qualityResponse={null}
-          optionsError={new ApiError(500, 'busy', 'Engine busy', null)}
-          onReloadOptions={onReload}
-          onUpdated={vi.fn()}
-        />,
-      )
-    })
-    const retry = Array.from(document.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Try again',
-    )!
-    await act(async () => {
-      retry.click()
-    })
-    expect(onReload).toHaveBeenCalled()
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!.click()
+      })
+      const modal = document.querySelector<HTMLDialogElement>('[data-quality-modal="twitch"]')!
+      await act(async () => {
+        modal.querySelector<HTMLButtonElement>('button[role="switch"]')!.click()
+      })
+      const applyBtn = Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === 'Apply',
+      )!
+      await act(async () => {
+        applyBtn.click()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(modal.textContent).toContain("Couldn't switch Twitch")
+      expect(
+        Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).some(
+          (b) => b.textContent?.trim() === 'Try again',
+        ),
+      ).toBe(true)
+
+      // OBS lock disables trigger.
+      await act(async () => {
+        root.render(
+          <DestinationQualityPicker
+            dest={dest}
+            allDestinations={[dest]}
+            usesObs={true}
+            live={true}
+            optionsResponse={makeResponse()}
+            loading={false}
+            onUpdated={vi.fn()}
+          />,
+        )
+      })
+      expect(
+        host.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')?.disabled,
+      ).toBe(true)
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('useQualityOptions stays gated while using OBS and fetches when active', async () => {
+    const request = vi.fn(async () => makeResponse())
+    useLive.setState({ conn: { client: { request } } as never })
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root: Root = createRoot(host)
+
+    function Probe({ usesObs }: { usesObs: boolean }) {
+      const q = useQualityOptions({ destinations: [] } as unknown as GoLiveView, true, usesObs)
+      return <span data-status={q.data ? 'loaded' : 'idle'} />
+    }
+
+    try {
+      await act(async () => {
+        root.render(<Probe usesObs={true} />)
+        await Promise.resolve()
+      })
+      expect(request).not.toHaveBeenCalled()
+
+      await act(async () => {
+        root.render(<Probe usesObs={false} />)
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(request).toHaveBeenCalledWith('GET', '/api/v1/golive/quality-options')
+      expect(host.querySelector('[data-status]')?.getAttribute('data-status')).toBe('loaded')
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
   })
 })

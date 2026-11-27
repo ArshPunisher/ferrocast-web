@@ -972,14 +972,22 @@ export function Platforms({
                     />
                     <DestinationQualityPicker
                       dest={d}
-                      qualityResponse={qualityOpts.data}
-                      optionsLoading={qualityOpts.loading}
-                      optionsError={qualityOpts.error}
+                      allDestinations={view.destinations}
+                      optionsResponse={qualityOpts.data}
+                      loading={qualityOpts.loading}
+                      error={qualityOpts.error}
                       onReloadOptions={qualityOpts.reload}
                       onUpdated={handleQualityUpdated}
                       destinationsById={destinationsById}
                       usesObs={usesObs}
                       isRemote={isRemote}
+                      live={canvas === 'vertical' ? view.vertical_live : view.live}
+                      ffmpegDownloading={
+                        canvas === 'vertical' &&
+                        view.cut.source === 'cut' &&
+                        view.cut.ffmpeg.state === 'downloading'
+                      }
+                      ignoreServiceLimits={ignoreServiceLimits}
                     />
                     {!streaming &&
                       d.enabled &&

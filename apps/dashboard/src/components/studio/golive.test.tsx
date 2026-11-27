@@ -1282,11 +1282,41 @@ describe('per-destination quality integration in GoLiveDock and Platforms', () =
       ...overrides,
     }) as unknown as GoLiveView
 
-  it('renders interactive quality chips in GoLiveDock, shows footer encode summary, and updates view on selection', async () => {
+  it('renders List 3b fixed two-line rows, state tags, status popovers, footer problems/strip, and Modal A integration', async () => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.setAttribute('open', '')
+      Object.defineProperty(this, 'open', { value: true, configurable: true })
+    }
+    HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+      this.removeAttribute('open')
+      Object.defineProperty(this, 'open', { value: false, configurable: true })
+      this.dispatchEvent(new Event('close'))
+    }
     setPictureSource('ferrocast')
-    const view = mkView()
+    const view = mkView({
+      live: true,
+      destinations: [
+        {
+          ...mkView().destinations[0]!,
+          health: { state: 'live', kbps: 6160, dropped: 0, since_ms: 1000 },
+        },
+        {
+          ...mkView().destinations[1]!,
+          health: {
+            state: 'reconnecting',
+            attempt: 2,
+            retry_in_ms: 4000,
+            reason: 'YouTube dropped the connection.',
+            kbps: 0,
+            dropped: 0,
+            since_ms: 1000,
+          },
+        },
+      ],
+    })
     const nextView = mkView({
+      live: true,
       destinations: view.destinations.map((d) =>
         d.id === 'twitch'
           ? {
@@ -1339,27 +1369,19 @@ describe('per-destination quality integration in GoLiveDock and Platforms', () =
                   allowed: true,
                   disabled_reason: null,
                 },
-                {
-                  id: '720p30',
-                  label: '720p30 · 3 Mbps',
-                  quality: {
-                    mode: 'custom',
-                    width: 1280,
-                    height: 720,
-                    fps: 30,
-                    kbps: 3000,
-                    codec: 'h264',
-                  },
-                  resolved: { width: 1280, height: 720, fps: 30, kbps: 3000, codec: 'h264' },
-                  auto_fitted: false,
-                  recommended: false,
-                  note: null,
-                  shares_encoder_with: [],
-                  allowed: true,
-                  disabled_reason: null,
-                },
               ],
-              custom_limits: null,
+              custom_limits: {
+                max_width: 2560,
+                max_height: 1440,
+                min_kbps: 500,
+                max_kbps: 6000,
+                fps_choices: [24, 30, 48, 60],
+                codecs: ['h264'],
+                recommended_width: 1920,
+                recommended_height: 1080,
+                recommended_fps: 60,
+                recommended_kbps: 6000,
+              },
             },
             youtube: {
               id: 'youtube',
@@ -1436,21 +1458,59 @@ describe('per-destination quality integration in GoLiveDock and Platforms', () =
         await Promise.resolve()
       })
 
+      // List 3b tags, line 2, no top banner, footer summary + problems trigger.
+      expect(host.querySelector('[data-golive-tag="twitch"]')?.textContent?.trim()).toBe('LIVE')
+      expect(host.querySelector('[data-golive-tag="youtube"]')?.textContent?.trim()).toBe(
+        'RECONNECTING',
+      )
       expect(host.textContent).toContain('1080p60 · 6 Mbps · auto')
-      expect(host.textContent).toContain('Same as main')
-      expect(host.textContent).not.toContain('Capped at 6,000 kbps for Twitch')
+      expect(host.textContent).toContain('Reconnecting · try 2')
       const summary = host.querySelector('[data-golive-encode-summary]')
       expect(summary?.textContent).toContain('2 places · 18.3 Mbps · 2 encodes')
+      expect(summary?.textContent).toContain('1 reconnecting')
 
+      // Status line opens status popover on YouTube.
+      await act(async () => {
+        host.querySelector<HTMLButtonElement>('[data-status-trigger="youtube"]')?.click()
+        await Promise.resolve()
+      })
+      const statusPop = document.querySelector('[data-golive-status-popover="youtube"]')
+      expect(statusPop).not.toBeNull()
+      expect(statusPop?.textContent).toContain('YouTube dropped the connection.')
+
+      // Tapping Twitch quality trigger opens Modal A, turns off Match main, picks 720p30 + 3 Mbps, applies.
       await act(async () => {
         host.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!.click()
         await new Promise((r) => setTimeout(r, 0))
       })
-      const opt720 = Array.from(
-        document.querySelectorAll<HTMLButtonElement>('[role="option"]'),
-      ).find((b) => b.textContent?.includes('720p30 · 3 Mbps'))!
+      const modal = document.querySelector<HTMLDialogElement>('[data-quality-modal="twitch"]')!
+      expect(modal).not.toBeNull()
       await act(async () => {
-        opt720.click()
+        modal.querySelector<HTMLButtonElement>('button[role="switch"]')!.click()
+      })
+      const btn720 = Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === '720p',
+      )!
+      const btn30 = Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === '30',
+      )!
+      const mbpsIn = modal.querySelector<HTMLInputElement>('input[type="number"]')!
+      await act(async () => {
+        btn720.click()
+        btn30.click()
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype,
+          'value',
+        )!.set!
+        setter.call(mbpsIn, '3')
+        mbpsIn.dispatchEvent(new Event('input', { bubbles: true }))
+        mbpsIn.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      const applyBtn = Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.trim() === 'Apply',
+      )!
+      await act(async () => {
+        applyBtn.click()
         await Promise.resolve()
         await Promise.resolve()
       })
@@ -1466,7 +1526,90 @@ describe('per-destination quality integration in GoLiveDock and Platforms', () =
     }
   })
 
-  it('renders quality chips inside Platforms dialog tiles and locks to Same as OBS when OBS is selected', async () => {
+  it('renders whole-stream failures as compact footer strip in GoLiveDock without top banner', async () => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    setPictureSource('ferrocast')
+    const view = mkView({
+      live: true,
+      destinations: mkView().destinations.map((d) => ({
+        ...d,
+        health: {
+          state: 'failed' as const,
+          attempts: 3,
+          reason: "Couldn't connect",
+          detail: 'Ingest closed.',
+          kbps: 0,
+          dropped: 0,
+          since_ms: 1000,
+        },
+      })),
+    })
+    const request = vi.fn(async () => ({}))
+    useLive.setState({ conn: { client: { request } } as never })
+    const res = { data: view, error: null, loading: false, reload: vi.fn(), set: vi.fn() }
+    const desk = {
+      scenes: { data: null, error: null, loading: false, reload: vi.fn(), set: vi.fn() },
+      preflight: { data: null, error: null, loading: false, reload: vi.fn(), set: vi.fn() },
+      prefs: {
+        data: { video_kbps: 12000, audio_kbps: 160 },
+        error: null,
+        loading: false,
+        reload: vi.fn(),
+        set: vi.fn(),
+      },
+    } as unknown as Desk
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root: Root = createRoot(host)
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({
+        matches: false,
+        media: '',
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    )
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    )
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk}>
+            <DockWorkspace
+              stage={null}
+              docks={(id) =>
+                id === 'golive' ? <GoLiveDock res={res as never} view={view} /> : null
+              }
+            />
+          </DeskProvider>,
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(host.textContent).not.toContain('Stream stopped: every platform refused')
+      const strip = host.querySelector('[data-golive-footer-strip]')
+      expect(strip?.textContent).toContain('Nothing is sending')
+      expect(strip?.textContent).toContain('Retry all')
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+      vi.unstubAllGlobals()
+      useLive.setState({ conn: null })
+    }
+  })
+
+  it('renders quality triggers inside Platforms dialog tiles and locks to Same as OBS when OBS is selected', async () => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     const view = mkView()
     const request = vi.fn(async (method: string, path: string) => {
