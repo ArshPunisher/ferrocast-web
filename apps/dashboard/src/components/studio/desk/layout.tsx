@@ -34,6 +34,7 @@ import {
   cx,
   dispatchDividerDrag,
   notifyPreviewOverlays,
+  safeViewportBounds,
   usePreviewHole,
 } from '@ferrocast/ui'
 import { useMediaQuery } from '../../../lib/hooks'
@@ -159,12 +160,27 @@ export function clampFloat(
       h: Math.max(MIN_FLOAT_H, rawH),
     }
   }
-  const maxW = Math.max(MIN_FLOAT_W, vw - FLOAT_EDGE * 2)
-  const maxH = Math.max(MIN_FLOAT_H, vh - FLOAT_EDGE * 2)
+  let leftEdge = FLOAT_EDGE
+  let topEdge = FLOAT_EDGE
+  let rightEdge = vw - FLOAT_EDGE
+  let bottomEdge = vh - FLOAT_EDGE
+  if (typeof document !== 'undefined') {
+    const liveVw = document.documentElement.clientWidth || window.innerWidth
+    const liveVh = document.documentElement.clientHeight || window.innerHeight
+    if (vw === liveVw && vh === liveVh) {
+      const b = safeViewportBounds(FLOAT_EDGE)
+      leftEdge = b.left
+      topEdge = b.top
+      rightEdge = b.right
+      bottomEdge = b.bottom
+    }
+  }
+  const maxW = Math.max(MIN_FLOAT_W, rightEdge - leftEdge)
+  const maxH = Math.max(MIN_FLOAT_H, bottomEdge - topEdge)
   const w = clamp(rawW, MIN_FLOAT_W, maxW)
   const h = clamp(rawH, MIN_FLOAT_H, maxH)
-  const x = clamp(rawX, FLOAT_EDGE, Math.max(FLOAT_EDGE, vw - w - FLOAT_EDGE))
-  const y = clamp(rawY, FLOAT_EDGE, Math.max(FLOAT_EDGE, vh - h - FLOAT_EDGE))
+  const x = clamp(rawX, leftEdge, Math.max(leftEdge, rightEdge - w))
+  const y = clamp(rawY, topEdge, Math.max(topEdge, bottomEdge - h))
   return { x, y, w, h }
 }
 
@@ -465,6 +481,12 @@ export function DockWorkspace({
     })
   }, [])
 
+  const appliedWeightVars = useRef<Set<string>>(new Set())
+  const activeDragCancelRef = useRef<(() => void) | null>(null)
+  const activeDragIsFloatRef = useRef(false)
+
+  useEffect(() => () => activeDragCancelRef.current?.(), [])
+
   // Keep layout panel sizes in CSS custom properties so divider drags run without React renders.
   useLayoutEffect(() => {
     const el = ws.current
@@ -472,11 +494,18 @@ export function DockWorkspace({
     el.style.setProperty('--fc-lw', `${layout.lw}px`)
     el.style.setProperty('--fc-rw', `${layout.rw}px`)
     el.style.setProperty('--fc-bh', `${layout.bh}px`)
+    const nextVars = new Set<string>()
     for (const [id, weight] of Object.entries(layout.w)) {
       if (typeof weight === 'number' && Number.isFinite(weight)) {
-        el.style.setProperty(dockVar(id as DockId), String(weight))
+        const varName = dockVar(id as DockId)
+        el.style.setProperty(varName, String(weight))
+        nextVars.add(varName)
       }
     }
+    for (const prev of appliedWeightVars.current) {
+      if (!nextVars.has(prev)) el.style.removeProperty(prev)
+    }
+    appliedWeightVars.current = nextVars
   }, [layout.lw, layout.rw, layout.bh, layout.w])
 
   // Re-clamp floating docks whenever the viewport shrinks.
@@ -529,6 +558,7 @@ export function DockWorkspace({
 
   const targetAt = useCallback(
     (x: number, y: number, self: DockId): Target | null => {
+      if (compact) return null
       const box = ws.current?.getBoundingClientRect()
       if (!box || x < box.left || x > box.right || y < box.top || y > box.bottom) return null
       for (const el of ws.current?.querySelectorAll<HTMLElement>('[data-dock]') ?? []) {
@@ -619,45 +649,73 @@ export function DockWorkspace({
         })
       return null
     },
-    [layout],
+    [compact, layout],
   )
+
+  useEffect(() => {
+    if (phone || layout.locked || (compact && !activeDragIsFloatRef.current)) {
+      activeDragCancelRef.current?.()
+    }
+  }, [compact, phone, layout.locked])
 
   const grab = useCallback(
     (id: DockId, e: ReactPointerEvent) => {
-      if (layout.locked || compact || e.button !== 0) return
+      if (layout.locked || e.button !== 0) return
+      if (compact && (phone || !layout.float[id])) return
+      activeDragCancelRef.current?.()
       const x0 = e.clientX
       const y0 = e.clientY
+      const pid = e.pointerId
       const floating = layout.float[id]
+      activeDragIsFloatRef.current = Boolean(floating)
+      const initialFloat = floating ? clampFloat(floating) : null
       let going = false
-      let t: Target | null = null
-      let nextFloat: Float | null = floating ? clampFloat(floating) : null
+      let finished = false
       let dragRaf = 0
       let latestX = x0
       let latestY = y0
-      const floatEl = floating
-        ? document.querySelector<HTMLElement>(`[data-dock="${CSS.escape(id)}"][data-over-preview]`)
-        : null
+      const resolveFloatEl = () =>
+        document.querySelector<HTMLElement>(`[data-dock="${CSS.escape(id)}"][data-over-preview]`)
+
+      const reconcileFloatEl = (r: Float | null) => {
+        if (!r) return
+        const targetEl = resolveFloatEl()
+        if (!targetEl) return
+        const liveW = Math.round(targetEl.offsetWidth) || r.w
+        const liveH = Math.round(targetEl.offsetHeight) || r.h
+        targetEl.style.left = `${r.x}px`
+        targetEl.style.top = `${r.y}px`
+        targetEl.dataset.pos = `${r.x},${r.y},${liveW},${liveH}`
+        notifyPreviewOverlays()
+      }
+
+      const matchesPointer = (ev: PointerEvent) =>
+        pid === undefined || ev.pointerId === undefined || ev.pointerId === pid
 
       const flushMove = () => {
         dragRaf = 0
-        t = targetAt(latestX, latestY, id)
+        const t = targetAt(latestX, latestY, id)
         if (floating) {
+          const targetEl = resolveFloatEl()
+          const curW = (targetEl && Math.round(targetEl.offsetWidth)) || floating.w
+          const curH = (targetEl && Math.round(targetEl.offsetHeight)) || floating.h
           const clamped = clampFloat({
-            ...floating,
             x: floating.x + latestX - x0,
             y: floating.y + latestY - y0,
+            w: curW,
+            h: curH,
           })
-          nextFloat = clamped
-          if (floatEl) {
-            floatEl.style.left = `${clamped.x}px`
-            floatEl.style.top = `${clamped.y}px`
-            floatEl.dataset.pos = `${clamped.x},${clamped.y},${clamped.w},${clamped.h}`
+          if (targetEl) {
+            targetEl.style.left = `${clamped.x}px`
+            targetEl.style.top = `${clamped.y}px`
+            targetEl.dataset.pos = `${clamped.x},${clamped.y},${curW},${curH}`
           }
         }
         setDrag({ id, x: latestX, y: latestY, t })
       }
 
       const move = (m: PointerEvent) => {
+        if (finished || !matchesPointer(m)) return
         if (!going && Math.hypot(m.clientX - x0, m.clientY - y0) < 5) return
         if (!going) {
           going = true
@@ -675,41 +733,60 @@ export function DockWorkspace({
         }
         dragRaf = requestAnimationFrame(flushMove)
       }
-      const end = () => {
+      const finishDrag = (shouldCommit: boolean, u?: PointerEvent) => {
+        if (finished) return
+        finished = true
+        activeDragCancelRef.current = null
+        activeDragIsFloatRef.current = false
         if (dragRaf) {
           cancelAnimationFrame(dragRaf)
           dragRaf = 0
         }
         document.removeEventListener('pointermove', move)
-        document.removeEventListener('pointerup', up)
-        document.removeEventListener('pointercancel', end)
+        document.removeEventListener('pointerup', onUp)
+        document.removeEventListener('pointercancel', onCancel)
         delete document.body.dataset.dockDrag
         document.body.style.userSelect = ''
         setDrag(null)
-      }
-      // The system took the pointer (a touch turned into a scroll): nothing moves.
-      const up = (u: PointerEvent) => {
-        if (going) {
-          latestX = u.clientX
-          latestY = u.clientY
-          t = targetAt(latestX, latestY, id)
-          if (floating) {
-            nextFloat = clampFloat({
-              ...floating,
-              x: floating.x + latestX - x0,
-              y: floating.y + latestY - y0,
-            })
-          }
+
+        if (!shouldCommit || !going) {
+          reconcileFloatEl(initialFloat)
+          return
         }
-        end()
-        if (!going) return
+
+        const dx = (u ? u.clientX : latestX) - x0
+        const dy = (u ? u.clientY : latestY) - y0
+        const target = targetAt(u ? u.clientX : latestX, u ? u.clientY : latestY, id)
+        if (!target && floating) {
+          const targetEl = resolveFloatEl()
+          const liveW = (targetEl && Math.round(targetEl.offsetWidth)) || floating.w
+          const liveH = (targetEl && Math.round(targetEl.offsetHeight)) || floating.h
+          const projected = clampFloat({
+            x: floating.x + dx,
+            y: floating.y + dy,
+            w: liveW,
+            h: liveH,
+          })
+          reconcileFloatEl(projected)
+        }
         setLayout((l) => {
-          const target = t
           if (!target) {
-            if (l.float[id]) {
-              return nextFloat ? { ...l, float: { ...l.float, [id]: nextFloat } } : l
+            const cur = l.float[id]
+            if (cur) {
+              const targetEl = resolveFloatEl()
+              const liveW = (targetEl && Math.round(targetEl.offsetWidth)) || cur.w
+              const liveH = (targetEl && Math.round(targetEl.offsetHeight)) || cur.h
+              const clamped = clampFloat({
+                x: cur.x + dx,
+                y: cur.y + dy,
+                w: liveW,
+                h: liveH,
+              })
+              return { ...l, float: { ...l.float, [id]: clamped } }
             }
-            return popOut(l, id, { x: Math.max(8, u.clientX - 60), y: Math.max(8, u.clientY - 16) })
+            const cx = u ? u.clientX : latestX
+            const cy = u ? u.clientY : latestY
+            return popOut(l, id, { x: Math.max(8, cx - 60), y: Math.max(8, cy - 16) })
           }
           if (target.at === id) return l
           if (target.tab && target.at) return tabWith(l, id, target.at)
@@ -722,11 +799,20 @@ export function DockWorkspace({
           return { ...n, [target.region]: list, preset: null }
         })
       }
+      const onUp = (u: PointerEvent) => {
+        if (!matchesPointer(u)) return
+        finishDrag(true, u)
+      }
+      const onCancel = (c: PointerEvent) => {
+        if (!matchesPointer(c)) return
+        finishDrag(false, c)
+      }
+      activeDragCancelRef.current = () => finishDrag(false)
       document.addEventListener('pointermove', move)
-      document.addEventListener('pointerup', up)
-      document.addEventListener('pointercancel', end)
+      document.addEventListener('pointerup', onUp)
+      document.addEventListener('pointercancel', onCancel)
     },
-    [compact, layout.float, layout.locked, setLayout, targetAt],
+    [compact, layout.float, layout.locked, phone, setLayout, targetAt],
   )
 
   const api: LayoutApi = { layout, setLayout, grab, narrow: compact, phone, wsRef: ws }
@@ -762,7 +848,7 @@ export function DockWorkspace({
         )
       }
       const renderedDockId = phone ? cur : activeOf(layout, id)
-      const noLayoutContain = id === 'scenes' || id === 'sources'
+      const noLayoutContain = groupOf(layout, id).some((d) => d === 'scenes' || d === 'sources')
       out.push(
         <div
           key={id}
@@ -849,7 +935,7 @@ export function DockWorkspace({
             className={cx(
               'fc-contain-stage flex min-w-0 flex-col',
               compact
-                ? '[&>:first-child]:aspect-video [&>:first-child]:flex-none [&>:first-child]:[container-type:inline-size]'
+                ? '[&>:first-child:not([data-studio-stage])]:aspect-video [&>:first-child:not([data-studio-stage])]:flex-none [&>:first-child:not([data-studio-stage])]:[container-type:inline-size]'
                 : 'flex-1',
             )}
           >
@@ -875,7 +961,7 @@ export function DockWorkspace({
           <div
             data-dock={cur}
             className={cx(
-              'flex min-h-[320px] flex-col border-t border-line',
+              'order-2 flex min-h-[320px] flex-col border-t border-line',
               hasFloatingReady && 'pb-14',
             )}
           >
@@ -972,8 +1058,20 @@ function FloatingDock({ id, f, children }: { id: DockId; f: Float; children: Rea
   const { setLayout, layout } = useLayout()
   const ref = useRef<HTMLDivElement>(null)
   const resizingRef = useRef(false)
+  const detachResizeRef = useRef<(() => void) | null>(null)
+  const trailingCommitTimerRef = useRef(0)
   const rect = clampFloat(f)
   usePreviewHole(ref, { active: true, deps: [rect.x, rect.y, rect.w, rect.h] })
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    el.style.left = `${rect.x}px`
+    el.style.top = `${rect.y}px`
+    const w = Math.round(el.offsetWidth) || rect.w
+    const h = Math.round(el.offsetHeight) || rect.h
+    el.dataset.pos = `${rect.x},${rect.y},${w},${h}`
+  }, [rect.x, rect.y, rect.w, rect.h])
 
   const commitSize = useCallback(() => {
     const el = ref.current
@@ -998,6 +1096,15 @@ function FloatingDock({ id, f, children }: { id: DockId; f: Float; children: Rea
   }, [id, setLayout])
 
   useEffect(() => {
+    return () => {
+      window.clearTimeout(trailingCommitTimerRef.current)
+      trailingCommitTimerRef.current = 0
+      detachResizeRef.current?.()
+      resizingRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
     const el = ref.current
     if (!el || typeof ResizeObserver === 'undefined') return
     let raf = 0
@@ -1008,7 +1115,17 @@ function FloatingDock({ id, f, children }: { id: DockId; f: Float; children: Rea
       if (w <= 0 || h <= 0) return
       el.dataset.pos = `${rect.x},${rect.y},${w},${h}`
       notifyPreviewOverlays()
-      if (!resizingRef.current) commitSize()
+      if (!resizingRef.current) {
+        commitSize()
+      } else {
+        window.clearTimeout(trailingCommitTimerRef.current)
+        trailingCommitTimerRef.current = window.setTimeout(() => {
+          trailingCommitTimerRef.current = 0
+          resizingRef.current = false
+          detachResizeRef.current?.()
+          commitSize()
+        }, 180)
+      }
     }
     const ro = new ResizeObserver(() => {
       if (raf) return
@@ -1035,13 +1152,25 @@ function FloatingDock({ id, f, children }: { id: DockId; f: Float; children: Rea
       aria-label={`${dockName(layout, id)} (floating)`}
       onPointerDownCapture={(e) => {
         if (e.target !== ref.current) return
+        detachResizeRef.current?.()
+        window.clearTimeout(trailingCommitTimerRef.current)
+        trailingCommitTimerRef.current = 0
         resizingRef.current = true
+        const detach = () => {
+          window.removeEventListener('pointerup', finish)
+          window.removeEventListener('pointercancel', finish)
+          if (detachResizeRef.current === detach) detachResizeRef.current = null
+        }
         const finish = () => {
+          detach()
+          window.clearTimeout(trailingCommitTimerRef.current)
+          trailingCommitTimerRef.current = 0
           resizingRef.current = false
           commitSize()
         }
-        window.addEventListener('pointerup', finish, { once: true })
-        window.addEventListener('pointercancel', finish, { once: true })
+        detachResizeRef.current = detach
+        window.addEventListener('pointerup', finish)
+        window.addEventListener('pointercancel', finish)
       }}
       className="fc-desk fixed z-30 flex min-h-40 min-w-56 resize flex-col overflow-hidden rounded-[7px] border border-line-strong bg-surface-1 shadow-pop"
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h }}
@@ -1150,29 +1279,50 @@ function Divider({
     if (m) commit(dx, dy, m)
   }
 
+  const activeCleanupRef = useRef<(() => void) | null>(null)
+  useEffect(() => () => activeCleanupRef.current?.(), [])
+
   const down = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (layout.locked) return
+    if (layout.locked || e.button !== 0) return
     const start = measure()
     if (!start) return
     e.preventDefault()
+    activeCleanupRef.current?.()
     e.currentTarget.setPointerCapture(e.pointerId)
     const x0 = e.clientX
     const y0 = e.clientY
+    const pid = e.pointerId
     const el = e.currentTarget
     const axis: 'x' | 'y' = dir === 'col' ? 'x' : 'y'
     const startWeights: [number, number] | null = between
       ? [layout.w[between[0]] ?? 1, layout.w[between[1]] ?? 1]
       : null
+    const target = wsRef.current
+    const prevVars: Array<[string, string]> = []
+    if (target) {
+      if (edge === 'left') prevVars.push(['--fc-lw', target.style.getPropertyValue('--fc-lw')])
+      else if (edge === 'right') prevVars.push(['--fc-rw', target.style.getPropertyValue('--fc-rw')])
+      else if (edge === 'bottom') prevVars.push(['--fc-bh', target.style.getPropertyValue('--fc-bh')])
+      else if (between) {
+        prevVars.push([dockVar(between[0]), target.style.getPropertyValue(dockVar(between[0]))])
+        prevVars.push([dockVar(between[1]), target.style.getPropertyValue(dockVar(between[1]))])
+      }
+    }
     let dragging = false
+    let finished = false
     let latestDx = 0
     let latestDy = 0
     let raf = 0
+
+    const matchesPointer = (ev: PointerEvent) =>
+      pid === undefined || ev.pointerId === undefined || ev.pointerId === pid
 
     const flush = () => {
       raf = 0
       applyVars(latestDx, latestDy, start, startWeights)
     }
     const move = (m: PointerEvent) => {
+      if (finished || !matchesPointer(m)) return
       if (!dragging) {
         dragging = true
         el.dataset.active = '1'
@@ -1188,25 +1338,51 @@ function Divider({
       }
       raf = requestAnimationFrame(flush)
     }
-    const up = (u?: PointerEvent) => {
+    const cleanup = (shouldCommit: boolean, u?: PointerEvent) => {
+      if (finished) return
+      finished = true
+      activeCleanupRef.current = null
       if (raf) {
         cancelAnimationFrame(raf)
         raf = 0
       }
       delete el.dataset.active
       el.removeEventListener('pointermove', move)
+      el.removeEventListener('pointerup', onUp)
+      el.removeEventListener('pointercancel', onCancel)
+      try {
+        el.releasePointerCapture?.(pid)
+      } catch {
+        // Ignore if pointer capture is already released or unsupported.
+      }
       if (dragging) {
         document.body.style.userSelect = ''
-        const dx = u ? u.clientX - x0 : latestDx
-        const dy = u ? u.clientY - y0 : latestDy
-        applyVars(dx, dy, start, startWeights)
-        commit(dx, dy, start)
+        if (shouldCommit) {
+          const dx = u ? u.clientX - x0 : latestDx
+          const dy = u ? u.clientY - y0 : latestDy
+          applyVars(dx, dy, start, startWeights)
+          commit(dx, dy, start)
+        } else if (target) {
+          for (const [k, v] of prevVars) {
+            if (v) target.style.setProperty(k, v)
+            else target.style.removeProperty(k)
+          }
+        }
         dispatchDividerDrag({ active: false, axis })
       }
     }
+    const onUp = (u: PointerEvent) => {
+      if (!matchesPointer(u)) return
+      cleanup(true, u)
+    }
+    const onCancel = (c: PointerEvent) => {
+      if (!matchesPointer(c)) return
+      cleanup(false, c)
+    }
+    activeCleanupRef.current = () => cleanup(false)
     el.addEventListener('pointermove', move)
-    el.addEventListener('pointerup', up, { once: true })
-    el.addEventListener('pointercancel', up, { once: true })
+    el.addEventListener('pointerup', onUp)
+    el.addEventListener('pointercancel', onCancel)
   }
   const key = (e: ReactKeyboardEvent) => {
     if (layout.locked) return
@@ -1273,7 +1449,7 @@ export function DockHeader({
   info?: ReactNode
 }) {
   const { grab, layout, setLayout, narrow: compact, phone } = useLayout()
-  const movable = !layout.locked && !compact
+  const movable = !layout.locked && (!compact || (!phone && Boolean(layout.float[id])))
   const host = hostOf(layout, id)
   // On a phone one panel shows at a time, picked below the picture: no tabs there.
   const group = phone ? [id] : groupOf(layout, host).filter((d) => !layout.hidden.includes(d))
