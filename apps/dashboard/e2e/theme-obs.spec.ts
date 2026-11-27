@@ -103,7 +103,7 @@ test.describe('theme in OBS', () => {
     await open(page, 'studio/golive')
     const tip = page.locator('#golive-platforms header').getByRole('button', { name: 'More info' })
     await tip.hover()
-    const bubble = page.locator('body > div.fixed[aria-hidden]')
+    const bubble = page.locator('body > [role="tooltip"][data-over-preview]')
     await expect(bubble).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(bubble).toHaveCount(0)
