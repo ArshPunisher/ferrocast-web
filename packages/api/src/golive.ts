@@ -195,9 +195,7 @@ export interface CustomQuality {
   codec?: VideoCodec | null
 }
 
-export type DestinationQuality =
-  | { mode: 'same_as_main' }
-  | ({ mode: 'custom' } & CustomQuality)
+export type DestinationQuality = { mode: 'same_as_main' } | ({ mode: 'custom' } & CustomQuality)
 
 export interface ResolvedQuality {
   width: number
@@ -228,12 +226,7 @@ export interface EncodeGroupView {
 }
 
 export type BudgetSource =
-  | 'apple_silicon'
-  | 'bench'
-  | 'nvenc_default'
-  | 'hw_default'
-  | 'cpu_default'
-  | 'unknown'
+  'apple_silicon' | 'bench' | 'nvenc_default' | 'hw_default' | 'cpu_default' | 'unknown'
 
 export type BudgetStatus = 'ok' | 'limit' | 'over' | 'unknown'
 

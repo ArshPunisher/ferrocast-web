@@ -704,8 +704,7 @@ export function StreamPage({
       alive = false
     }
   }, [conn, destinations, fetchRev, goliveView, ignoreServiceLimits, live])
-  const fetchedData =
-    fetched && fetched.conn === conn && fetched.rev === fetchRev ? fetched : null
+  const fetchedData = fetched && fetched.conn === conn && fetched.rev === fetchRev ? fetched : null
   const fetchLoading = needsFetch && !fetchedData
   const fetchFailed = Boolean(needsFetch && fetchedData?.error)
   const ignoreLimits =
@@ -721,7 +720,10 @@ export function StreamPage({
   const effectiveBudget =
     encodeBudget !== undefined
       ? encodeBudget
-      : (goliveView?.encode_budget ?? storeFrame?.encode_budget ?? fetchedData?.encodeBudget ?? null)
+      : (goliveView?.encode_budget ??
+        storeFrame?.encode_budget ??
+        fetchedData?.encodeBudget ??
+        null)
   const effectiveSource =
     qualitySource ??
     (goliveView
@@ -766,7 +768,16 @@ export function StreamPage({
           source: effectiveSource,
         },
       ),
-    [s.video_kbps, sentW, sentH, s.fps, effectiveDests, ignoreLimits, effectiveBudget, effectiveSource],
+    [
+      s.video_kbps,
+      sentW,
+      sentH,
+      s.fps,
+      effectiveDests,
+      ignoreLimits,
+      effectiveBudget,
+      effectiveSource,
+    ],
   )
   const bitrateSub: ReactNode = fetchLoading ? (
     'Checking platform limits…'

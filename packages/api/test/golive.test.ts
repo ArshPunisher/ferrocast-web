@@ -945,9 +945,7 @@ describe('DemoGoLive per-destination quality parity', () => {
       await api.addCustom('Studio SRT', 'srt://127.0.0.1:9001', '')
       await api.setEnhanced('twitch', true)
       const lockedOpts = await api.qualityOptions()
-      const srtEntry = Object.values(lockedOpts.destinations).find((d) =>
-        d.id.startsWith('c_'),
-      )!
+      const srtEntry = Object.values(lockedOpts.destinations).find((d) => d.id.startsWith('c_'))!
       expect(srtEntry.locked_reason).toBeTruthy()
       expect(srtEntry.custom_limits).toBeNull()
       expect(lockedOpts.destinations.twitch!.locked_reason).toBeTruthy()

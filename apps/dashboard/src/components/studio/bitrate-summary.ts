@@ -521,7 +521,12 @@ export function describeStreamCap(
     limiter,
     caps,
     heldBackIds,
-    settingsNote: buildCapSettingsNote(chosenVideoKbps, caps, mainActive.length, Boolean(opts.live)),
+    settingsNote: buildCapSettingsNote(
+      chosenVideoKbps,
+      caps,
+      mainActive.length,
+      Boolean(opts.live),
+    ),
     settingsDetail: null,
   }
 }
@@ -649,7 +654,9 @@ export function describeDestinationRate(
 
   if (d.resolved_quality && !summary.capped) {
     const ownCapNote =
-      !opts.ignoreServiceLimits && d.capped ? { summary: d.capped.summary, detail: d.capped.detail } : null
+      !opts.ignoreServiceLimits && d.capped
+        ? { summary: d.capped.summary, detail: d.capped.detail }
+        : null
     const heldBackNote =
       hasCoalescedLowerShare && rateLabel
         ? {

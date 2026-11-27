@@ -33,7 +33,9 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
 
     // EXTRA 17: concise per-platform readout next to Bitrate inside More options + (i) detail.
     await settingsDialog.getByText('More options', { exact: true }).click()
-    await expect(settingsDialog.getByText('Twitch 6 · YouTube 12 · Kick 8 Mbps').nth(1)).toBeVisible()
+    await expect(
+      settingsDialog.getByText('Twitch 6 · YouTube 12 · Kick 8 Mbps').nth(1),
+    ).toBeVisible()
     await settingsDialog.getByRole('button', { name: 'About bitrate per platform' }).click()
     await expect(settingsDialog.locator('div.fixed[data-over-preview="true"]')).toContainText(
       /Twitch takes at most 6 Mbps/,
@@ -94,9 +96,7 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
     // Turning Twitch off removes Twitch from upload without disturbing YouTube's 12 Mbps.
     await platforms.getByRole('switch', { name: 'Stream to Twitch' }).click()
     await expect(platYt.getByText('12 Mbps', { exact: true })).toBeVisible()
-    await expect(
-      platforms.getByText(/^12 Mbps \+ 8\.2 Mbps = 20\.2 Mbps upload$/),
-    ).toBeVisible()
+    await expect(platforms.getByText(/^12 Mbps \+ 8\.2 Mbps = 20\.2 Mbps upload$/)).toBeVisible()
   })
 
   test('Settings Bitrate breakdown and Your platforms have no horizontal scroll at 375 px', async ({

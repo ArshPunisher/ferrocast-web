@@ -197,11 +197,7 @@ export function brandToLimit(brand?: PasteBrand): PlatformLimit | null {
   return null
 }
 
-export function platformLimitFor(
-  kind: Service,
-  canvas: Canvas,
-  brand?: PasteBrand,
-): PlatformLimit {
+export function platformLimitFor(kind: Service, canvas: Canvas, brand?: PasteBrand): PlatformLimit {
   if (kind === 'twitch') return TWITCH_LIMIT
   if (kind === 'kick') return KICK_LIMIT
   if (kind === 'youtube') return canvas === 'vertical' ? YOUTUBE_VERTICAL_LIMIT : YOUTUBE_LIMIT
@@ -298,7 +294,12 @@ function fitToLimit(
       note: null,
     }
   }
-  const [width, height] = fitDimensions(src.width, src.height, limit.maxLongEdge, limit.maxShortEdge)
+  const [width, height] = fitDimensions(
+    src.width,
+    src.height,
+    limit.maxLongEdge,
+    limit.maxShortEdge,
+  )
   const fps = largestFpsDivisor(src.fps, limit.maxFps)
   const maxKbps = effectiveMaxKbps(limit, width, height, fps)
   const kbps = Math.min(src.kbps, maxKbps)
@@ -672,7 +673,7 @@ function evaluateGroups(
     const isSeparate =
       source === 'studio' &&
       anchorKey !== undefined &&
-      (s.active ? k !== anchorKey : k !== anchorKey && s.kbps !== (s.canvasProfile.kbps))
+      (s.active ? k !== anchorKey : k !== anchorKey && s.kbps !== s.canvasProfile.kbps)
     separateByDest.set(s.id, Boolean(isSeparate))
   }
 
@@ -751,8 +752,16 @@ export function planEncodes(input: {
   liveStats?: { fps: number; kbps: number }
   preserveCustomOnFallback?: boolean
 }): EncodePlanResult {
-  const { destinations, main, vertical, cutWanted, source, ignoreLimits, budgetConfig, hostCodecs } =
-    input
+  const {
+    destinations,
+    main,
+    vertical,
+    cutWanted,
+    source,
+    ignoreLimits,
+    budgetConfig,
+    hostCodecs,
+  } = input
   const obsMode = source === 'obs'
 
   const states: CandidateState[] = destinations.map((d) => {
@@ -978,7 +987,10 @@ export function planEncodes(input: {
   }
 
   // Compute lowest active platform cap for OBS / Pass-2 shared cap attribution.
-  const sharedLimiterByCanvas = new Map<Canvas, { names: string[]; kbps: number; w: number; h: number; fps: number }>()
+  const sharedLimiterByCanvas = new Map<
+    Canvas,
+    { names: string[]; kbps: number; w: number; h: number; fps: number }
+  >()
   if (obsMode || usedSharedFallback) {
     for (const canvas of ['main', 'vertical'] as const) {
       const limiters = states
@@ -1041,7 +1053,10 @@ export function planEncodes(input: {
     } else if (s.active && !ignoreLimits) {
       if (obsMode || usedSharedFallback) {
         const sharedLim = sharedLimiterByCanvas.get(s.canvas)
-        if (sharedLim && fitToLimit(s.canvasProfile, s.limit, hostCodecs, false).kbps === sharedLim.kbps) {
+        if (
+          sharedLim &&
+          fitToLimit(s.canvasProfile, s.limit, hostCodecs, false).kbps === sharedLim.kbps
+        ) {
           const dimChanged =
             sharedLim.w !== s.canvasProfile.width || sharedLim.h !== s.canvasProfile.height
           const fpsChanged = sharedLim.fps !== s.canvasProfile.fps
@@ -1055,8 +1070,7 @@ export function planEncodes(input: {
           )
         }
       } else if (!s.isCustom && s.autoFitted) {
-        const dimChanged =
-          s.width !== s.canvasProfile.width || s.height !== s.canvasProfile.height
+        const dimChanged = s.width !== s.canvasProfile.width || s.height !== s.canvasProfile.height
         const fpsChanged = s.fps !== s.canvasProfile.fps
         capped = makeCapSummary(
           s,
@@ -1188,7 +1202,9 @@ export function buildQualityOptionsResponse(input: {
         note === null &&
         (!simDest.resolved.auto_fitted || spec.id === '1080p60') &&
         r.kbps >= Math.min(limit.recKbps, canvasProfile.kbps) * 0.5 &&
-        (spec.id === 'same_as_main' ? !note && !simDest.resolved.auto_fitted : spec.id === '1080p60')
+        (spec.id === 'same_as_main'
+          ? !note && !simDest.resolved.auto_fitted
+          : spec.id === '1080p60')
       const overBudget = sim.budget.status === 'over'
 
       options.push({
@@ -1216,8 +1232,15 @@ export function buildQualityOptionsResponse(input: {
 
     const [maxW, maxH] = input.ignoreLimits
       ? [canvasProfile.width, canvasProfile.height]
-      : fitDimensions(canvasProfile.width, canvasProfile.height, limit.maxLongEdge, limit.maxShortEdge)
-    const maxFps = input.ignoreLimits ? canvasProfile.fps : largestFpsDivisor(canvasProfile.fps, limit.maxFps)
+      : fitDimensions(
+          canvasProfile.width,
+          canvasProfile.height,
+          limit.maxLongEdge,
+          limit.maxShortEdge,
+        )
+    const maxFps = input.ignoreLimits
+      ? canvasProfile.fps
+      : largestFpsDivisor(canvasProfile.fps, limit.maxFps)
     const fpsChoices: number[] = []
     for (const f of [120, 60, 48, 30, 24, 15]) {
       if (f <= maxFps && canvasProfile.fps % f === 0) fpsChoices.push(f)
@@ -1231,9 +1254,7 @@ export function buildQualityOptionsResponse(input: {
       limit.recShortEdge ?? maxH,
     )
     const recFps = largestFpsDivisor(maxFps, limit.recFps)
-    const maxKbps = input.ignoreLimits
-      ? 60000
-      : effectiveMaxKbps(limit, maxW, maxH, maxFps)
+    const maxKbps = input.ignoreLimits ? 60000 : effectiveMaxKbps(limit, maxW, maxH, maxFps)
 
     const customLimits: CustomQualityLimits | null = locked
       ? null

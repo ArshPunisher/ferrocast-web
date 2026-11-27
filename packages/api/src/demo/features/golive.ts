@@ -26,10 +26,7 @@ import type {
   VerticalObs,
   VideoCodec,
 } from '../../golive'
-import type {
-  GoLiveQualityOptionsResponse,
-  QualitySource,
-} from '../../golive'
+import type { GoLiveQualityOptionsResponse, QualitySource } from '../../golive'
 import type { Account } from '../../types'
 import { HttpError } from '../http-error'
 import {
@@ -330,9 +327,9 @@ export class DemoGoLive {
     const main = obsSupplying ? obsMain : studioMain
     const hasVertical = Boolean(
       ctx?.vertical ||
-        this.cutWanted() ||
-        this.verticalInstalled ||
-        this.cfg.some((d) => d.canvas === 'vertical'),
+      this.cutWanted() ||
+      this.verticalInstalled ||
+      this.cfg.some((d) => d.canvas === 'vertical'),
     )
     const vertical: StudioStreamProfile | null = ctx?.vertical
       ? ctx.vertical
@@ -341,7 +338,8 @@ export class DemoGoLive {
         : null
     const budgetConfig: DemoEncodeBudgetConfig = this.customBudget ??
       ctx?.budget ?? { source: 'apple_silicon', limit_mpx_s: 995, max_sessions: 8 }
-    const hostCodecs = this.customHostCodecs ?? ctx?.hostCodecs ?? (['h264', 'hevc'] as VideoCodec[])
+    const hostCodecs =
+      this.customHostCodecs ?? ctx?.hostCodecs ?? (['h264', 'hevc'] as VideoCodec[])
     const destinations: DestPlanMeta[] = this.cfg.map((d) => {
       const custom = d.kind === 'custom'
       const direct = custom ? directKind(d.url ?? '') : null
@@ -387,7 +385,8 @@ export class DemoGoLive {
     const mainGroup = plan.groups.find((g) => g.canvas === 'main')
     const mainKbps = mainGroup ? mainGroup.kbps : inputs.main.kbps
     return {
-      effectiveKbps: mainKbps === 6000 && targetVideo === 6000 ? this.kbps : mainKbps + inputs.main.audio_kbps,
+      effectiveKbps:
+        mainKbps === 6000 && targetVideo === 6000 ? this.kbps : mainKbps + inputs.main.audio_kbps,
       targetVideo,
       limiter: null,
     }
@@ -419,11 +418,7 @@ export class DemoGoLive {
     return this.accounts().find((a) => a.platform === kind)
   }
 
-  private health(
-    d: DestinationConfig,
-    now: number,
-    resolvedTotalKbps?: number,
-  ): PushHealth | null {
+  private health(d: DestinationConfig, now: number, resolvedTotalKbps?: number): PushHealth | null {
     const f = this.failed.get(d.id)
     if (f && d.enabled)
       return {
@@ -535,9 +530,7 @@ export class DemoGoLive {
     return out
   }
 
-  private destinations(
-    computed?: ReturnType<DemoGoLive['computePlan']>,
-  ): DestinationView[] {
+  private destinations(computed?: ReturnType<DemoGoLive['computePlan']>): DestinationView[] {
     const now = Date.now()
     const { inputs, plan } = computed ?? this.computePlan()
     const s = this.stats()
@@ -554,9 +547,7 @@ export class DemoGoLive {
         : []
       const planOut = plan.perDest.get(d.id)!
       const resolvedTotal =
-        inputs.source === 'studio'
-          ? planOut.resolved.kbps + planOut.resolved.audio_kbps
-          : undefined
+        inputs.source === 'studio' ? planOut.resolved.kbps + planOut.resolved.audio_kbps : undefined
       return {
         id: d.id,
         kind: d.kind,

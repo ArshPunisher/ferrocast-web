@@ -407,9 +407,7 @@ describe('Stream quality bitrate cap note (U2)', () => {
       goliveView: null,
     })
 
-    await act(async () =>
-      root?.render(<StreamPage s={mk({ video_kbps: 12000 })} set={() => {}} />),
-    )
+    await act(async () => root?.render(<StreamPage s={mk({ video_kbps: 12000 })} set={() => {}} />))
     expect(host?.textContent).toContain('Checking platform limits…')
 
     await act(async () => {

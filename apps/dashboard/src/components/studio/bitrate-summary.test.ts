@@ -496,9 +496,9 @@ describe('v3.8 resolved_quality, separate encodes, and settings breakdown', () =
     expect(cap.capped).toBe(true)
     expect(cap.effectiveVideoKbps).toBe(6000)
     expect(cap.settingsNote).toContain('Will send 6.0 Mbps.')
-    expect(describeDestinationRate(ytFallback, cap, { videoKbps: 12000 }).heldBackNote?.summary).toBe(
-      'Same stream as Twitch: 6.2 Mbps',
-    )
+    expect(
+      describeDestinationRate(ytFallback, cap, { videoKbps: 12000 }).heldBackNote?.summary,
+    ).toBe('Same stream as Twitch: 6.2 Mbps')
   })
 
   it('formats concise one-line Settings platform bitrates across caps, resolutions, custom, and empty states', () => {
