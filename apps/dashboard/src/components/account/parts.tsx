@@ -186,7 +186,12 @@ function Who({ title, sub }: { title: ReactNode; sub: ReactNode }) {
       <b className="flex min-w-0 items-center gap-1.5 text-[14.5px] leading-tight font-semibold text-text">
         {title}
       </b>
-      <small className="block truncate text-[13px] leading-snug text-text-3">{sub}</small>
+      <small
+        className="block truncate text-[13px] leading-snug text-text-3"
+        title={typeof sub === 'string' ? sub : undefined}
+      >
+        {sub}
+      </small>
     </span>
   )
 }
@@ -318,10 +323,15 @@ function Menu({
       className="z-[75] w-max min-w-[200px] max-w-[calc(100vw-16px)] rounded-[12px] border border-line-strong bg-surface-1 p-1.5 shadow-[var(--fc-shadow-pop)] [&>*]:shrink-0"
     >
       <div className="mb-1 border-b border-line px-2 pt-2 pb-2.5">
-        <b className="block truncate text-[14.5px] font-semibold text-text">
+        <b
+          className="block truncate text-[14.5px] font-semibold text-text"
+          title={accountName(view.account)}
+        >
           {accountName(view.account)}
         </b>
-        <small className="block truncate text-[13px] text-text-3">{view.account?.email}</small>
+        <small className="block truncate text-[13px] text-text-3" title={view.account?.email}>
+          {view.account?.email}
+        </small>
       </div>
       <button
         type="button"
@@ -509,7 +519,9 @@ export function SidebarAccount({
           <Who
             title={
               <>
-                <span className="truncate">{name}</span>
+                <span className="truncate" title={name}>
+                  {name}
+                </span>
                 {pro && <ProChrome />}
               </>
             }

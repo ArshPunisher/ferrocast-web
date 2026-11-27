@@ -55,7 +55,7 @@ export function EventRow({
     <li
       data-unread={unread ? 'true' : undefined}
       className={cx(
-        'group flex min-w-0 items-start gap-3 rounded-control px-2 py-2 hover:bg-surface-2 focus-within:bg-surface-2',
+        'group relative flex min-w-0 items-start gap-3 rounded-control px-2 py-2 hover:bg-surface-2 focus-within:bg-surface-2',
         unread && 'border-l-2 border-arc',
       )}
     >
@@ -100,6 +100,7 @@ export function EventRow({
         {d.detail && !compact && (
           <p
             dir="auto"
+            title={d.detail}
             className="mt-0.5 line-clamp-2 text-[14px] break-words [overflow-wrap:anywhere] text-text-3"
           >
             {d.detail}
@@ -109,11 +110,16 @@ export function EventRow({
       <time
         dateTime={new Date(event.received_at).toISOString()}
         title={new Date(event.received_at).toLocaleString()}
-        className="mt-0.5 shrink-0 font-mono text-[12.5px] text-text-3 tabular-nums group-hover:hidden group-focus-within:hidden"
+        className="mt-0.5 shrink-0 font-mono text-[12.5px] text-text-3 tabular-nums group-hover:invisible group-focus-within:invisible"
       >
         {relativeTime(event.received_at, now)}
       </time>
-      <div className="-my-1 hidden shrink-0 items-center gap-0.5 group-hover:flex group-focus-within:flex">
+      <div
+        className={cx(
+          'pointer-events-none absolute top-1 flex items-center gap-0.5 rounded-control bg-surface-2 opacity-0 group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100',
+          trailing ? 'right-10' : 'right-1.5',
+        )}
+      >
         {isAlertable(event) && (
           <IconButton
             size="sm"

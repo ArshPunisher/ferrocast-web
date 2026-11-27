@@ -55,6 +55,7 @@ export function Panel({
               <h2
                 id={headingId}
                 className="truncate font-display text-[18px] font-extrabold tracking-tight text-text"
+                title={typeof title === 'string' ? title : undefined}
               >
                 {title}
               </h2>

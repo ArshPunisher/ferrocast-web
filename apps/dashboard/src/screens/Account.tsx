@@ -159,11 +159,15 @@ function SignedIn({ view }: { view: AccountView }) {
           gap={pro ? 'var(--fc-plate-gap)' : undefined}
         />
         <div className="relative min-w-0">
-          <h1 className="truncate font-display text-[24px] leading-tight font-extrabold tracking-[-0.02em]">
+          <h1
+            title={name}
+            className="truncate font-display text-[24px] leading-tight font-extrabold tracking-[-0.02em]"
+          >
             {name}
           </h1>
           <p
             className={`mt-1 truncate text-[14.5px] ${pro ? 'text-[var(--fc-plate-text-2)]' : 'text-text-2'}`}
+            title={view.account?.email}
           >
             {view.account?.email}
           </p>
@@ -441,7 +445,10 @@ function Devices() {
                   <Icon size={18} aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <b className="block truncate text-[15px] font-semibold text-text">
+                  <b
+                    className="block truncate text-[15px] font-semibold text-text"
+                    title={s.label || (s.kind === 'app' ? 'Ferrocast app' : 'Web browser')}
+                  >
                     {s.label || (s.kind === 'app' ? 'Ferrocast app' : 'Web browser')}
                   </b>
                   <small className="block text-[13.5px] text-text-3">

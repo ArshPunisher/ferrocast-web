@@ -18,9 +18,15 @@ export function SecretUrl({ url, className }: { url: string; className?: string 
       )}
     >
       <code
+        // Shown, the whole address scrolls sideways and selects in one click, so the end of it
+        // can be checked or copied by hand; hidden, it stays one blurred line.
+        tabIndex={shown ? 0 : undefined}
+        title={shown ? url : undefined}
         className={cx(
-          'min-w-0 flex-1 truncate font-mono text-[13.5px] text-text-2 transition-[filter] duration-200',
-          !shown && 'fc-blur-url',
+          'min-w-0 flex-1 font-mono text-[13.5px] text-text-2 transition-[filter] duration-200',
+          shown
+            ? 'overflow-x-auto whitespace-nowrap select-all [scrollbar-width:thin] focus-visible:shadow-[var(--fc-focus-inset)] focus-visible:outline-none'
+            : 'fc-blur-url truncate',
         )}
         aria-hidden={!shown}
       >

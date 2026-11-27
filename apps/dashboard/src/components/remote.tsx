@@ -115,7 +115,10 @@ export function RemoteStrip({ remote }: { remote: RemoteState }) {
       )}
     >
       <Icon size={19} weight="bold" className={on ? 'shrink-0 text-accent-text' : 'shrink-0'} />
-      <span className="min-w-0 flex-1 truncate">
+      <span
+        className="min-w-0 flex-1 truncate"
+        title={`Through Ferrocast’s servers · ${on ? 'PC online' : 'PC offline'}`}
+      >
         Through Ferrocast’s servers · {on ? 'PC online' : 'PC offline'}
       </span>
       {remote.role === 'mod' && <Badge tone="neutral">Mod</Badge>}
@@ -432,7 +435,10 @@ function PcChoice({ onDone }: { onDone: () => void }) {
         {accountPcs.map((pc) => (
           <li key={pc.id} className="flex items-center gap-3 px-3.5 py-3">
             <span className="min-w-0 flex-1">
-              <b className="block truncate text-[16px] font-semibold text-text">
+              <b
+                className="block truncate text-[16px] font-semibold text-text"
+                title={pc.label || 'Your PC'}
+              >
                 {pc.label || 'Your PC'}
               </b>
               <small className="block text-[14px] text-text-3">
@@ -542,7 +548,9 @@ function RemoteBody() {
                   <DeviceMobile size={22} className="shrink-0 text-text-3" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <p className="flex min-w-0 items-center gap-2">
-                      <span className="truncate text-[16px] font-semibold text-text">{d.name}</span>
+                      <span className="truncate text-[16px] font-semibold text-text" title={d.name}>
+                        {d.name}
+                      </span>
                       <Badge tone={d.role === 'owner' ? 'accent' : 'neutral'}>
                         {ROLE_LABEL[d.role]}
                       </Badge>

@@ -282,7 +282,9 @@ function NavLink({
         weight={active ? 'fill' : 'regular'}
         className={cx('shrink-0', active && 'text-[var(--fc-molten-text)]')}
       />
-      <span className={cx(rail ? 'sr-only' : 'min-w-0 truncate')}>{item.label}</span>
+      <span className={cx(rail ? 'sr-only' : 'min-w-0 truncate')} title={item.label}>
+        {item.label}
+      </span>
     </a>
   )
 }
@@ -371,7 +373,12 @@ function AccountChip({ pro }: { pro: ProView }) {
         {initials}
       </span>
       <span className="min-w-0">
-        <b className="block truncate text-[14.5px] leading-tight font-semibold text-text">{name}</b>
+        <b
+          className="block truncate text-[14.5px] leading-tight font-semibold text-text"
+          title={name}
+        >
+          {name}
+        </b>
         <small className="flex items-center gap-1 text-[13px] text-text-3">
           <SealCheck size={14} weight="fill" className="shrink-0 text-accent-text" aria-hidden />
           {proPlanLine(pro)}
@@ -568,7 +575,10 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
           </button>
           {isPro && !folded && <ProMark />}
         </div>
-        <nav aria-label="Main" className="flex flex-col gap-0.5">
+        <nav
+          aria-label="Main"
+          className="-mx-1.5 -my-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-1.5 py-1 [scrollbar-width:none]"
+        >
           {nav.map((i) => (
             <NavLink key={i.label} item={i} active={isActive(i)} seam={isPro} rail={folded} />
           ))}

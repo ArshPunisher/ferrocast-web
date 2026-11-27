@@ -309,7 +309,7 @@ export function StatusStrip({
                 title={it.title}
                 className={cx(
                   'fc-press flex h-8 items-center rounded-full border text-[13.5px] font-medium whitespace-nowrap transition-colors',
-                  'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                  'focus-visible:shadow-[var(--fc-focus-inset)] focus-visible:outline-none',
                   compactChip ? 'gap-1.5 px-2' : 'gap-2 px-2.5 text-[14px]',
                   it.attention
                     ? 'border-line-strong bg-surface-2 text-text-2 hover:text-text'
@@ -395,7 +395,7 @@ export function StatusStrip({
               onClick={() => setOpen((v) => !v)}
               className={cx(
                 'fc-press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 font-mono text-[13px] font-bold whitespace-nowrap transition-colors',
-                'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+                'focus-visible:shadow-[var(--fc-focus-inset)] focus-visible:outline-none',
                 layout.overflowAttention === 'danger'
                   ? 'border-danger/50 bg-danger-soft text-danger hover:border-danger'
                   : layout.overflowAttention === 'warn'

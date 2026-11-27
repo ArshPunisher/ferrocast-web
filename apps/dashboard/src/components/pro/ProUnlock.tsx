@@ -7,7 +7,13 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ChartLineUp, Robot, ShieldCheck, YoutubeLogo, type Icon } from '@phosphor-icons/react'
 import type { ProView } from '@ferrocast/api'
-import { Button, SparkMark, notifyPreviewOverlays, usePreviewHole } from '@ferrocast/ui'
+import {
+  Button,
+  SparkMark,
+  lockPageScroll,
+  notifyPreviewOverlays,
+  usePreviewHole,
+} from '@ferrocast/ui'
 import { playBuiltin } from '@ferrocast/overlays'
 import { href } from '../../lib/router'
 import { PRO_UNLOCKED_EVENT, markUnlockShown, unlockShown } from '../../lib/pro-status'
@@ -37,6 +43,8 @@ export function ProUnlock({ pro }: { pro: ProView | null }) {
     markUnlockShown(pro)
     setOpen(true)
   }, [pro])
+
+  useEffect(() => (open && pro ? lockPageScroll() : undefined), [open, pro])
 
   useEffect(() => {
     const d = ref.current
@@ -78,7 +86,7 @@ export function ProUnlock({ pro }: { pro: ProView | null }) {
         animate={{ opacity: 1 }}
         transition={{ duration: reduce ? 0.16 : 0.2, ease }}
         onAnimationComplete={() => notifyPreviewOverlays()}
-        className="grid justify-items-center gap-3 rounded-panel border border-line-strong bg-surface-1 px-6 pt-6 pb-5 text-center shadow-pop"
+        className="grid max-h-[92dvh] justify-items-center gap-3 overflow-y-auto overscroll-contain rounded-panel border border-line-strong bg-surface-1 px-6 pt-6 pb-5 text-center shadow-pop"
       >
         <SparkMark size={76} />
         <h2

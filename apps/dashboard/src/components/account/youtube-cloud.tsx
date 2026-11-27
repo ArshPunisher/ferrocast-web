@@ -109,7 +109,11 @@ export function YoutubeCloud() {
       ) : (
         <div className="flex flex-col gap-3">
           <p className="flex min-w-0 items-center gap-2 text-[15px] text-text">
-            <b className="min-w-0 truncate font-semibold" dir="auto">
+            <b
+              className="min-w-0 truncate font-semibold"
+              dir="auto"
+              title={v.channel.title ?? 'Your channel'}
+            >
               {v.channel.title ?? 'Your channel'}
             </b>
             {v.channel.live && <Badge tone="danger">Live</Badge>}
