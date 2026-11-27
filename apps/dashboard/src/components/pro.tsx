@@ -156,7 +156,7 @@ export function planCopy(prices: NonNullable<ProView['prices']>, plan: ProPlan) 
     name: 'Yearly',
     price: rupeesFromPaise(prices.yearly),
     per: 'a year',
-    // Whole rupees: "About ₹167 a month" (₹1,999 / 12 = ₹166.58).
+    // Whole rupees: "About ₹333 a month" (₹3,999 / 12 = ₹333.25).
     sub: `About ${rupeesFromPaise(Math.round(prices.yearly / 12 / 100) * 100)} a month`,
     save: saved > 0 ? `Save ${rupeesFromPaise(saved)}` : null,
   }

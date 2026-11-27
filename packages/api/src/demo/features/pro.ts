@@ -46,7 +46,7 @@ export class DemoPro {
     refunded: false,
     installs: 0,
     sales_open: false,
-    prices: { currency: 'INR', monthly: 19_900, yearly: 199_900 },
+    prices: { currency: 'INR', monthly: 39_900, yearly: 399_900 },
     checked_at: Date.now(),
     stale: false,
     offline_grace_days: 7,
@@ -64,15 +64,15 @@ export class DemoPro {
   setup(s: DemoProSetup): void {
     if (s.salesOpen !== undefined) this.state.sales_open = s.salesOpen
     if (s.sale) {
-      this.state.list_prices = { currency: 'INR', monthly: 19_900, yearly: 199_900 }
-      this.state.prices = { currency: 'INR', monthly: 13_900, yearly: 199_900 }
+      this.state.list_prices = { currency: 'INR', monthly: 39_900, yearly: 399_900 }
+      this.state.prices = { currency: 'INR', monthly: 27_900, yearly: 399_900 }
       this.state.sale = {
         name: 'Diwali',
         headline: '30% off Pro monthly for Diwali',
         message: null,
         ends_at: Date.now() + 5 * 86_400_000,
         percent_off: 30,
-        was: { monthly: 19_900 },
+        was: { monthly: 39_900 },
       }
     }
     if (s.features !== undefined) {
@@ -149,8 +149,8 @@ export class DemoPro {
       if (!code) throw new HttpError(422, 'invalid_code', 'Type the code first.')
       if (code === DEMO_DISCOUNT_CODE) {
         const list = this.state.list_prices ?? this.state.prices
-        const m = list?.monthly ?? 19_900
-        const y = list?.yearly ?? 199_900
+        const m = list?.monthly ?? 39_900
+        const y = list?.yearly ?? 399_900
         const now = this.state.prices?.monthly ?? m
         const off = Math.floor((m * 0.8) / 100) * 100
         return {
@@ -218,8 +218,8 @@ export class DemoPro {
       this.state.status = 'created'
       const prices = this.state.prices ?? {
         currency: 'INR' as const,
-        monthly: 19_900,
-        yearly: 199_900,
+        monthly: 39_900,
+        yearly: 399_900,
       }
       return {
         checkout_url: 'https://ferrocast.clearcraftlabs.com/pricing/',

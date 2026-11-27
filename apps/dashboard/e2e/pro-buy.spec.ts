@@ -25,10 +25,10 @@ test.describe('settings: buying Pro in three steps', () => {
     // Both prices at once, yearly picked, with what it saves.
     const yearly = pro.getByRole('radio', { name: /Yearly/ })
     await expect(yearly).toHaveAttribute('aria-checked', 'true')
-    await expect(yearly).toContainText('₹1,999')
-    await expect(yearly).toContainText('Save ₹389')
-    await expect(yearly).toContainText('About ₹167 a month')
-    await expect(pro.getByRole('radio', { name: /Monthly/ })).toContainText('₹199')
+    await expect(yearly).toContainText('₹3,999')
+    await expect(yearly).toContainText('Save ₹789')
+    await expect(yearly).toContainText('About ₹333 a month')
+    await expect(pro.getByRole('radio', { name: /Monthly/ })).toContainText('₹399')
     for (const f of [
       'YouTube from the cloud',
       'Smart moderation',
@@ -75,7 +75,7 @@ test.describe('settings: buying Pro in three steps', () => {
 
     // Pay opens Razorpay's page outside the dashboard and waits here.
     const popup = context.waitForEvent('page')
-    await pro.getByRole('button', { name: 'Pay ₹1,999 on Razorpay' }).click()
+    await pro.getByRole('button', { name: 'Pay ₹3,999 on Razorpay' }).click()
     await (await popup).close()
     await expect(pro.getByRole('heading', { name: 'Finish paying in your browser' })).toBeVisible()
     const again = pro.getByRole('link', { name: 'Open checkout again' })
@@ -173,7 +173,7 @@ test.describe('settings: buying Pro in three steps', () => {
       message: 'That email address doesn’t look right.',
       hint: 'Use the address where you want Razorpay’s receipts.',
     })
-    await panel(page).getByRole('button', { name: 'Pay ₹199 on Razorpay' }).click()
+    await panel(page).getByRole('button', { name: 'Pay ₹399 on Razorpay' }).click()
     await expect(
       panel(page).getByRole('heading', { name: 'Where should receipts go?' }),
     ).toBeVisible()
