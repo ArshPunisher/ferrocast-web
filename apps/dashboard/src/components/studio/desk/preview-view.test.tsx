@@ -2315,9 +2315,9 @@ describe('Studio preview live-resize and scale sync', () => {
         await vi.advanceTimersByTimeAsync(25)
       })
       expect(putCalls().length).toBe(putsBeforeGraceResize + 1)
-      expect((putCalls()[putCalls().length - 1]![2] as { rect?: { opacity?: number } }).rect?.opacity).not.toBe(
-        0,
-      )
+      expect(
+        (putCalls()[putCalls().length - 1]![2] as { rect?: { opacity?: number } }).rect?.opacity,
+      ).not.toBe(0)
 
       // After grace expires, dropped active:false recovers via stage pointerdown.
       await act(async () => {
@@ -2355,7 +2355,12 @@ describe('Studio preview live-resize and scale sync', () => {
   it('avoids prefix cache collisions, refreshes expired/switched scene stills, and rejects unsafe hint URLs (CR-12, CR-13, F5)', async () => {
     const { desk, thumbCalls } = setupPreviewTest()
     const scenesData = desk.scenes as {
-      data: { current: string; transition: { kind: string; ms: number }; vertical: null; preview: null }
+      data: {
+        current: string
+        transition: { kind: string; ms: number }
+        vertical: null
+        preview: null
+      }
       reload(): void
     }
     scenesData.data.current = 'Camera:Close'
@@ -2406,9 +2411,11 @@ describe('Studio preview live-resize and scale sync', () => {
         )
         await vi.advanceTimersByTimeAsync(25)
       })
-      expect(thumbCalls().slice(thumbsBeforeSwitch).some(([, p]) => p.includes('/Camera/thumbnail'))).toBe(
-        true,
-      )
+      expect(
+        thumbCalls()
+          .slice(thumbsBeforeSwitch)
+          .some(([, p]) => p.includes('/Camera/thumbnail')),
+      ).toBe(true)
 
       // After TTL (>10_000ms) expires, live resize still paints fallback and triggers a fresh thumbnail fetch.
       const thumbsBeforeExpire = thumbCalls().length
@@ -2532,9 +2539,9 @@ describe('Studio preview live-resize and scale sync', () => {
         await Promise.resolve()
       })
       expect(putCalls().length).toBe(basePuts + 1)
-      expect((putCalls()[putCalls().length - 1]![2] as { rect?: { opacity?: number } }).rect?.opacity).toBe(
-        0,
-      )
+      expect(
+        (putCalls()[putCalls().length - 1]![2] as { rect?: { opacity?: number } }).rect?.opacity,
+      ).toBe(0)
 
       // Reset drag and clear stage with a new uncached scene whose thumbnail fails: fallback still hides native view.
       await act(async () => {

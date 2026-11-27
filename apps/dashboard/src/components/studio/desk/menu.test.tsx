@@ -256,11 +256,7 @@ describe('submenu flipping, safe bounds, and button anchoring (M4)', () => {
               ref={panelBtnRef}
               type="button"
               onClick={(e) =>
-                open(
-                  e,
-                  'History',
-                  menuItems ?? [{ label: 'Nothing to undo yet', disabled: true }],
-                )
+                open(e, 'History', menuItems ?? [{ label: 'Nothing to undo yet', disabled: true }])
               }
             >
               History
@@ -268,8 +264,12 @@ describe('submenu flipping, safe bounds, and button anchoring (M4)', () => {
             <button
               type="button"
               onClick={(e) => {
-                setMenuItems([{ label: 'With sub', items: [{ label: 'Disabled sub', disabled: true }] }])
-                open(e, 'Guides', [{ label: 'With sub', items: [{ label: 'Disabled sub', disabled: true }] }])
+                setMenuItems([
+                  { label: 'With sub', items: [{ label: 'Disabled sub', disabled: true }] },
+                ])
+                open(e, 'Guides', [
+                  { label: 'With sub', items: [{ label: 'Disabled sub', disabled: true }] },
+                ])
               }}
             >
               Guides

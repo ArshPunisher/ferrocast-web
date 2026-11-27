@@ -1301,8 +1301,10 @@ function Divider({
     const prevVars: Array<[string, string]> = []
     if (target) {
       if (edge === 'left') prevVars.push(['--fc-lw', target.style.getPropertyValue('--fc-lw')])
-      else if (edge === 'right') prevVars.push(['--fc-rw', target.style.getPropertyValue('--fc-rw')])
-      else if (edge === 'bottom') prevVars.push(['--fc-bh', target.style.getPropertyValue('--fc-bh')])
+      else if (edge === 'right')
+        prevVars.push(['--fc-rw', target.style.getPropertyValue('--fc-rw')])
+      else if (edge === 'bottom')
+        prevVars.push(['--fc-bh', target.style.getPropertyValue('--fc-bh')])
       else if (between) {
         prevVars.push([dockVar(between[0]), target.style.getPropertyValue(dockVar(between[0]))])
         prevVars.push([dockVar(between[1]), target.style.getPropertyValue(dockVar(between[1]))])

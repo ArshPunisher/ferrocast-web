@@ -443,9 +443,7 @@ describe('Dynamic overlay resize holes, opacity-only entrance, and InfoTip bound
     link.focus()
     await act(async () => {
       outside.focus()
-      link.dispatchEvent(
-        new FocusEvent('focusout', { relatedTarget: outside, bubbles: true }),
-      )
+      link.dispatchEvent(new FocusEvent('focusout', { relatedTarget: outside, bubbles: true }))
       await vi.advanceTimersByTimeAsync(200)
     })
     expect(document.body.querySelector('[data-over-preview]')).toBeNull()

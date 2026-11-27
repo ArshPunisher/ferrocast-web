@@ -468,7 +468,9 @@ describe('DockWorkspace CSS layout, resize loops, and containment', () => {
     await act(async () => {
       floatEl.dispatchEvent(pointerEvt('pointerdown', { clientX: 515, clientY: 355 }))
     })
-    expect(addSpy.mock.calls.filter(([t]) => t === 'pointerup' || t === 'pointercancel')).toHaveLength(2)
+    expect(
+      addSpy.mock.calls.filter(([t]) => t === 'pointerup' || t === 'pointercancel'),
+    ).toHaveLength(2)
 
     curW = 410
     curH = 310
@@ -588,12 +590,18 @@ describe('DockWorkspace CSS layout, resize loops, and containment', () => {
       ({ left: 0, top: 0, width: 1280, height: 50, right: 1280, bottom: 50 }) as DOMRect
     Object.defineProperty(header, 'style', { value: { display: 'flex' }, configurable: true })
     const origGetCS = window.getComputedStyle
-    vi.spyOn(window, 'getComputedStyle').mockImplementation((el: Element, pseudo?: string | null) => {
-      if (el === header) {
-        return { display: 'flex', visibility: 'visible', position: 'sticky' } as CSSStyleDeclaration
-      }
-      return origGetCS(el, pseudo)
-    })
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(
+      (el: Element, pseudo?: string | null) => {
+        if (el === header) {
+          return {
+            display: 'flex',
+            visibility: 'visible',
+            position: 'sticky',
+          } as CSSStyleDeclaration
+        }
+        return origGetCS(el, pseudo)
+      },
+    )
     document.body.appendChild(header)
     try {
       expect(clampFloat({ x: 200, y: 0, w: 320, h: 240 }, 1280, 800).y).toBe(58)
@@ -615,9 +623,7 @@ describe('DockWorkspace CSS layout, resize loops, and containment', () => {
       return (
         <button
           data-prune-weights
-          onClick={() =>
-            setLayout((l) => ({ ...l, w: { audio: 1.5, sources: 1, golive: 1 } }))
-          }
+          onClick={() => setLayout((l) => ({ ...l, w: { audio: 1.5, sources: 1, golive: 1 } }))}
         />
       )
     }

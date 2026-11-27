@@ -258,7 +258,9 @@ test.describe('Studio CSS layout and resize stability', () => {
     await settled(page)
 
     const ws = page.locator('[data-dock-ws]')
-    const initialLw = await ws.evaluate((el) => getComputedStyle(el).getPropertyValue('--fc-lw').trim())
+    const initialLw = await ws.evaluate((el) =>
+      getComputedStyle(el).getPropertyValue('--fc-lw').trim(),
+    )
     const sep = page.getByRole('separator', { name: 'Resize the left panels' })
     const box = (await sep.boundingBox())!
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)

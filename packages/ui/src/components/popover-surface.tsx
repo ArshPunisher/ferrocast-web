@@ -424,7 +424,8 @@ export function PopoverSurface({
     el.style.minWidth = prevInlineMinW
 
     const boundsMaxW = Math.max(80, bounds.right - bounds.left)
-    const capW = Number.isFinite(cssMaxW) && cssMaxW > 0 ? Math.min(cssMaxW, boundsMaxW) : boundsMaxW
+    const capW =
+      Number.isFinite(cssMaxW) && cssMaxW > 0 ? Math.min(cssMaxW, boundsMaxW) : boundsMaxW
     const surfaceW = matchAnchorWidth
       ? Math.min(capW, Math.max(naturalW, aRect.width))
       : Math.min(capW, naturalW)
@@ -601,7 +602,11 @@ export function PopoverSurface({
   const portalTarget = effectiveHost
 
   const cappedMinWidth =
-    matchAnchorWidth && anchorWidth ? (pos ? Math.min(anchorWidth, pos.maxWidth) : anchorWidth) : null
+    matchAnchorWidth && anchorWidth
+      ? pos
+        ? Math.min(anchorWidth, pos.maxWidth)
+        : anchorWidth
+      : null
 
   const mergedStyle: CSSProperties = {
     top: pos?.top ?? 0,

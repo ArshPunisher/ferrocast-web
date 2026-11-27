@@ -79,8 +79,9 @@ describe('preview window events', () => {
     expect(isSafeStillUrl('data:image/png;base64,abc123+/=')).toBe(true)
     expect(isSafeStillUrl('data:image/jpeg;base64,STILL_1')).toBe(true)
     expect(
-      isSafeStillUrl('data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2F%22%3E%3C%2Fsvg%3E') ||
-        isSafeStillUrl('data:image/svg+xml;charset=utf-8,%3Csvg%3E%3C%2Fsvg%3E'),
+      isSafeStillUrl(
+        'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2F%22%3E%3C%2Fsvg%3E',
+      ) || isSafeStillUrl('data:image/svg+xml;charset=utf-8,%3Csvg%3E%3C%2Fsvg%3E'),
     ).toBe(true)
     expect(isSafeStillUrl('blob:https://127.0.0.1:47820/1234-5678')).toBe(true)
     expect(isSafeStillUrl('https://cdn.example.com/thumb.png')).toBe(true)

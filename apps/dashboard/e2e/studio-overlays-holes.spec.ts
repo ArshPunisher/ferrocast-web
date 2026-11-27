@@ -23,13 +23,16 @@ async function openDesktopStudio(
   seedLayout?: Record<string, unknown>,
 ) {
   await page.setViewportSize({ width, height })
-  await page.addInitScript((layoutJson: string | null) => {
-    ;(window as unknown as { __FERROCAST__: unknown }).__FERROCAST__ = { desktop: true }
-    localStorage.setItem('fc-golive-picture', 'ferrocast')
-    localStorage.removeItem('fc-studio-scenes-grid')
-    if (layoutJson) localStorage.setItem('fc-studio-layout', layoutJson)
-    else localStorage.removeItem('fc-studio-layout')
-  }, seedLayout ? JSON.stringify(seedLayout) : null)
+  await page.addInitScript(
+    (layoutJson: string | null) => {
+      ;(window as unknown as { __FERROCAST__: unknown }).__FERROCAST__ = { desktop: true }
+      localStorage.setItem('fc-golive-picture', 'ferrocast')
+      localStorage.removeItem('fc-studio-scenes-grid')
+      if (layoutJson) localStorage.setItem('fc-studio-layout', layoutJson)
+      else localStorage.removeItem('fc-studio-layout')
+    },
+    seedLayout ? JSON.stringify(seedLayout) : null,
+  )
   await open(page, 'studio/golive', 'autoplay=0&latency=0&studioEngine=1')
   await page.getByRole('button', { name: 'Start the Studio' }).click()
   await expect(page.locator('[data-canvas-box]').first()).toBeVisible()

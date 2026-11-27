@@ -952,11 +952,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
       const withVisibleOpacity = (r: PreviewRect | null) =>
         r && restoringFromHidden && r.opacity === undefined ? { ...r, opacity: 1 } : r
       const thawing = frozen
-      void put(
-        withVisibleOpacity(rect),
-        withVisibleOpacity(program),
-        withVisibleOpacity(tallRect),
-      )
+      void put(withVisibleOpacity(rect), withVisibleOpacity(program), withVisibleOpacity(tallRect))
         .then((placed) => {
           if (!alive) return
           if (placed) hidNative = false
@@ -1127,7 +1123,13 @@ function PreviewBoxes({ running }: { running: boolean }) {
       schedule()
     }
 
-    const stageTargets = [...new Set([stageRef.current, vStageRef.current, el, vRef.current, programRef.current].filter((n): n is HTMLDivElement => Boolean(n)))]
+    const stageTargets = [
+      ...new Set(
+        [stageRef.current, vStageRef.current, el, vRef.current, programRef.current].filter(
+          (n): n is HTMLDivElement => Boolean(n),
+        ),
+      ),
+    ]
     for (const node of stageTargets) {
       node.addEventListener('pointerdown', recoverNativeResize, { capture: true })
     }
@@ -1595,7 +1597,9 @@ function SwitchBar() {
         <IconButton
           size="xs"
           label="Swap the preview and what's on air"
-          onClick={() => void run('swap', () => done(api.swapScenes())).then((ok) => ok && refresh())}
+          onClick={() =>
+            void run('swap', () => done(api.swapScenes())).then((ok) => ok && refresh())
+          }
         >
           <ArrowsLeftRight size={15} weight="bold" />
         </IconButton>

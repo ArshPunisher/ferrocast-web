@@ -11,11 +11,7 @@ import { OverflowRow, type OverflowItem } from './overflow-row'
 let rowWidth = 1000
 const itemWidths = new Map<string, number>()
 const widthOf = (el: HTMLElement) =>
-  el.dataset.ov
-    ? (itemWidths.get(el.dataset.ov) ?? 60)
-    : el.hasAttribute('data-more')
-      ? 26
-      : 0
+  el.dataset.ov ? (itemWidths.get(el.dataset.ov) ?? 60) : el.hasAttribute('data-more') ? 26 : 0
 const used = (row: HTMLElement) => {
   const parts: number[] = [...row.querySelectorAll<HTMLElement>(':scope > [data-ov]')]
     .map(widthOf)

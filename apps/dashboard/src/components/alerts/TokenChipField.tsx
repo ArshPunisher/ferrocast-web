@@ -269,17 +269,14 @@ export function TokenChipField({
                     paletteRefs.current[(i + 1) % quickOptions.length]?.focus()
                   } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
                     e.preventDefault()
-                    paletteRefs.current[(i - 1 + quickOptions.length) % quickOptions.length]?.focus()
+                    paletteRefs.current[
+                      (i - 1 + quickOptions.length) % quickOptions.length
+                    ]?.focus()
                   }
                 }}
                 className="fc-press flex min-h-9 items-center gap-2 rounded-[8px] px-2 text-left hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
               >
-                <Plus
-                  size={11}
-                  weight="bold"
-                  aria-hidden="true"
-                  className="shrink-0 text-text-3"
-                />
+                <Plus size={11} weight="bold" aria-hidden="true" className="shrink-0 text-text-3" />
                 <span className="font-mono text-[13px] font-semibold text-text">{`{${opt.key}}`}</span>
                 <span className="ml-auto truncate text-[13px] text-text-3">{opt.label}</span>
               </button>
