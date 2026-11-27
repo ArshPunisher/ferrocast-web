@@ -2,40 +2,145 @@
 import Logo from './Logo.astro'
 import Icon from './Icon.astro'
 import BrandMark from './BrandMark.astro'
+import MiniBraid from './MiniBraid.astro'
+import { ICON_PATHS } from '@ferrocast/ui/platform-icons'
 import { COMPANY } from '../data/company'
 import { API_ORIGIN } from '../data/api'
+import { MENUS, PRICING_LINK, type NavItem } from '../data/nav'
 
-const links = [
-  { href: '/features/', label: 'Features' },
-  { href: '/pricing/', label: 'Pricing' },
-  { href: '/compare/', label: 'Compare' },
-  { href: '/docs/getting-started/', label: 'Docs' },
-  { href: '/faq/', label: 'FAQ' },
-  { href: '/web-dashboard/', label: 'Web dashboard' },
-]
 const here = Astro.url.pathname
-const isCurrent = (href: string) => here === href || (href !== '/' && here.startsWith(href))
+const hrefPath = (href: string) => href.split('#')[0] ?? href
+// A link is "here" only for a page of its own, not for a #section of the features page.
+const isHere = (it: NavItem) => !it.href.includes('#') && !it.external && hrefPath(it.href) === here
+const groupHere = (key: string) =>
+  MENUS.find((m) => m.key === key)?.groups.some((g) => g.items.some(isHere)) ?? false
+const pricingHere = here === PRICING_LINK.href
+const platforms = ['twitch', 'youtube', 'kick', 'facebook'] as const
 ---
 
-<header class="site-header">
+<header class="site-header" data-mm>
   <div class="container bar">
-    <a href="/" class="brand" aria-label="Ferrocast home">
+    <a href="/" class="brand" aria-label="Ferrocast home" data-mm-close-on-hover>
       <Logo id="hdr" height={21} />
     </a>
 
-    <nav aria-label="Main" class="desktop-nav">
+    <nav aria-label="Main" class="mm-nav" data-mm-zone>
       <ul>
-        {links.map((l) => (
+        {MENUS.map((m) => (
           <li>
-            <a href={l.href} aria-current={isCurrent(l.href) ? 'page' : undefined}>
-              {l.label}
-            </a>
+            <button
+              type="button"
+              class="mm-trg"
+              data-mm-trigger={m.key}
+              data-here={groupHere(m.key) ? '' : undefined}
+              aria-expanded="false"
+              aria-controls={`mm-${m.key}`}
+            >
+              {m.label}
+              <Icon name="caret-down" weight="bold" size={12} class="caret" />
+            </button>
+            <div
+              class={`mm-view mm-${m.key}`}
+              id={`mm-${m.key}`}
+              data-mm-view={m.key}
+              role="group"
+              aria-label={m.label}
+              inert
+            >
+              <div class="container a-grid">
+                {m.groups.map((g, gi) => (
+                  <div class="a-col">
+                    <p class="a-h">{g.title}</p>
+                    {g.items.map((it, i) => (
+                      <a
+                        class="mm-item"
+                        href={it.href}
+                        rel={it.external ? 'noopener' : undefined}
+                        aria-current={isHere(it) ? 'page' : undefined}
+                        style={`--i: ${gi * 3 + i}`}
+                      >
+                        <span class="tile">
+                          <Icon name={it.icon} weight="light" size={20} />
+                        </span>
+                        <span class="mm-txt">
+                          <b>{it.title}</b>
+                          <span>{it.desc}</span>
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                ))}
+                {m.key === 'features' && (
+                  <aside class="a-card">
+                    <div class="a-card-art">
+                      <MiniBraid id="mb" />
+                    </div>
+                    <h3>Multistream, free</h3>
+                    <p>Go live on every platform at once, from your own PC.</p>
+                    <div class="a-card-row">
+                      <span class="plats" role="img" aria-label="Twitch, YouTube, Kick, Facebook">
+                        {platforms.map((p) => (
+                          <svg
+                            viewBox="0 0 24 24"
+                            width="18"
+                            height="18"
+                            fill={`var(--fc-${p})`}
+                            aria-hidden="true"
+                          >
+                            <path d={ICON_PATHS[p]} />
+                          </svg>
+                        ))}
+                      </span>
+                      <a class="btn btn-primary btn-sm" href="/features/multistream/">
+                        See how
+                        <Icon name="arrow-right" weight="bold" size={14} class="ic-go" />
+                      </a>
+                    </div>
+                  </aside>
+                )}
+                {m.key === 'usecases' && (
+                  <aside class="a-card a-card-quiet">
+                    <h3>Not sure where to start?</h3>
+                    <p>Install the app, connect one platform and go live. The rest can wait.</p>
+                    <a class="btn btn-primary btn-sm" href="/download/">
+                      Download
+                      <Icon name="arrow-right" weight="bold" size={14} class="ic-go" />
+                    </a>
+                  </aside>
+                )}
+                {m.key === 'resources' && (
+                  <aside class="a-card a-card-quiet">
+                    <h3>Open source</h3>
+                    <p>Read the code, report a bug or build it yourself.</p>
+                    <a class="btn btn-secondary btn-sm" href={COMPANY.github} rel="noopener">
+                      <BrandMark name="github" size={16} />
+                      View on GitHub
+                    </a>
+                  </aside>
+                )}
+              </div>
+              <div class="a-foot">
+                <div class="container a-foot-in">
+                  <span>Free and open source. No account needed.</span>
+                  {m.key === 'features' && <a href="/features/">See every feature</a>}
+                </div>
+              </div>
+            </div>
           </li>
         ))}
+        <li>
+          <a
+            class="mm-trg"
+            href={PRICING_LINK.href}
+            aria-current={pricingHere ? 'page' : undefined}
+          >
+            {PRICING_LINK.label}
+          </a>
+        </li>
       </ul>
     </nav>
 
-    <div class="actions">
+    <div class="actions" data-mm-close-on-hover>
       <button type="button" class="icon-btn theme-btn" data-theme-cycle>
         <span class="t-i t-system">
           <Icon name="monitor" size={18} />
@@ -63,51 +168,100 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
       </a>
       <button
         type="button"
-        class="icon-btn menu-btn"
+        class="burger"
         aria-expanded="false"
         aria-controls="mobile-menu"
-        data-menu-toggle
+        data-mm-burger
       >
         <span class="sr-only">Menu</span>
-        <span class="open-i">
-          <Icon name="list" size={22} />
-        </span>
-        <span class="close-i">
-          <Icon name="x" size={22} />
-        </span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
       </button>
     </div>
   </div>
 
-  <div id="mobile-menu" class="mobile-menu" hidden>
-    <nav aria-label="Main mobile" class="container">
-      <ul>
-        {links.map((l) => (
-          <li>
-            <a href={l.href} aria-current={isCurrent(l.href) ? 'page' : undefined}>
-              {l.label}
-              <Icon name="arrow-right" size={18} />
-            </a>
-          </li>
-        ))}
-        <li>
-          <a href={COMPANY.github} rel="noopener">
-            GitHub
-            <Icon name="arrow-up-right" size={18} />
-          </a>
-        </li>
-      </ul>
-      <a href="/login/" class="btn btn-secondary mobile-cta" data-acct-mobile>
-        Sign in
+  <div class="mm-scrim" aria-hidden="true"></div>
+  <div class="dscrim" data-mm-dscrim aria-hidden="true"></div>
+  <div
+    id="mobile-menu"
+    class="drawer"
+    data-mm-drawer
+    role="dialog"
+    aria-modal="true"
+    aria-label="Menu"
+    inert
+  >
+    <div class="d-head">
+      <Logo id="drw" height={20} />
+      <button type="button" class="burger is-x" data-mm-drawer-close>
+        <span class="sr-only">Close menu</span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
+    </div>
+    <nav aria-label="Main mobile" class="d-body">
+      {MENUS.map((m) => (
+        <div class="acc" data-acc>
+          <button
+            type="button"
+            class="acc-btn"
+            data-acc-btn
+            aria-expanded="false"
+            aria-controls={`acc-${m.key}`}
+          >
+            <span>{m.label}</span>
+            <Icon name="caret-down" weight="bold" size={14} class="caret" />
+          </button>
+          <div class="acc-panel" id={`acc-${m.key}`}>
+            <div class="acc-inner">
+              {m.groups.map((g) => (
+                <div class="acc-group">
+                  {m.groups.length > 1 && <p class="acc-h">{g.title}</p>}
+                  {g.items.map((it) => (
+                    <a
+                      class="mm-item"
+                      href={it.href}
+                      aria-current={isHere(it) ? 'page' : undefined}
+                    >
+                      <span class="tile">
+                        <Icon name={it.icon} weight="light" size={20} />
+                      </span>
+                      <span class="mm-txt">
+                        <b>{it.title}</b>
+                        <span>{it.desc}</span>
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ))}
+      <a class="acc-link" href={PRICING_LINK.href} aria-current={pricingHere ? 'page' : undefined}>
+        {PRICING_LINK.label}
       </a>
-      <a href="/download/" class="btn btn-primary mobile-cta">
-        Download Ferrocast
+      <a class="acc-link" href={COMPANY.github} rel="noopener">
+        GitHub
+        <Icon name="arrow-up-right" size={18} />
       </a>
     </nav>
+    <div class="d-foot">
+      <a href="/download/" class="btn btn-primary">
+        Download Ferrocast
+      </a>
+      <a href="/login/" class="btn btn-secondary" data-acct-mobile>
+        Sign in
+      </a>
+    </div>
   </div>
 </header>
 
 <script>
+  import { initMegaMenu } from '../scripts/mega-menu'
+  const header = document.querySelector<HTMLElement>('[data-mm]')
+  if (header) initMegaMenu(header)
+
   // Who's signed in, from the server (the API host shares this site's cookie scope). Any
   // failure leaves "Sign in", which is always a working link.
   const acct = document.querySelector<HTMLAnchorElement>('[data-acct]')
@@ -154,24 +308,6 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
       .catch(() => {})
   }
 
-  const btn = document.querySelector<HTMLButtonElement>('[data-menu-toggle]')
-  const menu = document.getElementById('mobile-menu')
-  const setOpen = (open: boolean) => {
-    if (!btn || !menu) return
-    btn.setAttribute('aria-expanded', String(open))
-    menu.hidden = !open
-  }
-  btn?.addEventListener('click', () => setOpen(btn.getAttribute('aria-expanded') !== 'true'))
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && btn?.getAttribute('aria-expanded') === 'true') {
-      setOpen(false)
-      btn.focus()
-    }
-  })
-  window.matchMedia('(min-width: 900px)').addEventListener('change', (e) => {
-    if (e.matches) setOpen(false)
-  })
-
   // Theme: one button that cycles System -> Light -> Dark. System follows the OS and saves
   // nothing; Light and Dark are saved on this device.
   const themeBtn = document.querySelector<HTMLButtonElement>('[data-theme-cycle]')
@@ -216,7 +352,6 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
     document.dispatchEvent(new CustomEvent('fc-theme', { detail: saved() }))
   })
 </script>
-
 <style>
   .site-header {
     position: sticky;
@@ -230,7 +365,7 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
   .bar {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 8px;
     height: 64px;
   }
   .brand {
@@ -241,40 +376,294 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
     margin-right: auto;
     border-radius: 8px;
   }
-  .desktop-nav {
+
+  /* ---- desktop: triggers in the bar, one panel under it */
+  .mm-nav {
     display: none;
+    align-self: stretch;
   }
-  .desktop-nav ul {
+  .mm-nav ul {
     display: flex;
-    gap: 4px;
+    height: 100%;
+    gap: 2px;
     list-style: none;
     margin: 0;
     padding: 0;
   }
-  .desktop-nav a {
+  .mm-nav li {
+    display: flex;
+    align-items: center;
+  }
+  .mm-trg {
     display: inline-flex;
     align-items: center;
+    gap: 6px;
     height: 36px;
     padding-inline: 12px;
     border-radius: 8px;
+    border: 0;
+    background: none;
     color: var(--fc-text-2);
-    text-decoration: none;
+    font: inherit;
     font-size: 0.9375rem;
     font-weight: 550;
-    transition: color 160ms var(--fc-ease-out);
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      color 160ms var(--fc-ease-out),
+      background-color 160ms var(--fc-ease-out);
   }
-  .desktop-nav a[aria-current='page'] {
+  .mm-trg :global(.caret) {
+    color: var(--fc-text-3);
+    transition: transform 220ms var(--fc-ease-out);
+  }
+  .mm-trg[aria-expanded='true'] {
+    color: var(--fc-text);
+    background: var(--fc-surface-3);
+  }
+  .mm-trg[aria-expanded='true'] :global(.caret) {
+    transform: rotate(180deg);
+  }
+  .mm-trg[data-here],
+  .mm-trg[aria-current='page'] {
     color: var(--fc-text);
   }
   @media (hover: hover) and (pointer: fine) {
-    .desktop-nav a:hover {
+    .mm-trg:hover {
       color: var(--fc-text);
-    }
-    .icon-btn:hover {
-      color: var(--fc-text);
-      background: var(--fc-surface-2);
     }
   }
+  .mm-scrim {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 64px;
+    bottom: 0;
+    z-index: -1;
+    background: rgb(8 12 18 / 0.18);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 220ms var(--fc-ease-out);
+  }
+  .site-header[data-open] .mm-scrim {
+    opacity: 1;
+  }
+  .mm-view {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    background: var(--fc-bg);
+    border-bottom: 1px solid var(--fc-line);
+    box-shadow: var(--fc-shadow-pop);
+    transform: translateY(-8px);
+    transition:
+      opacity 160ms var(--fc-ease-out),
+      transform 240ms var(--fc-ease-out),
+      visibility 0s 240ms;
+  }
+  .mm-view.is-open {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+    transition-delay: 0s;
+  }
+  .a-grid {
+    display: grid;
+    gap: 8px 28px;
+    padding-block: 28px 30px;
+    align-items: start;
+  }
+  .mm-features .a-grid {
+    grid-template-columns: 1.05fr 1.05fr 0.9fr 1.15fr;
+  }
+  .mm-usecases .a-grid {
+    grid-template-columns: repeat(2, minmax(0, 360px));
+    justify-content: start;
+  }
+  .mm-resources .a-grid {
+    grid-template-columns: repeat(3, minmax(0, 340px));
+    justify-content: start;
+  }
+  .a-h {
+    padding: 0 10px 8px;
+    color: var(--fc-text-3);
+    font-size: 0.75rem;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .a-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .mm-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 10px;
+    border-radius: 12px;
+    color: var(--fc-text);
+    text-decoration: none;
+  }
+  .mm-txt {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .mm-txt b {
+    font-size: 0.9375rem;
+    font-weight: 650;
+    line-height: 1.25;
+  }
+  .mm-txt span {
+    margin-top: 2px;
+    color: var(--fc-text-3);
+    font-size: 0.875rem;
+    line-height: 1.35;
+  }
+  .tile {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-2);
+    color: var(--fc-text-2);
+    transition:
+      background-color 200ms var(--fc-ease-out),
+      color 200ms var(--fc-ease-out),
+      border-color 200ms var(--fc-ease-out);
+  }
+  .mm-item[aria-current='page'] .tile {
+    background: var(--fc-btn-soft);
+    color: var(--fc-molten-text);
+    border-color: transparent;
+  }
+  .mm-view .mm-item {
+    opacity: 0;
+    transform: translateY(6px);
+    transition:
+      opacity 200ms var(--fc-ease-out),
+      transform 260ms var(--fc-ease-out),
+      background-color 160ms var(--fc-ease-out);
+  }
+  .mm-view.is-open .mm-item {
+    opacity: 1;
+    transform: none;
+    transition-delay: calc(var(--i, 0) * 22ms + 40ms), calc(var(--i, 0) * 22ms + 40ms), 0s;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .mm-view .mm-item:hover {
+      background: var(--fc-surface-3);
+      transition-delay: 0s;
+    }
+    .mm-item:hover .tile {
+      background: var(--fc-btn-soft);
+      color: var(--fc-molten-text);
+      border-color: transparent;
+    }
+  }
+  .mm-view .mm-item:focus-visible {
+    background: var(--fc-surface-3);
+    outline-offset: -2px;
+  }
+  .a-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 18px;
+    overflow: hidden;
+    border-radius: var(--fc-radius-panel);
+    background: var(--fc-canvas);
+    color: #e9eff5;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+    --fc-twitch: #a970ff;
+    --fc-youtube: #ff3b4e;
+    --fc-kick: #53fc18;
+    --fc-facebook: #6aa5ff;
+    --fc-brand-arc: #33d4ff;
+    --fc-brand-molten: #ffa424;
+  }
+  .a-card h3 {
+    color: #f3f6fa;
+    font-size: 1.25rem;
+  }
+  .a-card p {
+    color: #bccad8;
+    font-size: 0.9375rem;
+    line-height: 1.45;
+  }
+  .a-card-art {
+    margin: -4px -4px 4px;
+  }
+  .a-card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .plats {
+    display: inline-flex;
+    gap: 10px;
+  }
+  .a-card-quiet {
+    background: var(--fc-surface-2);
+    color: var(--fc-text);
+    border: 1px solid var(--fc-line);
+    box-shadow: none;
+  }
+  .a-card-quiet h3 {
+    color: var(--fc-text);
+  }
+  .a-card-quiet p {
+    color: var(--fc-text-2);
+  }
+  .a-card-quiet .btn {
+    align-self: flex-start;
+    margin-top: 6px;
+  }
+  .mm-view.is-open :global(.braid path) {
+    animation: braid-draw 900ms var(--fc-ease-out) both;
+  }
+  @keyframes braid-draw {
+    from {
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  .a-foot {
+    border-top: 1px solid var(--fc-line);
+    background: var(--fc-surface-2);
+  }
+  .a-foot-in {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-block: 12px;
+    color: var(--fc-text-3);
+    font-size: 0.875rem;
+  }
+  .a-foot-in a {
+    color: var(--fc-accent-text);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* ---- the bar's right side */
   .actions {
     display: flex;
     align-items: center;
@@ -296,12 +685,14 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
       color 160ms var(--fc-ease-out),
       background-color 160ms var(--fc-ease-out);
   }
+  @media (hover: hover) and (pointer: fine) {
+    .icon-btn:hover {
+      color: var(--fc-text);
+      background: var(--fc-surface-2);
+    }
+  }
   .icon-btn:active {
     transform: scale(0.94);
-  }
-  .open-i,
-  .close-i {
-    display: inline-flex;
   }
   /* theme button: only the current mode's icon shows; each click turns to the next */
   .t-i {
@@ -323,15 +714,6 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
       opacity: 0;
       transform: rotate(-60deg) scale(0.6);
     }
-  }
-  .close-i {
-    display: none;
-  }
-  [aria-expanded='true'] .open-i {
-    display: none;
-  }
-  [aria-expanded='true'] .close-i {
-    display: inline-flex;
   }
   .gh,
   .cta,
@@ -382,66 +764,223 @@ const isCurrent = (href: string) => here === href || (href !== '/' && here.start
       background: var(--fc-surface-2);
     }
   }
-  .mobile-menu {
-    border-top: 1px solid var(--fc-line);
+
+  /* menu button that turns into an X */
+  .burger {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--fc-radius-control);
+    border: 0;
+    background: none;
+    color: var(--fc-text);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .burger span:not(.sr-only) {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+    transition:
+      transform 320ms var(--fc-ease-drawer),
+      top 320ms var(--fc-ease-drawer);
+  }
+  .burger span:nth-child(2) {
+    top: 18px;
+  }
+  .burger span:nth-child(3) {
+    top: 25px;
+  }
+  .burger[aria-expanded='true'] span:nth-child(2),
+  .burger.is-x span:nth-child(2) {
+    top: 21.5px;
+    transform: rotate(45deg);
+  }
+  .burger[aria-expanded='true'] span:nth-child(3),
+  .burger.is-x span:nth-child(3) {
+    top: 21.5px;
+    transform: rotate(-45deg);
+  }
+  .burger:active {
+    transform: scale(0.94);
+  }
+
+  /* ---- phones and narrow windows: a drawer with accordions */
+  .dscrim {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: rgb(8 12 18 / 0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 280ms var(--fc-ease-out);
+  }
+  [data-drawer-open] .dscrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .drawer {
+    position: fixed;
+    z-index: 80;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(92vw, 400px);
+    display: flex;
+    flex-direction: column;
     background: var(--fc-bg);
-    max-height: calc(100dvh - 64px);
+    border-left: 1px solid var(--fc-line);
+    box-shadow: var(--fc-shadow-pop);
+    transform: translateX(100%);
+    visibility: hidden;
+    transition:
+      transform 380ms var(--fc-ease-drawer),
+      visibility 0s 380ms;
+  }
+  [data-drawer-open] .drawer {
+    transform: none;
+    visibility: visible;
+    transition-delay: 0s;
+  }
+  .d-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+    padding: 0 8px 0 16px;
+    border-bottom: 1px solid var(--fc-line);
+    color: var(--fc-text);
+  }
+  .d-body {
+    flex: 1;
     overflow-y: auto;
     overscroll-behavior: contain;
+    padding: 4px 16px 16px;
   }
-  .mobile-menu ul {
-    list-style: none;
-    margin: 0;
-    padding: 8px 0;
+  .d-foot {
+    display: grid;
+    gap: 8px;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--fc-line);
   }
-  .mobile-menu li a {
+  .acc {
+    border-bottom: 1px solid var(--fc-line);
+  }
+  .acc-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 56px;
+    padding: 0 4px;
+    border: 0;
+    background: none;
+    color: var(--fc-text);
+    font: inherit;
+    font-family: var(--fc-font-display);
+    font-size: 1.25rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    cursor: pointer;
+  }
+  .acc-btn :global(.caret) {
+    color: var(--fc-text-3);
+    transition: transform 280ms var(--fc-ease-drawer);
+  }
+  .acc.open .acc-btn :global(.caret) {
+    transform: rotate(180deg);
+  }
+  .acc-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 300ms var(--fc-ease-drawer);
+  }
+  .acc.open .acc-panel {
+    grid-template-rows: 1fr;
+  }
+  .acc-inner {
+    overflow: hidden;
+    min-height: 0;
+    visibility: hidden;
+    transition: visibility 0s 300ms;
+  }
+  .acc.open .acc-inner {
+    visibility: visible;
+    transition-delay: 0s;
+  }
+  .acc-group {
+    padding-bottom: 8px;
+  }
+  .acc-h {
+    padding: 10px 10px 4px;
+    color: var(--fc-text-3);
+    font-size: 0.75rem;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .acc-link {
     display: flex;
     align-items: center;
     justify-content: space-between;
     min-height: 56px;
+    padding: 0 4px;
+    border-bottom: 1px solid var(--fc-line);
     color: var(--fc-text);
-    text-decoration: none;
     font-family: var(--fc-font-display);
-    font-size: 1.375rem;
+    font-size: 1.25rem;
     font-weight: 650;
     letter-spacing: -0.02em;
-    border-bottom: 1px solid var(--fc-line);
+    text-decoration: none;
   }
-  .mobile-menu li a :global(svg) {
+  .acc-link :global(svg) {
     color: var(--fc-text-3);
   }
-  .mobile-cta {
-    width: 100%;
-    margin: 16px 0 calc(24px + env(safe-area-inset-bottom, 0px));
-  }
-  .mobile-cta + .mobile-cta {
-    margin-top: 0;
-  }
-  .mobile-cta:has(+ .mobile-cta) {
-    margin-bottom: 10px;
-  }
+
   @media (min-width: 560px) {
     .cta {
       display: inline-flex;
     }
   }
-  @media (min-width: 900px) {
-    .desktop-nav {
+  @media (min-width: 960px) {
+    .mm-nav {
       display: block;
     }
     .gh,
     .acct {
       display: inline-flex;
     }
-    .menu-btn,
-    .mobile-menu {
+    .burger,
+    .drawer,
+    .dscrim {
       display: none !important;
     }
     .brand {
-      margin-right: 24px;
+      margin-right: 12px;
     }
-    .desktop-nav {
-      margin-right: auto;
+    .actions {
+      margin-left: auto;
+    }
+  }
+  @media (max-width: 959px) {
+    .mm-view,
+    .mm-scrim {
+      display: none;
+    }
+    .actions {
+      margin-left: auto;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mm-view,
+    .mm-view .mm-item,
+    .drawer,
+    .acc-panel {
+      transition-duration: 0.01ms !important;
+      transition-delay: 0s !important;
     }
   }
 </style>

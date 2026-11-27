@@ -1,0 +1,73 @@
+---
+// A small braid: strands from the Spark to Twitch, YouTube and Kick. Drawn the same way as
+// the home page's hero, scaled down for the menu card.
+import { ICON_PATHS } from '@ferrocast/ui/platform-icons'
+import { BRAND_PAINT_THEMED, sparkShapes } from '@ferrocast/ui/brand'
+interface Props {
+  id: string
+  w?: number
+  h?: number
+}
+const { id, w = 300, h = 130 } = Astro.props
+const spark = sparkShapes(BRAND_PAINT_THEMED)
+const names = ['twitch', 'youtube', 'kick'] as const
+const ys = [18, 65, 112]
+const strand = (y: number, o: number) =>
+  `M${w - 24} ${y + o * 0.6} C ${w * 0.62} ${y + o * 0.6} ${w * 0.5} ${h / 2 + o * 0.4} ${w * 0.3} ${h / 2 + o * 0.3} S ${w * 0.2} ${h / 2} 46 ${h / 2}`
+---
+
+<svg class="braid" viewBox={`0 0 ${w} ${h}`} width="100%" aria-hidden="true" focusable="false">
+  <defs>
+    {names.map((n, i) => (
+      <linearGradient
+        id={`${id}${i}`}
+        x1={w - 24}
+        y1="0"
+        x2="60"
+        y2="0"
+        gradientUnits="userSpaceOnUse"
+      >
+        <stop offset="0" stop-color={`var(--fc-${n})`}></stop>
+        <stop offset="1" stop-color="var(--fc-brand-arc)"></stop>
+      </linearGradient>
+    ))}
+  </defs>
+  <g fill="none" stroke-width="1.2" opacity=".9">
+    {names.map((_, i) =>
+      [-4, 0, 4].map((o) => (
+        <path d={strand(ys[i]!, o)} pathLength="1" stroke={`url(#${id}${i})`}></path>
+      )),
+    )}
+  </g>
+  <svg
+    x="6"
+    y={h / 2 - 18}
+    width="36"
+    height="36"
+    viewBox="0 0 64 64"
+    class="spark"
+    set:html={spark}
+  />
+  {names.map((n, i) => (
+    <svg
+      x={w - 24}
+      y={ys[i]! - 9}
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill={`var(--fc-${n})`}
+    >
+      <path d={ICON_PATHS[n]}></path>
+    </svg>
+  ))}
+</svg>
+
+<style>
+  .braid path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+  .spark {
+    color: #eef0f4;
+  }
+</style>
