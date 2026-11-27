@@ -112,7 +112,12 @@ export function AutoConfigDialog({
   return (
     <Dialog compact open={open} onClose={onClose} title="Set up for me" size="lg">
       {open && (
-        <Wizard s={s} onApply={onApply} {...(onSynced ? { onSynced } : {})} onClose={onClose} />
+        <AutoConfigBody
+          s={s}
+          onApply={onApply}
+          {...(onSynced ? { onSynced } : {})}
+          onClose={onClose}
+        />
       )}
     </Dialog>
   )
@@ -168,11 +173,18 @@ function Big({
     >
       <span className="flex items-center gap-2">
         <span
-          className="grid size-7 shrink-0 place-items-center rounded-[7px] text-white"
+          className="grid size-7 shrink-0 place-items-center rounded-[7px]"
+          // A tinted tile with the tone as the glyph: white on a bright fill is unreadable in dark themes.
           style={
             on
-              ? { background: 'color-mix(in srgb, var(--fc-on-pick) 18%, transparent)' }
-              : { background: tone }
+              ? {
+                  background: 'color-mix(in srgb, var(--fc-on-pick) 18%, transparent)',
+                  color: 'inherit',
+                }
+              : {
+                  background: `color-mix(in oklab, ${tone} 18%, var(--fc-surface-3))`,
+                  color: tone,
+                }
           }
         >
           <Icon size={15} weight="fill" aria-hidden />
@@ -382,7 +394,8 @@ function publishAutoConfig(next: AutoConfigState) {
   }))
 }
 
-function Wizard({
+/** The wizard's content, for a dialog of its own or a view inside another dialog. */
+export function AutoConfigBody({
   s,
   onApply,
   onSynced,
@@ -1219,7 +1232,9 @@ export function AutoConfigRollbackBar({
           <span className="font-semibold">{phaseText(state.phase)}</span>
           <span className="font-mono text-[12px] text-text-2 tabular-nums">{pct}%</span>
           {state.current_label && (
-            <span className="truncate text-[12.5px] text-text-2">{state.current_label}</span>
+            <span className="truncate text-[12.5px] text-text-2" title={state.current_label}>
+              {state.current_label}
+            </span>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">

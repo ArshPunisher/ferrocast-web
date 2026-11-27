@@ -50,7 +50,7 @@ export function LogDialog({ open, onClose }: { open: boolean; onClose: () => voi
   )
 }
 
-function LogBody() {
+export function LogBody() {
   const { api } = useDesk()
   const client = useClient()
   const log = useResource(() => api.log(1500), [api])

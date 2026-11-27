@@ -22,12 +22,18 @@ async function enterStudioDesk(page: Page): Promise<void> {
   await expect(settingsBtn).toBeVisible({ timeout: 15_000 })
 }
 
+// The setup opens inside the Studio settings dialog (one dialog at a time), or in its own
+// dialog from the Go live dock.
+const SETUP_DIALOG = /^(Set up for me|Studio settings)$/
+
 async function openWizardViaSettings(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Studio settings' }).click()
   const settingsDialog = page.getByRole('dialog', { name: 'Studio settings' })
   await expect(settingsDialog).toBeVisible()
   await settingsDialog.getByRole('button', { name: /Set up for me/i }).click()
-  await expect(page.getByRole('dialog', { name: 'Set up for me' })).toBeVisible()
+  await expect(page.getByRole('dialog', { name: SETUP_DIALOG })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Set up for me' }).first()).toBeVisible()
+  await expect(page.locator('dialog[open]')).toHaveCount(1)
 }
 
 test.use({ viewport: { width: 1280, height: 800 } })
@@ -50,7 +56,7 @@ test.describe('auto-config encoder benchmark and rollback', () => {
       await openWizardViaSettings(page)
     }
 
-    const dlg = page.getByRole('dialog', { name: 'Set up for me' })
+    const dlg = page.getByRole('dialog', { name: SETUP_DIALOG })
     await expect(dlg).toBeVisible()
 
     // Keyboard navigation on radiogroups
@@ -117,7 +123,7 @@ test.describe('auto-config encoder benchmark and rollback', () => {
       '(d) => { d.studioEngine?.configure({ benchProfile: "qsv_stepdown", benchStepMs: 20, confirmTimeoutMs: 220, watchWindowMs: 1200 }) }',
     )
     await openWizardViaSettings(page)
-    const dlg = page.getByRole('dialog', { name: 'Set up for me' })
+    const dlg = page.getByRole('dialog', { name: SETUP_DIALOG })
     await dlg.getByRole('button', { name: 'Run benchmark' }).click()
     await expect(dlg.getByText(/Recommended:/i)).toBeVisible({ timeout: 10_000 })
     await dlg.getByRole('button', { name: 'Apply settings' }).click()
@@ -181,7 +187,7 @@ test.describe('auto-config encoder benchmark and rollback', () => {
     )
 
     await openWizardViaSettings(page)
-    const dlg = page.getByRole('dialog', { name: 'Set up for me' })
+    const dlg = page.getByRole('dialog', { name: SETUP_DIALOG })
     await dlg.getByRole('button', { name: 'Run benchmark' }).click()
     await expect(dlg.getByText(/Recommended:/i)).toBeVisible({ timeout: 10_000 })
     // Mobile candidate card list is shown (< 640px)
@@ -254,7 +260,7 @@ test.describe('auto-config encoder benchmark and rollback', () => {
         '(d) => { d.studioEngine?.configure({ benchProfile: "nvidia_nvenc", benchStepMs: 320, confirmTimeoutMs: 10_000, watchWindowMs: 20_000 }) }',
       )
       await openWizardViaSettings(page)
-      const dlg = page.getByRole('dialog', { name: 'Set up for me' })
+      const dlg = page.getByRole('dialog', { name: SETUP_DIALOG })
       await scanClean()
 
       // Running state

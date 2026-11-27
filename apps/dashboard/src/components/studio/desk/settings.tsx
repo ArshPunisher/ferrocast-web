@@ -2,9 +2,19 @@
 // recording, shortcuts and reconnecting, as plain choices first and the details under "More
 // options". Saved together; what can't change now (live, or until a restart) says so.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import {
   ArrowCounterClockwise,
+  CaretLeft,
   CheckCircle,
   Broadcast,
   EyeSlash,
@@ -64,8 +74,8 @@ import { useLive } from '../../../lib/store'
 import { describeSettingsBitrates, describeStreamCap } from '../bitrate-summary'
 import { useDesk, type EngineApi } from './common'
 import { sharedNote } from './record-notes'
-import { AutoConfigDialog } from './auto-config'
-import { LogDialog } from './log-viewer'
+import { AutoConfigBody } from './auto-config'
+import { LogBody } from './log-viewer'
 import { RemoteControlSection } from './remote-control'
 import { OptionsForm } from './options'
 import { TRANSITIONS } from './preview'
@@ -93,12 +103,37 @@ export function SettingsDialog({
   onClose: () => void
   start?: Page | undefined
 }) {
+  // The auto setup and the log open inside this dialog, with a way back, not on top of it:
+  // one dialog at a time, and the changes not saved yet stay put.
+  const [sub, setSub] = useState<SubView>(null)
+  useEffect(() => {
+    if (!open) setSub(null)
+  }, [open])
   return (
-    <Dialog compact open={open} onClose={onClose} size="wide" flush title="Studio settings">
-      {open && <Settings start={start ?? 'stream'} onClose={onClose} />}
+    <Dialog
+      compact
+      open={open}
+      onClose={() => (sub ? setSub(null) : onClose())}
+      size="wide"
+      flush
+      title="Studio settings"
+    >
+      {open && (
+        <SubViewContext.Provider value={setSub}>
+          <Settings
+            start={start ?? 'stream'}
+            onClose={onClose}
+            sub={sub}
+            onBack={() => setSub(null)}
+          />
+        </SubViewContext.Provider>
+      )}
     </Dialog>
   )
 }
+
+type SubView = 'wizard' | 'log' | null
+const SubViewContext = createContext<(v: SubView) => void>(() => undefined)
 
 /** A Mac (the only place the drawing choice applies). */
 const isMac = os === 'mac'
@@ -139,7 +174,17 @@ export function prefsChanged(
   return { changed: next !== seen, seen: next }
 }
 
-function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
+function Settings({
+  start,
+  onClose,
+  sub,
+  onBack,
+}: {
+  start: Page
+  onClose: () => void
+  sub: SubView
+  onBack: () => void
+}) {
   const { api, prefs } = useDesk()
   const loaded = useResource(() => api.studioSettings(), [api])
   const [page, setPage] = useState<Page>(start)
@@ -242,6 +287,32 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
     }
   }
   const here = PAGES.find((p) => p.id === page)
+  if (sub) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col border-t border-line">
+        <div className="flex flex-none items-center gap-2 border-b border-line bg-surface-2 px-3 py-2">
+          <Button size="xs" variant="ghost" onClick={onBack}>
+            <CaretLeft size={14} weight="bold" /> Settings
+          </Button>
+          <h3 className="m-0 font-display text-[15px] font-bold">
+            {sub === 'wizard' ? 'Set up for me' : 'Log'}
+          </h3>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
+          {sub === 'wizard' ? (
+            <AutoConfigBody
+              s={draft}
+              onApply={set}
+              onSynced={syncFromAutoConfig}
+              onClose={onBack}
+            />
+          ) : (
+            <LogBody />
+          )}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="flex min-h-0 flex-1 flex-col border-t border-line">
       <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
@@ -272,14 +343,14 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
         </nav>
         <div
           key={page}
-          className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto [scrollbar-gutter:stable] [&>*]:shrink-0 overscroll-contain px-5 py-5 sm:px-8 sm:py-6"
+          className="@container relative flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto [scrollbar-gutter:stable] [&>*]:shrink-0 overscroll-contain px-5 py-5 sm:px-8 sm:py-6"
         >
           {here && (
             <h3 className="m-0 hidden font-display text-[17px] font-bold tracking-tight sm:block">
               {here.label}
             </h3>
           )}
-          {page === 'stream' && <StreamPage s={draft} set={set} onSynced={syncFromAutoConfig} />}
+          {page === 'stream' && <StreamPage s={draft} set={set} />}
           {page === 'audio' && <AudioPage s={draft} set={set} />}
           {page === 'picture' && <PicturePage s={draft} set={set} />}
           {page === 'record' && <RecordPage s={draft} set={set} />}
@@ -288,7 +359,7 @@ function Settings({ start, onClose }: { start: Page; onClose: () => void }) {
           {page === 'advanced' && <AdvancedPage s={draft} set={set} />}
         </div>
       </div>
-      <div className="flex items-center gap-2 border-t border-line bg-surface-2 px-5 py-3 sm:px-6">
+      <div className="flex flex-wrap items-center gap-2 border-t border-line bg-surface-2 px-5 py-3 sm:px-6">
         {changed ? (
           <>
             <span className="text-[14px] font-semibold text-warn">Not saved yet</span>
@@ -413,7 +484,7 @@ function Row({
   info?: string
 }) {
   return (
-    <div className="grid min-h-9 grid-cols-1 items-center gap-2 border-t border-line py-1.5 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,260px)] sm:gap-4">
+    <div className="grid min-h-9 grid-cols-1 items-center gap-2 border-t border-line py-1.5 first:border-t-0 @lg:grid-cols-[minmax(0,1fr)_minmax(0,260px)] @lg:gap-4">
       <div className="flex min-w-0 items-center gap-1 text-[13px]">
         <span className="min-w-0">
           {label}
@@ -426,7 +497,7 @@ function Row({
         </span>
         {info && <InfoTip label={`About ${label.toLowerCase()}`}>{info}</InfoTip>}
       </div>
-      <div className="flex items-center justify-start gap-2 sm:justify-end">{children}</div>
+      <div className="flex items-center justify-start gap-2 @lg:justify-end">{children}</div>
     </div>
   )
 }
@@ -628,21 +699,19 @@ export function EncoderOptions({
 export function StreamPage({
   s,
   set,
-  onSynced,
   destinations,
   ignoreServiceLimits,
   live,
   encodeBudget,
   qualitySource,
 }: PageProps & {
-  onSynced?: (next: StudioSettings) => void
   destinations?: DestinationView[]
   ignoreServiceLimits?: boolean
   live?: boolean
   encodeBudget?: EncodeBudgetCheck | null
   qualitySource?: QualitySource
 }) {
-  const [wizard, setWizard] = useState(false)
+  const openSub = useContext(SubViewContext)
   const [more, setMore] = useState(false)
   const sentW = s.scale?.[0] ?? s.width
   const sentH = s.scale?.[1] ?? s.height
@@ -813,7 +882,7 @@ export function StreamPage({
     <>
       <button
         type="button"
-        onClick={() => setWizard(true)}
+        onClick={() => openSub('wizard')}
         className="fc-press flex items-center gap-3 rounded-panel border border-accent-line bg-accent-soft px-4 py-3 text-left hover:border-arc focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
       >
         <Sparkle size={22} weight="fill" className="shrink-0 text-accent-text" aria-hidden />
@@ -824,17 +893,10 @@ export function StreamPage({
           </span>
         </span>
       </button>
-      <AutoConfigDialog
-        open={wizard}
-        onClose={() => setWizard(false)}
-        s={s}
-        onApply={set}
-        {...(onSynced ? { onSynced } : {})}
-      />
       <Heading info="Higher quality needs a faster upload. Kick refuses over 8 Mbps.">
         Quality
       </Heading>
-      <ChoiceGrid label="Stream quality" className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      <ChoiceGrid label="Stream quality" className="grid grid-cols-1 gap-2.5 @md:grid-cols-2">
         {PRESETS.map((p) => {
           const size = p.scale ?? [s.width, s.height]
           return (
@@ -880,7 +942,7 @@ export function StreamPage({
       >
         Encoder
       </Heading>
-      <ChoiceGrid label="Encoder" className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      <ChoiceGrid label="Encoder" className="grid grid-cols-1 gap-2.5 @md:grid-cols-2">
         <Choice
           on={encoderChoice(s.encoder) === 'hardware'}
           title={hardwareEncoderName()}
@@ -1005,7 +1067,7 @@ export function StreamPage({
           {s.scale && (
             <>
               <Row label="Custom size" sub="Even numbers; the picture is scaled to fit">
-                <span className="flex items-center gap-2">
+                <span className="flex flex-wrap items-center gap-2">
                   <NumberBox
                     label="Width"
                     value={s.scale[0]}
@@ -1216,7 +1278,7 @@ function SoundCare() {
               disabled={busy}
               onClick={() => toggle(list, n)}
               className={cx(
-                'fc-press inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-semibold',
+                'fc-press inline-flex min-h-8 max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-[13.5px] font-semibold',
                 'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:opacity-60',
                 on
                   ? 'border-accent-line bg-accent-soft text-text'
@@ -1226,7 +1288,9 @@ function SoundCare() {
               {on && (
                 <CheckCircle size={14} weight="fill" className="text-accent-text" aria-hidden />
               )}
-              {n}
+              <span className="min-w-0 truncate" title={n}>
+                {n}
+              </span>
             </button>
           )
         })}
@@ -1380,7 +1444,7 @@ export function PicturePage({ s, set }: PageProps) {
       <Heading info="What scenes are built on. It can't change while you're live or recording.">
         Canvas
       </Heading>
-      <ChoiceGrid label="Canvas size" className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      <ChoiceGrid label="Canvas size" className="grid grid-cols-1 gap-2.5 @md:grid-cols-2">
         {CANVASES.map((c) => (
           <Choice
             key={c.title}
@@ -1780,7 +1844,7 @@ export function RecordPage({ s, set }: PageProps) {
   return (
     <>
       <Heading>Quality</Heading>
-      <ChoiceGrid label="Recording quality" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+      <ChoiceGrid label="Recording quality" className="grid grid-cols-2 gap-2.5 @md:grid-cols-3">
         <Choice
           on={choice === 'stream'}
           title="Same as stream"
@@ -2681,7 +2745,7 @@ export function GeneralPage({ s, set }: PageProps) {
 }
 
 function AdvancedPage({ s, set }: PageProps) {
-  const [logOpen, setLogOpen] = useState(false)
+  const openSub = useContext(SubViewContext)
   return (
     <>
       <Heading info="What the app and the Studio's engine wrote down. Copy it into a bug report: stream keys and tokens are taken out first.">
@@ -2689,12 +2753,11 @@ function AdvancedPage({ s, set }: PageProps) {
       </Heading>
       <div className="flex flex-col">
         <Row label="See what happened">
-          <Button size="sm" onClick={() => setLogOpen(true)}>
+          <Button size="sm" onClick={() => openSub('log')}>
             Open the log
           </Button>
         </Row>
       </div>
-      <LogDialog open={logOpen} onClose={() => setLogOpen(false)} />
       <RemoteControlSection />
       <Heading>If the connection drops</Heading>
       <div className="flex flex-col">
