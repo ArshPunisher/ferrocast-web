@@ -13,6 +13,18 @@
 - Open: the engine keeps answering with the last level for an unplugged sound (see the notes
   report); the web side no longer draws it.
 
+## 27 Nov 2026 (site menu and pages, new Pro price, branch feat/site-nav)
+
+- **Header:** the job-grouped menu (Features, Use cases, Resources, Pricing) with a drawer on
+  phones, replacing the old link row. Menu data lives in `apps/site/src/data/nav.ts`.
+- **New pages:** Multistream, Vertical + horizontal, Overlays and widgets (under /features/),
+  Gaming, Just chatting and IRL (/use-cases/), and Ferrocast vs Streamlabs (features only, no
+  prices). Features page gained Clips, Polls and Stream insights cards.
+- **Pro price:** ₹399 a month or ₹3,999 a year (site, FAQ, compare, terms, demo relay). The relay's
+  own `/v1/pro/prices` must be changed to match; the pricing page reads it live.
+- **Intro fix:** scrolling no longer cuts the home opening short.
+- Open: the pages use screenshots from the current Studio; quality per platform ships in 3.8.0.
+
 ## 18 Nov 2026 (3.3.0: smoother streams and a source drawer that works, branch own-engine-only)
 
 Released as 3.3.0 with the engine (its CHANGELOG has the streamer's list).

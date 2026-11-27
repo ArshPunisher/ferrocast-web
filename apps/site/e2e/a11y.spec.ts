@@ -8,6 +8,12 @@ const pages = [
   '/faq/',
   '/contact/',
   '/features/alerts/',
+  '/features/multistream/',
+  '/features/vertical-dual-output/',
+  '/features/widgets/',
+  '/use-cases/gaming/',
+  '/use-cases/irl/',
+  '/vs-streamlabs/',
   '/download/',
   '/docs/getting-started/',
   '/privacy/',
@@ -30,6 +36,23 @@ for (const scheme of ['dark', 'light'] as const) {
       ).toEqual([])
     })
   }
+}
+
+for (const scheme of ['dark', 'light'] as const) {
+  test(`axe ${scheme} with the Features menu open`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' })
+    await page.goto('/pricing/', { waitUntil: 'networkidle' })
+    await page.locator('[data-mm-trigger="features"]').click()
+    await expect(page.locator('#mm-features')).toBeVisible()
+    const r = await new AxeBuilder({ page })
+      .include('.site-header')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+      .analyze()
+    const bad = r.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')
+    expect(bad.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual(
+      [],
+    )
+  })
 }
 
 test('keyboard: skip link, then the main nav', async ({ page }) => {

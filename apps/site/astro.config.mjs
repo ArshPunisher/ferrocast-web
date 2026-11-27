@@ -30,6 +30,8 @@ const DATA = {
   '/features': ['src/data/features.ts'],
   '/faq': ['src/data/faq.ts'],
   '/compare': ['src/data/compare.ts'],
+  '/use-cases': ['src/data/usecases.ts'],
+  '/vs-streamlabs': ['src/data/vs-streamlabs.ts'],
   '/pricing': ['src/data/company.ts'],
   '/terms': ['src/data/company.ts'],
   '/privacy': ['src/data/company.ts'],
@@ -38,9 +40,13 @@ const DATA = {
 }
 function lastmod(url) {
   const path = new URL(url).pathname.replace(/\/$/, '')
-  const page = [`src/pages${path}/index.astro`, `src/pages${path}.astro`].find((f) =>
-    existsSync(root + f),
-  )
+  const parent = path.slice(0, path.lastIndexOf('/'))
+  const page = [
+    `src/pages${path}/index.astro`,
+    `src/pages${path}.astro`,
+    // a template page that renders several URLs, like use-cases/[slug].astro
+    `src/pages${parent}/[slug].astro`,
+  ].find((f) => existsSync(root + f))
   if (!page) return buildTime
   const section = Object.keys(DATA).find((k) => k && path.startsWith(k)) ?? (path ? null : '')
   const files = [page, 'src/data/pages.ts', ...(section !== null ? DATA[section] : [])].filter(

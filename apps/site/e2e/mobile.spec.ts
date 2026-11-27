@@ -13,7 +13,7 @@ for (const path of sitemapPaths()) {
 
 test('the mobile menu opens, traps nothing, and closes with Escape', async ({ page }) => {
   await page.goto('/')
-  const btn = page.getByRole('button', { name: 'Menu' })
+  const btn = page.getByRole('button', { name: 'Menu', exact: true })
   await expect(btn).toHaveAttribute('aria-expanded', 'false')
   await btn.click()
   await expect(btn).toHaveAttribute('aria-expanded', 'true')
@@ -30,7 +30,7 @@ test('the mobile menu opens, traps nothing, and closes with Escape', async ({ pa
 test('form controls and tap targets are big enough', async ({ page }) => {
   await page.goto('/')
   for (const name of ['Menu', /^Theme:/]) {
-    const box = await page.getByRole('button', { name }).boundingBox()
+    const box = await page.getByRole('button', { name, exact: name === 'Menu' }).boundingBox()
     expect(box?.width ?? 0).toBeGreaterThanOrEqual(40)
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(40)
   }
