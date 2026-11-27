@@ -478,6 +478,7 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
         }
       : {}),
     autoplay: params.get('autoplay') !== '0',
+    ...(params.get('twitchPollScopeMissing') === '1' ? { twitchPollScopeMissing: true } : {}),
     ...(params.has('latency') ? { latencyMs: Number(params.get('latency')) } : {}),
     ...(params.has('clipstep') ? { clipStepMs: Number(params.get('clipstep')) } : {}),
     // `?tips=empty` starts with no tip page saved; `?relay=0` is a build without a relay.

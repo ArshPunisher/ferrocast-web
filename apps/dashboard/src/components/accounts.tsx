@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowSquareOut, Check, CopySimple } from '@phosphor-icons/react'
 import {
   ApiError,
@@ -31,7 +31,7 @@ const BLURB: Record<AccountPlatform, string> = {
 }
 
 /** Connect one platform: Twitch shows a device code; YouTube, Kick and Facebook finish in the browser. */
-export function useConnect(): {
+export function useConnect(onConnected?: (platform: AccountPlatform) => void): {
   connect: (p: AccountPlatform) => Promise<void>
   busy: AccountPlatform | null
   dialog: React.ReactNode
@@ -42,15 +42,32 @@ export function useConnect(): {
     platform: AccountPlatform
     flow: ConnectFlow
     at: number
+    sawPending: boolean
+    prevEventAt: number
   } | null>(null)
   const connectors = useLive((s) => s.connectors)
   // The desktop app says so when the browser didn't open; only a notice since this dialog opened counts.
   const browserFailed = useLive((s) => (flow ? browserDidntOpen(s.notices, flow.at) : false))
   const [copied, flash] = useFlash()
   const [linkCopied, flashLink] = useFlash()
-  const done = flow ? connectors?.[flow.platform].state === 'connected' : false
+  const curConnector = flow ? connectors?.[flow.platform] : undefined
+  const onConnectedRef = useRef(onConnected)
+  onConnectedRef.current = onConnected
+  // A reconnect (for example adding Twitch poll permissions) starts while state is still
+  // `connected`: wait until we see it leave `connected` (or receive a newer connected update)
+  // so the dialog doesn't close before the user approves.
+  useEffect(() => {
+    if (flow && !flow.sawPending && curConnector && curConnector.state !== 'connected') {
+      setFlow((prev) => (prev ? { ...prev, sawPending: true } : prev))
+    }
+  }, [flow, curConnector])
+  const done = flow
+    ? curConnector?.state === 'connected' &&
+      (flow.sawPending || (curConnector.last_event_at ?? 0) > flow.prevEventAt)
+    : false
   useEffect(() => {
     if (flow && done) {
+      onConnectedRef.current?.(flow.platform)
       toast({
         key: `account:${flow.platform}`,
         tone: 'ok',
@@ -61,10 +78,17 @@ export function useConnect(): {
     }
   }, [done, flow])
   const connect = async (p: AccountPlatform) => {
+    const prev = connectors?.[p]
     setBusy(p)
     try {
       const f = await client.connect(p)
-      setFlow({ platform: p, flow: f, at: Date.now() })
+      setFlow({
+        platform: p,
+        flow: f,
+        at: Date.now(),
+        sawPending: prev?.state !== 'connected',
+        prevEventAt: prev?.last_event_at ?? 0,
+      })
       // Nothing else opens the sign-in page: the engine only hands back its URL.
       if (f.flow === 'browser') openExternal(f.url)
     } catch (e) {
