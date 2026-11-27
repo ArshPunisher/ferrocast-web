@@ -38,6 +38,7 @@ import {
   KindTile,
   PLAIN_TONE,
   SOUND_ONLY,
+  kindMatches,
   pickKind,
   useDesk,
   type KindEntry,
@@ -117,8 +118,21 @@ export function pairedSound(video: string, sounds: readonly string[]): string | 
   return best?.name ?? null
 }
 
-/** Video devices whose sound comes with them: on by default for capture cards. */
-const BRINGS_SOUND: Record<string, boolean> = { card: true, camera: false }
+/** The entry that lists video devices (cameras and capture cards): the ones that can bring a sound. */
+const VIDEO_DEVICE = 'camera'
+
+/** A device named like a capture card brings its sound with it by default; a webcam does not. */
+export function looksLikeCaptureCard(deviceName: string | null): boolean {
+  return (
+    !!deviceName &&
+    /capture|elgato|cam ?link|avermedia|hdmi|game ?cap|usb\d? video/i.test(deviceName)
+  )
+}
+
+/** The calm note after adding a camera or card that was already open elsewhere. */
+export function reusedNote(name: string): string {
+  return `${name} uses a device that is already open in your Studio, so it shares the same picture.`
+}
 
 /** Kinds that need macOS's Screen Recording switch (screens, windows, and their sound). */
 const NEEDS_SCREEN = new Set(['screen', 'window', 'desktop', 'app'])
@@ -275,9 +289,7 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
         </div>
         <div className="flex gap-1 overflow-x-auto sm:min-h-0 sm:flex-1 sm:flex-col sm:overflow-y-auto sm:pr-1">
           {groups.map((g) => {
-            const shown = g.choices.filter(
-              (c) => !needle || c.entry.label.toLowerCase().includes(needle),
-            )
+            const shown = g.choices.filter((c) => !needle || kindMatches(c.entry, needle))
             if (!shown.length) return null
             return (
               <div key={g.label} className="flex gap-1 sm:flex-col sm:gap-px">
@@ -351,15 +363,11 @@ export function usePickView(): [PickView, (v: PickView) => void] {
 const NONE: Record<string, { title: string; tips: string[] }> = {
   clone: { title: 'Nothing to copy yet', tips: ['Add a source first, then copy it.'] },
   camera: {
-    title: 'No camera found',
+    title: 'No video device found',
     tips: [
-      'Plug the camera in, or switch it on.',
+      'Plug the camera or capture card in, or switch it on.',
       'Close other apps using it (Zoom, Teams, the Camera app).',
     ],
-  },
-  card: {
-    title: 'No capture card found',
-    tips: ['Plug the card in with its USB cable.', 'Close other apps using it.'],
   },
   screen: {
     title: 'No screens to show',
@@ -598,11 +606,12 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
   const sound = SOUND.has(c.entry.key)
   const [everywhere, setEverywhere] = useState(c.entry.key !== 'app')
   // A capture card or camera: its own sound device, to add with it.
-  const pairs = c.entry.key in BRINGS_SOUND
+  const pairs = c.entry.key === VIDEO_DEVICE
   const micEntry = KIND_GROUPS.flatMap((g) => g.entries).find((e) => e.key === 'mic')
   const micKind = pairs && micEntry ? pickKind(micEntry, kinds.data) : null
   const micForm = useKindForm(api, micKind)
-  const [withSound, setWithSound] = useState(BRINGS_SOUND[c.entry.key] ?? false)
+  // Until it is switched by hand, it follows the device: on for a capture card, off for a webcam.
+  const [soundPick, setSoundPick] = useState<boolean | null>(null)
 
   const sourcesNow = srcs.data ?? (lastSources?.api === api ? lastSources.list : null)
   if (form.error) return <LoadError error={form.error} onRetry={form.reload} />
@@ -648,6 +657,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
     )
   const micDev = deviceOption(micForm.data?.[0] ?? [], micEntry?.device)
   const soundName = devName && micDev ? pairedSound(devName, micDev.choices) : null
+  const withSound = soundPick ?? looksLikeCaptureCard(devName)
   // An image, video or slideshow with no file yet would add an empty source.
   const now = { ...defaults, ...(c.entry.settings ?? {}), ...edits }
   const needsFile =
@@ -732,10 +742,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
       )
     }
     const made = await run('add', () => api.addSource(scene, source, !!c.entry.fit), {
-      success: (m) =>
-        m.reused
-          ? `${m.item.name} already shows this device, so it's added here too, as it's set up.`
-          : `Added ${source.name}.`,
+      success: (m) => (m.reused ? reusedNote(m.item.name) : `Added ${source.name}.`),
     })
     if (made && !visible) await api.editItem(scene, made.item.id, 'hide').catch(() => undefined)
     // The new source is the one selected: its properties are what is edited next (S18 B3).
@@ -1027,7 +1034,7 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                   label={`With its sound (${soundName})`}
                   description="Adds its sound to this scene and lets you hear it."
                   checked={withSound}
-                  onChange={setWithSound}
+                  onChange={setSoundPick}
                 />
               )}
             </div>

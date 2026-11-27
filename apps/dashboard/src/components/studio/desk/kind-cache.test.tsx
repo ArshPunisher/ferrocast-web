@@ -104,7 +104,7 @@ describe('no devices to pick', () => {
     const html = renderToStaticMarkup(
       <NoDevices c={choice('camera')} checking={false} onLook={() => undefined} />,
     )
-    expect(html).toContain('No camera found')
+    expect(html).toContain('No video device found')
     expect(html).toContain('Close other apps using it')
     expect(html).toContain('Look again')
     expect(html).toContain('role="status"')
@@ -114,7 +114,6 @@ describe('no devices to pick', () => {
 
   it('has its own words for each kind that lists devices', () => {
     for (const [key, title] of [
-      ['card', 'No capture card found'],
       ['screen', 'No screens to show'],
       ['window', 'No windows to show'],
       ['mic', 'No microphone found'],

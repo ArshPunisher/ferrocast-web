@@ -38,7 +38,7 @@ async function desk(page: Page): Promise<void> {
 
 async function openCamera(page: Page): Promise<void> {
   await page.getByRole('button', { name: /^Add a source to / }).click()
-  await page.getByRole('button', { name: 'Camera', exact: true }).click()
+  await page.getByRole('button', { name: 'Video device', exact: true }).click()
 }
 
 test('the device lists are read ahead as the dialog opens', async ({ page }) => {
@@ -57,7 +57,7 @@ test('devices show as tiles or a list, and the choice is kept', async ({ page })
   await desk(page)
   await openCamera(page)
   const group = page.getByRole('group', { name: 'Show devices as' })
-  const none = page.getByText('No camera found')
+  const none = page.getByText('No video device found')
   await expect(group.or(none)).toBeVisible()
   // A Mac or PC with no camera at all shows the empty state instead: nothing to switch.
   test.skip(await none.isVisible(), 'No camera on this computer.')
@@ -101,7 +101,7 @@ test('no camera plugged in: says so, offers to look again, and Add waits', async
   })
   await desk(page)
   await openCamera(page)
-  await expect(page.getByText('No camera found')).toBeVisible()
+  await expect(page.getByText('No video device found')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeDisabled()
   // No settings form in its place.
   await expect(page.getByRole('dialog').getByText('Settings', { exact: true })).toHaveCount(0)

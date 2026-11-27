@@ -56,7 +56,6 @@ import {
   UserFocus,
   UserSquare,
   UsersThree,
-  VideoCamera,
   Waveform,
   Webcam,
   type Icon,
@@ -306,6 +305,8 @@ export interface KindEntry {
   guest?: boolean
   /** Its own colour, when not its group's (cameras violet among the captures). */
   tone?: string
+  /** Other words people look for it by (the search also matches these). */
+  keywords?: string[]
 }
 
 export interface KindGroup {
@@ -321,12 +322,21 @@ export const KIND_GROUPS: KindGroup[] = [
     tone: 'var(--fc-accent-text)',
     entries: [
       {
+        // One entry for cameras and capture cards: the engine has one kind for both (OBS's
+        // "Video Capture Device"), and a source saved as either still opens.
         key: 'camera',
-        label: 'Camera',
+        label: 'Video device',
         icon: Webcam,
         tone: 'var(--fc-twitch)',
-        kinds: ['macos-avcapture', 'av_capture_input_v2', 'dshow_input', 'v4l2_input'],
+        kinds: [
+          'macos-avcapture',
+          'macos-avcapture-fast',
+          'av_capture_input_v2',
+          'dshow_input',
+          'v4l2_input',
+        ],
         device: ['device', 'video_device_id', 'device_id'],
+        keywords: ['camera', 'webcam', 'capture', 'capture card', 'elgato'],
       },
       {
         key: 'screen',
@@ -345,15 +355,6 @@ export const KIND_GROUPS: KindGroup[] = [
         kinds: ['screen_capture', 'game_capture', 'window_capture'],
         settings: { type: 1 },
         device: ['window', 'window'],
-        fit: true,
-      },
-      {
-        key: 'card',
-        label: 'Capture card',
-        icon: VideoCamera,
-        tone: 'var(--fc-twitch)',
-        kinds: ['macos-avcapture-fast', 'av_capture_input_v2', 'dshow_input'],
-        device: ['device', 'video_device_id'],
         fit: true,
       },
       {
@@ -576,6 +577,15 @@ export function friendlyKind(kind: string): string | null {
   // One kind for two entries (a Mac camera or capture card): both names.
   if (found.length === 2) return `${found[0]?.label} or ${found[1]?.label.toLowerCase()}`
   return null
+}
+
+/** Whether the Add dialog's search finds this entry: by its name or by any word it is known by. */
+export function kindMatches(e: KindEntry, needle: string): boolean {
+  const n = needle.trim().toLowerCase()
+  if (!n) return true
+  return (
+    e.label.toLowerCase().includes(n) || (e.keywords ?? []).some((k) => k.toLowerCase().includes(n))
+  )
 }
 
 export function pickKind(e: KindEntry, kinds: EngineKinds | null): string | null {
