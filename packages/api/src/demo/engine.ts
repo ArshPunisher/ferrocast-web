@@ -192,6 +192,8 @@ export interface DemoOptions {
   cloudMode?: DemoCloudSetup
   /** Simulate Ferrocast's built-in Studio engine routes (`/studio/engine/*`) in demo mode. */
   studioEngine?: boolean | DemoStudioEngineOptions
+  /** Simulate Twitch missing `channel:manage:polls` until reconnected. */
+  twitchPollScopeMissing?: boolean
   /** Pro "Dashboard anywhere": act as a paired phone with this role (and PC on or off). */
   remote?: {
     role: RemoteRole
@@ -360,6 +362,7 @@ export class DemoEngine {
 
   // State
   setupDone: boolean
+  private twitchNeedsPollScope = false
   private seq = 1000
   private alertSeq = 0
   private connectors: Connectors
@@ -563,6 +566,7 @@ export class DemoEngine {
     this.rand = mulberry32(opts.seed ?? 20261017)
     this.latency = opts.latencyMs ?? null
     this.setupDone = opts.setupDone ?? true
+    this.twitchNeedsPollScope = opts.twitchPollScopeMissing === true
     this.token = opts.token ?? DEMO_TOKEN
     this.relayOn = opts.relay ?? true
     this.pro = new DemoPro(opts.pro)
@@ -2022,8 +2026,9 @@ export class DemoEngine {
       pushOverlayState: (partial) => {
         for (const s of this.overlaySubs) this.sendOverlay(s, 'state', clone(partial))
       },
-      say: (text) => {
-        for (const p of this.connectedChat())
+      say: (text, platforms) => {
+        for (const p of this.connectedChat()) {
+          if (platforms && !platforms.includes(p)) continue
           this.ingest(
             {
               type: 'chat_message',
@@ -2039,6 +2044,7 @@ export class DemoEngine {
             p,
             'live',
           )
+        }
       },
       chat: (actor, text) => {
         if (actor.platform === 'tips' || actor.platform === 'ferrocast') return
@@ -2056,6 +2062,8 @@ export class DemoEngine {
         )
       },
       connectedChat: () => this.connectedChat(),
+      isLiveOn: (p) => this.isLiveOn(p),
+      twitchNeedsPollScope: () => this.twitchNeedsPollScope,
       knownActors: () => known,
       seenActor: (platform, userId) => this.seenActor(platform, userId),
       isLive: () => this.isLive(),
@@ -2107,13 +2115,22 @@ export class DemoEngine {
     return { token: this.token }
   }
 
+  /** Simulate Twitch missing `channel:manage:polls` until reconnected (tests/demo). */
+  setTwitchPollScopeMissing(missing = true): void {
+    this.twitchNeedsPollScope = missing
+  }
+
   private connect(platform: string) {
     if (!['twitch', 'youtube', 'kick', 'facebook'].includes(platform))
       throw new HttpError(404, 'not_found', 'Ferrocast doesn’t support that platform.')
     const p = platform as AccountPlatform
     // Facebook signs in again when it is connected already (through the relay, to switch Pages);
-    // the others refuse.
-    if (p !== 'facebook' && this.connectors[p].state === 'connected')
+    // Twitch may reconnect when extra permissions (such as channel:manage:polls) are requested.
+    if (
+      p !== 'facebook' &&
+      !(p === 'twitch' && this.twitchNeedsPollScope) &&
+      this.connectors[p].state === 'connected'
+    )
       throw new HttpError(
         409,
         'already_connected',
@@ -2149,6 +2166,7 @@ export class DemoEngine {
           connected_at: Date.now(),
           scopes_ok: true,
         })
+        if (p === 'twitch') this.twitchNeedsPollScope = false
         this.setConnector(p, connector('connected', name, null, login, url))
         this.ingest({ type: 'connector', state: 'connected' }, p, 'live')
         this.pushOverlayLinks()

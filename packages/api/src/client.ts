@@ -44,6 +44,7 @@ import type {
   PanicResult,
   Platform,
   PointsBalance,
+  PollsCapabilities,
   PollSpec,
   PollView,
   Queue,
@@ -513,6 +514,7 @@ export class FerroClient {
 
   // Polls
   poll = () => this.get<PollView | null>('/api/v1/polls/current')
+  pollCapabilities = () => this.get<PollsCapabilities>('/api/v1/polls/capabilities')
   startPoll = (p: PollSpec) => this.post<PollView>('/api/v1/polls', p)
   /** Ends it now and posts the result in chat. */
   endPoll = () => this.post<PollView>('/api/v1/polls/current/end')

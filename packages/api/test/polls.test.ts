@@ -45,7 +45,14 @@ describe('demo polls', () => {
     }
   })
 
-  it('runs a poll: live results, one at a time, ends once, then posts the result', async () => {
+  it('reports capabilities, runs native+chat mixed polls, supports untimed polls, and handles Twitch reconnect', async () => {
+    const caps = await client.pollCapabilities()
+    expect(caps.platforms.map((c) => [c.platform, c.mode])).toEqual([
+      ['twitch', 'native'],
+      ['youtube', 'native'],
+      ['kick', 'chat_fallback'],
+    ])
+
     expect(await client.poll()).toBeNull()
     const frames: LiveFrame[] = []
     const sock = engine.socket(client.liveUrl())
@@ -53,6 +60,11 @@ describe('demo polls', () => {
     await vi.advanceTimersByTimeAsync(1)
     const p = await client.startPoll(ok)
     expect(p.options.map((o) => o.text)).toEqual(['Ascent', 'Bind'])
+    expect(p.platforms?.map((s) => [s.platform, s.mode])).toEqual([
+      ['twitch', 'native'],
+      ['youtube', 'native'],
+      ['kick', 'chat'],
+    ])
     expect((await fail(client.startPoll(ok)))?.status).toBe(409)
     await vi.advanceTimersByTimeAsync(30_000)
     const mid = (await client.poll())!
@@ -64,15 +76,68 @@ describe('demo polls', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect((await client.poll())!.total).toBe(ended.total)
     const said = frames.filter(
-      (f) =>
+      (f): f is Extract<LiveFrame, { type: 'event' }> =>
         f.type === 'event' &&
         f.data.kind.type === 'chat_message' &&
         f.data.kind.content.text.startsWith('Poll closed'),
     )
-    expect(said.length).toBe(3) // once per connected platform
+    expect(said.map((s) => s.data.platform)).toEqual(['kick'])
     await client.clearPoll()
     expect((await fail(client.clearPoll()))?.code).toBe('poll_not_found')
     expect((await fail(client.endPoll()))?.code).toBe('poll_not_found')
+
+    // Untimed poll (`duration_s: null`) stays open past 30m until End is pressed.
+    const untimed = await client.startPoll({
+      question: 'Stay on boss?',
+      options: ['Stay', 'Reset'],
+      duration_s: null,
+    })
+    expect(untimed.ends_at).toBeNull()
+    await vi.advanceTimersByTimeAsync(2_000_000)
+    expect((await client.poll())?.closed).toBe(false)
+    expect((await client.endPoll()).closed).toBe(true)
+    await client.clearPoll()
+
+    // Fallback when text exceeds native limits without truncating question/options.
+    const longFallback = await client.startPoll({
+      question: 'This question is deliberately over sixty characters to trigger Twitch fallback',
+      options: ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'],
+      duration_s: 60,
+    })
+    expect(longFallback.platforms).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          platform: 'twitch',
+          mode: 'chat',
+          state: 'failed_fallback',
+          note: 'text_too_long_for_native',
+        }),
+        expect.objectContaining({
+          platform: 'youtube',
+          mode: 'chat',
+          state: 'failed_fallback',
+          note: 'options_count_unsupported_for_native',
+        }),
+      ]),
+    )
+    await client.clearPoll()
+
+    // Missing Twitch poll scope exposes reconnect_needed, permits reconnect without 409, and restores native.
+    engine.setTwitchPollScopeMissing(true)
+    const beforeRecon = await client.pollCapabilities()
+    expect(beforeRecon.platforms[0]).toMatchObject({
+      platform: 'twitch',
+      mode: 'reconnect_needed',
+      reason: 'needs_scope',
+    })
+    const flow = await client.connect('twitch')
+    expect(flow.flow).toBe('device_code')
+    await vi.advanceTimersByTimeAsync(5_000)
+    const afterRecon = await client.pollCapabilities()
+    expect(afterRecon.platforms[0]).toMatchObject({
+      platform: 'twitch',
+      mode: 'native',
+    })
   })
 })
 

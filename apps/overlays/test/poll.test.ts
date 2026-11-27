@@ -103,4 +103,32 @@ describe('poll widget', () => {
     rt.apply(frame('state', { poll: { id: 5 } as unknown as PollView }))
     expect(widget().hidden).toBe(true)
   })
+
+  it('adapts vote prompt for native, mixed, and untimed polls', () => {
+    rt.apply(snapshot({}, overlay([pollWidget])))
+
+    rt.apply(
+      frame('state', {
+        poll: poll({
+          ends_at: null,
+          platforms: [{ platform: 'twitch', mode: 'native', state: 'active' }],
+        }),
+      }),
+    )
+    expect(widget().hidden).toBe(false)
+    expect(widget().textContent).toContain('Vote in the poll')
+
+    rt.apply(
+      frame('state', {
+        poll: poll({
+          ends_at: null,
+          platforms: [
+            { platform: 'twitch', mode: 'native', state: 'active' },
+            { platform: 'kick', mode: 'chat', state: 'active' },
+          ],
+        }),
+      }),
+    )
+    expect(widget().textContent).toContain('Vote in poll or !vote 1-2')
+  })
 })

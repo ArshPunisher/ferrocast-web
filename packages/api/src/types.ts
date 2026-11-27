@@ -1880,17 +1880,53 @@ export interface GiveawaySpec {
   subscriber_bonus?: boolean
 }
 
-/** A chat poll (`!vote N`). Who voted for what is never sent. */
+export type PollCapabilityMode = 'native' | 'chat_fallback' | 'reconnect_needed'
+
+export interface PollLimits {
+  min_options: number
+  max_options: number
+  min_duration_s: number
+  max_duration_s: number
+  supports_no_timer: boolean
+  question_chars: number
+  option_chars: number
+}
+
+export interface PlatformPollCapability {
+  platform: ChatPlatform
+  mode: PollCapabilityMode
+  reason?: string | null
+  limits: PollLimits
+}
+
+/** `GET /api/v1/polls/capabilities`. */
+export interface PollsCapabilities {
+  platforms: PlatformPollCapability[]
+}
+
+export type PlatformPollMode = 'native' | 'chat'
+export type PlatformPollState = 'active' | 'ended' | 'failed_fallback'
+
+export interface PlatformPollStatus {
+  platform: ChatPlatform
+  mode: PlatformPollMode
+  external_id?: string | null
+  state: PlatformPollState
+  note?: string | null
+}
+
+/** A stream poll (`native` platform polls + `!vote N` fallback). Who voted for what is never sent. */
 export interface PollView {
   id: string
   question: string
   options: { text: string; votes: number }[]
   total: number
   started_at: Millis
-  ends_at: Millis
+  ends_at: Millis | null
   closed: boolean
   /** Indexes of the leading answers: several on a tie, none without votes. */
   leaders: number[]
+  platforms?: PlatformPollStatus[]
 }
 
 /** `POST /api/v1/polls`. */
@@ -1898,8 +1934,10 @@ export interface PollSpec {
   question: string
   /** 2–5 answers, 1–60 characters each. */
   options: string[]
-  /** 10–1800 seconds. */
-  duration_s: number
+  /** 10–1800 seconds, or `null` for an untimed ("No timer") poll. */
+  duration_s: number | null
+  /** Run `!vote` in chat on platforms without native poll support (default true). */
+  chat_fallback?: boolean
 }
 
 export const POLL_LIMITS = {

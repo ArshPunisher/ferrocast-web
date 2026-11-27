@@ -73,9 +73,17 @@ export class PollWidget implements WidgetView {
     const fresh = p.id !== this.shownId
     this.shownId = p.id
     this.question.textContent = safeText(p.question, 120)
+    const platforms = Array.isArray(p.platforms) ? p.platforms : []
+    const hasNative = platforms.some((s) => s.mode === 'native')
+    const hasChat = platforms.length === 0 || platforms.some((s) => s.mode === 'chat')
+    const voteRange = `1${options.length > 1 ? `-${options.length}` : ''}`
     this.status.textContent = p.closed
       ? 'Final result'
-      : `Type !vote 1${options.length > 1 ? `-${options.length}` : ''}`
+      : hasNative && hasChat
+        ? `Vote in poll or !vote ${voteRange}`
+        : hasNative
+          ? 'Vote in the poll'
+          : `Type !vote ${voteRange}`
     this.el.classList.toggle('is-closed', !!p.closed)
     // Rows are reused so bars glide from their old length instead of jumping.
     if (fresh || this.list.children.length !== options.length) {

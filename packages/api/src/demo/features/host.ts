@@ -21,12 +21,16 @@ export interface DemoHost {
   broadcastLive(frame: unknown): void
   /** Sends a `state` frame (partial overlay state) to every overlay socket. */
   pushOverlayState(partial: Record<string, unknown>): void
-  /** The bot says something in chat on every connected platform (shown as the streamer). */
-  say(text: string): void
+  /** The bot says something in chat on every connected platform (or the named subset). */
+  say(text: string, platforms?: ChatPlatform[]): void
   /** A viewer chats (demo audience): goes through the same path as real chat. */
   chat(actor: Actor, text: string): void
   /** Chat platforms that are connected right now. */
   connectedChat(): ChatPlatform[]
+  /** Whether a specific chat platform is currently live. */
+  isLiveOn?(p: ChatPlatform): boolean
+  /** Whether Twitch needs to reconnect for `channel:manage:polls` (demo helper). */
+  twitchNeedsPollScope?(): boolean
   /** People the demo knows (its seeded chatters), with stable ids. */
   knownActors(): Actor[]
   /** Anyone who chatted or did something here (from the event log), like the engine's viewers. */
