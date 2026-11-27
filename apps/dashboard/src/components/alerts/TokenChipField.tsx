@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { BracketsCurly, Plus, Warning, X } from '@phosphor-icons/react'
 import { KNOWN_VARS, checkTemplate } from '@ferrocast/api'
 import { Input, PopoverSurface, Textarea, cx } from '@ferrocast/ui'
@@ -138,9 +138,6 @@ export function TokenChipField({
       : null
 
   const quickOptions = options
-  useEffect(() => {
-    if (paletteOpen) paletteRefs.current[0]?.focus({ preventScroll: true })
-  }, [paletteOpen])
 
   /** Writes the token at the caret; false when it would not fit (nothing changed). */
   const insertToken = (key: string): boolean => {
@@ -237,7 +234,7 @@ export function TokenChipField({
             open={paletteOpen}
             onClose={(reason) => {
               setPaletteOpen(false)
-              if (reason === 'escape') paletteBtn.current?.focus()
+              if (reason === 'escape' || reason === 'tab') paletteBtn.current?.focus()
             }}
             anchorRef={paletteBtn}
             surfaceRef={palettePanel}
@@ -245,6 +242,7 @@ export function TokenChipField({
             align="end"
             gap={6}
             edgePadding={8}
+            focusOnOpen="first"
             id={paletteId}
             role="group"
             aria-label={`Insert token into ${label}`}
