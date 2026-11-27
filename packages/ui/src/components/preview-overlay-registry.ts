@@ -52,8 +52,45 @@ export interface PreviewOverlaysEventDetail {
 
 const entries = new Map<string, RegisteredPreviewOverlay>()
 const listeners = new Set<() => void>()
+const observedEls = new Map<Element, number>()
+let sharedRo: ResizeObserver | null = null
+let roRaf = 0
 let version = 0
 let pendingEventRaf = 0
+
+function ensureSharedObserver(): ResizeObserver | null {
+  if (typeof ResizeObserver !== 'function') return null
+  if (!sharedRo) {
+    sharedRo = new ResizeObserver(() => {
+      if (roRaf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        notifyPreviewOverlays()
+        return
+      }
+      roRaf = requestAnimationFrame(() => {
+        roRaf = 0
+        notifyPreviewOverlays()
+      })
+    })
+  }
+  return sharedRo
+}
+
+function observeOverlayResize(el: Element): void {
+  const count = observedEls.get(el) ?? 0
+  observedEls.set(el, count + 1)
+  if (count === 0) ensureSharedObserver()?.observe(el)
+}
+
+function unobserveOverlayResize(el: Element): void {
+  const count = observedEls.get(el) ?? 0
+  if (count <= 1) {
+    observedEls.delete(el)
+    sharedRo?.unobserve(el)
+  } else {
+    observedEls.set(el, count - 1)
+  }
+}
 
 function elementOf(entry: RegisteredPreviewOverlay): Element | null {
   return typeof entry.target === 'function' ? null : entry.target
@@ -134,11 +171,19 @@ export function registerPreviewHole(
     radius: opts.radius,
     getRect: opts.getRect,
   }
+  const prev = entries.get(id)
+  if (prev && prev.kind === 'overlay') {
+    const prevEl = elementOf(prev)
+    if (prevEl) unobserveOverlayResize(prevEl)
+  }
   entries.set(id, entry)
+  const el = elementOf(entry)
+  if (entry.kind === 'overlay' && el) observeOverlayResize(el)
   notifyPreviewOverlays()
   return () => {
     if (entries.get(id) !== entry) return
     entries.delete(id)
+    if (entry.kind === 'overlay' && el) unobserveOverlayResize(el)
     notifyPreviewOverlays()
   }
 }
@@ -256,8 +301,11 @@ export function collectPreviewHoles(
 
   if (overlays.length > maxOverlays) return null
   if (fullStageCover) {
-    return [{ x: -edge, y: -edge, w: box.width + 2 * edge, h: box.height + 2 * edge, r: 0 }]
+    return maxHoles >= 1
+      ? [{ x: -edge, y: -edge, w: box.width + 2 * edge, h: box.height + 2 * edge, r: 0 }]
+      : null
   }
+  if (overlays.length > maxHoles) return null
   return [...overlays, ...guides.slice(0, Math.max(0, maxHoles - overlays.length))]
 }
 
@@ -291,6 +339,7 @@ export function findUnregisteredPreviewOverlays(stageEl?: Element | null): Eleme
   if (typeof document === 'undefined') return []
   const stages = stageEl ? [stageEl] : [...document.querySelectorAll('[data-stage-bg]')]
   const stageRects = stages
+    .filter((s) => !s.hasAttribute('hidden'))
     .map((s) => s.getBoundingClientRect())
     .filter((r) => r.width > 0 && r.height > 0)
   if (stageRects.length === 0) return []
@@ -313,6 +362,13 @@ export function findUnregisteredPreviewOverlays(stageEl?: Element | null): Eleme
 /** Clear all entries (tests only). */
 export function resetPreviewOverlayRegistry(): void {
   entries.clear()
+  observedEls.clear()
+  sharedRo?.disconnect()
+  sharedRo = null
+  if (roRaf && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(roRaf)
+  }
+  roRaf = 0
   if (pendingEventRaf && typeof cancelAnimationFrame === 'function') {
     cancelAnimationFrame(pendingEventRaf)
   }

@@ -124,4 +124,13 @@ describe('PreviewOverlayRegistry', () => {
     off1()
     off2()
   })
+
+  it('returns null when mandatory overlay holes alone exceed maxHoles', () => {
+    const off1 = registerPreviewHole('ov-1', () => rect(10, 10, 40, 40))
+    const off2 = registerPreviewHole('ov-2', () => rect(80, 10, 40, 40))
+    expect(collectPreviewHoles(rect(0, 0, 1000, 600), 0, { maxHoles: 1 })).toBeNull()
+    expect(collectPreviewHoles(rect(0, 0, 1000, 600), 0, { maxHoles: 2 })).toHaveLength(2)
+    off1()
+    off2()
+  })
 })

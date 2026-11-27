@@ -1,4 +1,4 @@
-import { act, useRef, useState } from 'react'
+import { act, useEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -6,6 +6,7 @@ import {
   PopoverSurface,
   getPreviewOverlays,
   resetPreviewOverlayRegistry,
+  safeViewportBounds,
 } from '@ferrocast/ui'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -184,5 +185,225 @@ describe('PopoverSurface', () => {
     })
     expect(document.body.querySelector('[role="menu"]')).toBeNull()
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('excludes dismissible=false submenus from openPopoverStack and tracks dismissible changes', async () => {
+    const closeRoot = vi.fn()
+    const closeSub = vi.fn()
+    function Host({ subDismissible = false }: { subDismissible?: boolean }) {
+      const rootBtn = useRef<HTMLButtonElement>(null)
+      const subBtn = useRef<HTMLButtonElement>(null)
+      return (
+        <>
+          <button ref={rootBtn} type="button">
+            Root
+          </button>
+          <PopoverSurface
+            open
+            onClose={closeRoot}
+            anchorRef={rootBtn}
+            anchorRect={rect(100, 100, 80, 32)}
+            role="group"
+            aria-label="Root"
+          >
+            <button ref={subBtn} type="button">
+              Sub
+            </button>
+          </PopoverSurface>
+          <PopoverSurface
+            open
+            dismissible={subDismissible}
+            onClose={closeSub}
+            anchorRef={subBtn}
+            anchorRect={rect(200, 100, 80, 32)}
+            role="menu"
+            aria-label="Submenu"
+          >
+            <div>Sub item</div>
+          </PopoverSurface>
+        </>
+      )
+    }
+
+    const container = document.body.appendChild(document.createElement('div'))
+    root = createRoot(container)
+    await act(async () => root!.render(<Host subDismissible={false} />))
+
+    // Escape must reach Root even though Submenu mounted after it with dismissible=false.
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(closeRoot).toHaveBeenCalledWith('escape')
+    expect(closeSub).not.toHaveBeenCalled()
+
+    // Toggling dismissible true -> false -> true updates stack ownership cleanly.
+    closeRoot.mockClear()
+    await act(async () => root!.render(<Host subDismissible />))
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(closeSub).toHaveBeenCalledWith('escape')
+    expect(closeRoot).not.toHaveBeenCalled()
+
+    closeSub.mockClear()
+    await act(async () => root!.render(<Host subDismissible={false} />))
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    expect(closeRoot).toHaveBeenCalledWith('escape')
+  })
+
+  it('preserves authored CSS max-width and caps matchAnchorWidth minWidth at pos.maxWidth', async () => {
+    const styleTag = document.head.appendChild(document.createElement('style'))
+    styleTag.textContent = '.cap-300 { max-width: 300px; }'
+
+    function Host({ match = false }: { match?: boolean }) {
+      const btn = useRef<HTMLButtonElement>(null)
+      return (
+        <>
+          <button ref={btn} type="button">
+            Anchor
+          </button>
+          <PopoverSurface
+            open
+            onClose={() => undefined}
+            anchorRef={btn}
+            anchorRect={match ? rect(0, 100, 400, 32) : rect(100, 100, 40, 24)}
+            matchAnchorWidth={match}
+            role="tooltip"
+            className={match ? '' : 'cap-300'}
+          >
+            <span>Tooltip text</span>
+          </PopoverSurface>
+        </>
+      )
+    }
+
+    const container = document.body.appendChild(document.createElement('div'))
+    root = createRoot(container)
+    await act(async () => root!.render(<Host match={false} />))
+
+    const tip = document.body.querySelector('[role="tooltip"]') as HTMLElement
+    // Must not overwrite CSS max-width: 300px with bounds width (1264px).
+    expect(parseFloat(tip.style.maxWidth || '300')).toBeLessThanOrEqual(300)
+
+    // With 400px viewport (maxWidth = 384) and 400px anchor + matchAnchorWidth, minWidth caps at 384.
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(400)
+    await act(async () => root!.render(<Host key="narrow" match />))
+    const matched = document.body.querySelector('[role="tooltip"]') as HTMLElement
+    expect(parseFloat(matched.style.maxWidth)).toBe(384)
+    expect(parseFloat(matched.style.minWidth)).toBe(384)
+
+    styleTag.remove()
+  })
+
+  it('keeps global listeners stable across parent re-renders and avoids body-to-dialog double mount', async () => {
+    const addWin = vi.spyOn(window, 'addEventListener')
+    const addDoc = vi.spyOn(document, 'addEventListener')
+    const mounts: string[] = []
+
+    function Probe() {
+      useEffect(() => {
+        const dlg = document.querySelector('dialog[open]')
+        const inDialog = Boolean(dlg?.contains(document.querySelector('[data-probe]')))
+        mounts.push(inDialog ? 'dialog' : 'body')
+      }, [])
+      return <span data-probe>Probe</span>
+    }
+
+    function Host({ tick }: { tick: number }) {
+      const btn = useRef<HTMLButtonElement>(null)
+      return (
+        <Dialog open onClose={() => undefined} title={`Box ${tick}`}>
+          <button ref={btn} type="button">
+            Open
+          </button>
+          <PopoverSurface
+            open
+            onClose={() => undefined}
+            anchorRef={btn}
+            anchorRect={{ left: 200, top: 200, right: 260, bottom: 230, width: 60, height: 30 }}
+            shouldIgnoreOutsidePointerDown={() => false}
+            role="menu"
+          >
+            <Probe />
+          </PopoverSurface>
+        </Dialog>
+      )
+    }
+
+    const container = document.body.appendChild(document.createElement('div'))
+    root = createRoot(container)
+    await act(async () => root!.render(<Host tick={1} />))
+
+    // Probe must mount straight into <dialog>, never mounting into document.body first.
+    expect(mounts).toEqual(['dialog'])
+
+    const resizeAdds = addWin.mock.calls.filter(([t]) => t === 'resize').length
+    const downAdds = addDoc.mock.calls.filter(([t]) => t === 'pointerdown').length
+
+    // Re-rendering with fresh inline callbacks and inline rect objects must not re-bind listeners.
+    await act(async () => root!.render(<Host tick={2} />))
+    await act(async () => root!.render(<Host tick={3} />))
+    expect(addWin.mock.calls.filter(([t]) => t === 'resize').length).toBe(resizeAdds)
+    expect(addDoc.mock.calls.filter(([t]) => t === 'pointerdown').length).toBe(downAdds)
+  })
+
+  it('prevents default and returns focus to trigger on closeOnTab', async () => {
+    function Host() {
+      const [open, setOpen] = useState(false)
+      const btn = useRef<HTMLButtonElement>(null)
+      return (
+        <div>
+          <button ref={btn} type="button" onClick={() => setOpen(true)}>
+            Trigger
+          </button>
+          <PopoverSurface
+            open={open}
+            onClose={() => setOpen(false)}
+            anchorRef={btn}
+            anchorRect={rect(100, 100, 80, 32)}
+            closeOnTab
+            role="menu"
+          >
+            <button type="button" role="menuitem">
+              Item 1
+            </button>
+          </PopoverSurface>
+        </div>
+      )
+    }
+
+    const container = document.body.appendChild(document.createElement('div'))
+    root = createRoot(container)
+    await act(async () => root!.render(<Host />))
+
+    const btn = container.querySelector('button')!
+    btn.focus()
+    await act(async () => btn.click())
+
+    const item = document.body.querySelector('[role="menuitem"]') as HTMLButtonElement
+    item.focus()
+    const tabEv = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    await act(async () => {
+      item.dispatchEvent(tabEv)
+    })
+    expect(tabEv.defaultPrevented).toBe(true)
+    expect(document.body.querySelector('[role="menu"]')).toBeNull()
+    expect(document.activeElement).toBe(btn)
+  })
+
+  it('prefers header[data-app-header] over dock/panel headers in safeViewportBounds', () => {
+    const dockHdr = document.body.appendChild(document.createElement('header'))
+    dockHdr.style.position = 'sticky'
+    dockHdr.getBoundingClientRect = () => rect(0, 0, 300, 200)
+
+    const appHdr = document.body.appendChild(document.createElement('header'))
+    appHdr.setAttribute('data-app-header', '')
+    appHdr.style.position = 'sticky'
+    appHdr.getBoundingClientRect = () => rect(0, 0, 1280, 56)
+
+    const bounds = safeViewportBounds(8, false)
+    expect(bounds.top).toBe(64)
   })
 })

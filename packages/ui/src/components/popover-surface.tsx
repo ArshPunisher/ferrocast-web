@@ -41,6 +41,22 @@ export interface ComputedPopoverPosition {
   placedSide: PopoverPlacement
 }
 
+export const FOCUSABLE_SELECTOR =
+  'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+
+/** Returns visible focusable elements within `container`. */
+export function findFocusableElements(container: HTMLElement | null): HTMLElement[] {
+  if (!container) return []
+  return [...container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter((el) => {
+    if (el.closest('[hidden], .hidden')) return false
+    if (typeof getComputedStyle === 'function') {
+      const cs = getComputedStyle(el)
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false
+    }
+    return true
+  })
+}
+
 const openPopoverStack: string[] = []
 
 function pushPopover(id: string): void {
@@ -85,7 +101,10 @@ export function safeViewportBounds(edgePadding = 8, insideDialog = false): SafeB
     }
   }
 
-  const headerRect = visibleChromeRect('header')
+  const hasAppHeader = document.querySelector('header[data-app-header]') !== null
+  const headerRect = hasAppHeader
+    ? visibleChromeRect('header[data-app-header]')
+    : visibleChromeRect('header')
   const headerBottom =
     headerRect && headerRect.top <= 1 && headerRect.bottom > 0 ? headerRect.bottom : 0
 
@@ -197,9 +216,8 @@ export function computePopoverPosition({
   const available = up ? above : below
   const maxHeight = Math.min(bounds.bottom - bounds.top, Math.max(0, available))
   const height = Math.min(naturalHeight, maxHeight)
-  const top = up
-    ? Math.max(bounds.top, anchor.top - gap - height)
-    : Math.min(anchor.bottom + gap, Math.max(bounds.top, bounds.bottom - height))
+  const rawTop = up ? anchor.top - gap - height : anchor.bottom + gap
+  const top = Math.max(bounds.top, Math.min(rawTop, Math.max(bounds.top, bounds.bottom - height)))
 
   const wantLeft =
     align === 'end'
@@ -248,6 +266,8 @@ export interface PopoverSurfaceProps extends Omit<
   closeOnScroll?: boolean | undefined
   closeOnEscape?: boolean | undefined
   closeOnTab?: boolean | undefined
+  /** Focus target once positioned and visible on open. */
+  focusOnOpen?: 'first' | 'surface' | undefined
   /** Selector for related floating elements (e.g. submenus) that don't trigger outside-close. */
   ignoreOutsideSelector?: string | undefined
   /** Custom outside pointerdown predicate (e.g. menu opened from a More panel button). */
@@ -287,6 +307,7 @@ export function PopoverSurface({
   closeOnScroll = true,
   closeOnEscape = true,
   closeOnTab = false,
+  focusOnOpen,
   ignoreOutsideSelector,
   shouldIgnoreOutsidePointerDown,
   dismissible = true,
@@ -304,10 +325,32 @@ export function PopoverSurface({
   const [anchorWidth, setAnchorWidth] = useState<number | null>(null)
   const [resizeTick, setResizeTick] = useState(0)
 
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const ignoreDownRef = useRef(shouldIgnoreOutsidePointerDown)
+  ignoreDownRef.current = shouldIgnoreOutsidePointerDown
+  const anchorRectRef = useRef(anchorRect)
+  anchorRectRef.current = anchorRect
+  const parentMenuRectRef = useRef(parentMenuRect)
+  parentMenuRectRef.current = parentMenuRect
+  const styleMaxWRef = useRef(style?.maxWidth)
+  styleMaxWRef.current = style?.maxWidth
+  const openerRef = useRef<HTMLElement | null>(null)
+  const didAutoFocusRef = useRef(false)
+
   const setSurfaceRefs = (node: HTMLElement | null) => {
     localRef.current = node
     if (externalRef) externalRef.current = node
   }
+
+  const anchor = anchorRef?.current ?? anchorEl ?? null
+  const enclosingDialog = anchor?.closest('dialog')
+  const syncHost = anchor
+    ? enclosingDialog && enclosingDialog.isConnected
+      ? enclosingDialog
+      : document.body
+    : null
+  const effectiveHost = syncHost ?? host
 
   const anchorKey = anchorRect
     ? `${anchorRect.left},${anchorRect.top},${anchorRect.right},${anchorRect.bottom}`
@@ -318,22 +361,35 @@ export function PopoverSurface({
 
   useLayoutEffect(() => {
     if (!open) {
+      openerRef.current = null
+      return
+    }
+    if (!openerRef.current && typeof document !== 'undefined') {
+      const active = document.activeElement
+      if (active instanceof HTMLElement && !localRef.current?.contains(active)) {
+        openerRef.current = active
+      }
+    }
+  }, [open])
+
+  useLayoutEffect(() => {
+    if (!open) {
       setPos(null)
       setHost(null)
       setAnchorWidth(null)
       return
     }
-    const anchor = anchorRef?.current ?? anchorEl ?? null
-    const dialog = anchor?.closest('dialog')
+    const curAnchor = anchorRef?.current ?? anchorEl ?? null
+    const dialog = curAnchor?.closest('dialog')
     const nextHost = dialog && dialog.isConnected ? dialog : document.body
     if (host !== nextHost) {
       setHost(nextHost)
-      return
     }
     const el = localRef.current
     if (!el) return
 
-    const aRect: RectBox | null = anchorRect ?? (anchor ? anchor.getBoundingClientRect() : null)
+    const aRect: RectBox | null =
+      anchorRectRef.current ?? (curAnchor ? curAnchor.getBoundingClientRect() : null)
     if (!aRect) return
 
     if (matchAnchorWidth && aRect.width > 0) {
@@ -354,6 +410,25 @@ export function PopoverSurface({
       }
     }
 
+    // Read authored CSS max-width before any viewport clamp inline maxWidth overrides it.
+    const prevInlineMaxW = el.style.maxWidth
+    const prevInlineMinW = el.style.minWidth
+    el.style.maxWidth = styleMaxWRef.current !== undefined ? String(styleMaxWRef.current) : ''
+    if (matchAnchorWidth) el.style.minWidth = ''
+    const cssMaxRaw = getComputedStyle(el).maxWidth
+    const cssMaxW = cssMaxRaw && cssMaxRaw !== 'none' ? parseFloat(cssMaxRaw) : NaN
+    const naturalW = el.offsetWidth || el.getBoundingClientRect().width || 200
+    const naturalH = el.offsetHeight || el.getBoundingClientRect().height || 0
+    const naturalScrollH = el.scrollHeight || el.offsetHeight || 0
+    el.style.maxWidth = prevInlineMaxW
+    el.style.minWidth = prevInlineMinW
+
+    const boundsMaxW = Math.max(80, bounds.right - bounds.left)
+    const capW = Number.isFinite(cssMaxW) && cssMaxW > 0 ? Math.min(cssMaxW, boundsMaxW) : boundsMaxW
+    const surfaceW = matchAnchorWidth
+      ? Math.min(capW, Math.max(naturalW, aRect.width))
+      : Math.min(capW, naturalW)
+
     // If the host element itself is transformed, `position: fixed` coordinates are relative to it.
     let originX = 0
     let originY = 0
@@ -366,22 +441,34 @@ export function PopoverSurface({
     const computed = computePopoverPosition({
       anchor: aRect,
       surface: {
-        width: el.offsetWidth || el.getBoundingClientRect().width || 200,
-        height: el.offsetHeight || el.getBoundingClientRect().height || 0,
-        scrollHeight: el.scrollHeight || el.offsetHeight || 0,
+        width: surfaceW,
+        height: naturalH,
+        scrollHeight: naturalScrollH,
       },
       bounds,
       placement,
       align,
       gap,
-      parentMenuRect,
+      parentMenuRect: parentMenuRectRef.current,
     })
 
-    setPos({
+    const nextPos: ComputedPopoverPosition = {
       ...computed,
       left: computed.left - originX,
       top: computed.top - originY,
-    })
+      maxWidth: capW,
+    }
+
+    setPos((prev) =>
+      prev &&
+      prev.left === nextPos.left &&
+      prev.top === nextPos.top &&
+      prev.maxHeight === nextPos.maxHeight &&
+      prev.maxWidth === nextPos.maxWidth &&
+      prev.placedSide === nextPos.placedSide
+        ? prev
+        : nextPos,
+    )
   }, [
     open,
     host,
@@ -389,8 +476,6 @@ export function PopoverSurface({
     anchorRef,
     anchorKey,
     parentKey,
-    anchorRect,
-    parentMenuRect,
     withinEl,
     placement,
     align,
@@ -406,57 +491,74 @@ export function PopoverSurface({
   })
 
   useEffect(() => {
-    if (!open || !host) return
-    pushPopover(id)
-    return () => removePopover(id)
-  }, [open, host, id])
+    if (!open || !pos) {
+      if (!open) didAutoFocusRef.current = false
+      return
+    }
+    if (!focusOnOpen || didAutoFocusRef.current) return
+    didAutoFocusRef.current = true
+    const el = localRef.current
+    if (!el) return
+    if (focusOnOpen === 'first') {
+      const target = findFocusableElements(el)[0] ?? el
+      target.focus({ preventScroll: true })
+    } else {
+      el.focus({ preventScroll: true })
+    }
+  }, [open, pos, focusOnOpen])
 
   useEffect(() => {
-    if (!open || !host) return
+    if (!open || !effectiveHost || !dismissible || !closeOnEscape) return
+    pushPopover(id)
+    return () => removePopover(id)
+  }, [open, effectiveHost, dismissible, closeOnEscape, id])
+
+  useEffect(() => {
+    if (!open || !effectiveHost) return
     const el = localRef.current
-    const anchor = anchorRef?.current ?? anchorEl ?? null
+    const curAnchor = anchorRef?.current ?? anchorEl ?? null
     if (typeof ResizeObserver !== 'function') return
     const ro = new ResizeObserver(() => {
       setResizeTick((t) => t + 1)
       notifyPreviewOverlays()
     })
     if (el) ro.observe(el)
-    if (anchor) ro.observe(anchor)
+    if (curAnchor) ro.observe(curAnchor)
     return () => ro.disconnect()
-  }, [open, host, anchorEl, anchorRef])
+  }, [open, effectiveHost, anchorEl, anchorRef])
 
   useEffect(() => {
-    if (!open || !host) return
+    if (!open || !effectiveHost) return
     const onResize = () => {
-      if (closeOnResize) onClose('resize')
+      if (closeOnResize) onCloseRef.current('resize')
       else setResizeTick((t) => t + 1)
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
-  }, [open, host, closeOnResize, onClose])
+  }, [open, effectiveHost, closeOnResize])
 
   useEffect(() => {
-    if (!open || !host || !dismissible) return
+    if (!open || !effectiveHost || !dismissible) return
     const onDown = (e: PointerEvent) => {
       const target = e.target as Node | null
       if (!target) return
-      const anchor = anchorRef?.current ?? anchorEl ?? null
-      if (localRef.current?.contains(target) || anchor?.contains(target)) return
+      const curAnchor = anchorRef?.current ?? anchorEl ?? null
+      if (localRef.current?.contains(target) || curAnchor?.contains(target)) return
       if (
         ignoreOutsideSelector &&
         target instanceof Element &&
         target.closest(ignoreOutsideSelector)
       )
         return
-      if (shouldIgnoreOutsidePointerDown?.(e)) return
-      onClose('outside')
+      if (ignoreDownRef.current?.(e)) return
+      onCloseRef.current('outside')
     }
     const onDocKey = (e: KeyboardEvent) => {
       if (!closeOnEscape || e.key !== 'Escape') return
       if (e.defaultPrevented || !isTopPopover(id)) return
       e.preventDefault()
       e.stopPropagation()
-      onClose('escape')
+      onCloseRef.current('escape')
     }
     const ancestorScrolls = new Map<Element, { top: number; left: number }>()
     let curScrollEl: Element | null = anchorRef?.current ?? anchorEl ?? null
@@ -473,7 +575,7 @@ export function PopoverSurface({
         const prev = ancestorScrolls.get(t)
         if (prev && prev.top === t.scrollTop && prev.left === t.scrollLeft) return
       }
-      onClose('scroll')
+      onCloseRef.current('scroll')
     }
     document.addEventListener('pointerdown', onDown, true)
     document.addEventListener('keydown', onDocKey)
@@ -485,27 +587,28 @@ export function PopoverSurface({
     }
   }, [
     open,
-    host,
+    effectiveHost,
     dismissible,
     id,
     anchorEl,
     anchorRef,
     ignoreOutsideSelector,
-    shouldIgnoreOutsidePointerDown,
     closeOnEscape,
     closeOnScroll,
-    onClose,
   ])
 
-  if (!open || typeof document === 'undefined') return null
-  const portalTarget = host ?? document.body
+  if (!open || typeof document === 'undefined' || !effectiveHost) return null
+  const portalTarget = effectiveHost
+
+  const cappedMinWidth =
+    matchAnchorWidth && anchorWidth ? (pos ? Math.min(anchorWidth, pos.maxWidth) : anchorWidth) : null
 
   const mergedStyle: CSSProperties = {
     top: pos?.top ?? 0,
     left: pos?.left ?? 0,
     maxHeight: pos?.maxHeight,
     maxWidth: pos?.maxWidth,
-    ...(matchAnchorWidth && anchorWidth ? { minWidth: anchorWidth } : {}),
+    ...(cappedMinWidth !== null ? { minWidth: cappedMinWidth } : {}),
     ...(pos ? {} : { visibility: 'hidden' }),
     ...style,
   }
@@ -514,7 +617,21 @@ export function PopoverSurface({
     onKeyDown?.(e)
     if (e.defaultPrevented) return
     if (closeOnTab && e.key === 'Tab') {
-      onClose('tab')
+      e.preventDefault()
+      const curAnchor = anchorRef?.current ?? anchorEl ?? null
+      const opener = openerRef.current
+      const focusTarget =
+        opener &&
+        opener.isConnected &&
+        opener !== document.body &&
+        opener !== document.documentElement
+          ? opener
+          : curAnchor?.matches(FOCUSABLE_SELECTOR)
+            ? curAnchor
+            : (curAnchor?.querySelector<HTMLElement>(`[aria-haspopup], ${FOCUSABLE_SELECTOR}`) ??
+              null)
+      onCloseRef.current('tab')
+      if (focusTarget && focusTarget.isConnected) focusTarget.focus({ preventScroll: true })
     }
   }
 

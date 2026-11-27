@@ -2,6 +2,7 @@ import { act, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  ConfirmDialog,
   Dialog,
   InfoTip,
   PopoverSurface,
@@ -314,5 +315,140 @@ describe('ProUnlock overlay registration', () => {
     ) as HTMLElement | null
     expect(panel).toBeTruthy()
     expect(getPreviewOverlays().some((e) => e.target === panel)).toBe(true)
+  })
+})
+
+describe('Dynamic overlay resize holes, opacity-only entrance, and InfoTip bounds/a11y (F1, F6, F14)', () => {
+  it('notifies PreviewOverlayRegistry via shared ResizeObserver when Dialog or ToastCard grows dynamically and uses opacity-only entrance', async () => {
+    const roCallbacks: Array<() => void> = []
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(cb: () => void) {
+          roCallbacks.push(cb)
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
+
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <>
+          <Dialog open onClose={() => undefined} title="Dynamic Dialog">
+            <div>Initial skeleton</div>
+          </Dialog>
+          <ConfirmDialog
+            open
+            onClose={() => undefined}
+            title="Confirm"
+            confirm="Yes"
+            onConfirm={() => undefined}
+          />
+          <Sheet open onClose={() => undefined} title="Sheet">
+            Body
+          </Sheet>
+          <Toaster />
+        </>,
+      ),
+    )
+
+    await act(async () => {
+      toast({ tone: 'info', message: 'Check this', detail: 'Expanded detail text' })
+    })
+
+    // None of Dialog, ConfirmDialog, Sheet, or ToastCard should start with layout-shifting scale/translate transforms.
+    const overlayPanels = [...document.body.querySelectorAll<HTMLElement>('[data-over-preview]')]
+    expect(overlayPanels.length).toBeGreaterThanOrEqual(4)
+    for (const p of overlayPanels) {
+      expect(p.style.transform).toBe('')
+    }
+
+    const notifications: number[] = []
+    const unsub = subscribePreviewOverlays(() => notifications.push(1))
+    expect(roCallbacks.length).toBeGreaterThan(0)
+
+    await act(async () => {
+      for (const cb of roCallbacks) cb()
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    })
+    expect(notifications.length).toBeGreaterThanOrEqual(1)
+    unsub()
+  })
+
+  it('does not crush InfoTip height inside a short [data-over-preview] Dialog panel', async () => {
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <Dialog open compact onClose={() => undefined} title="Turn the Studio off?">
+          <p>
+            Everything stops too{' '}
+            <InfoTip label="More details">
+              The replay buffer, virtual camera and NDI stop as well.
+            </InfoTip>
+          </p>
+        </Dialog>,
+      ),
+    )
+
+    const dlg = document.querySelector('dialog[open]')!
+    const innerCard = dlg.querySelector('[data-over-preview]') as HTMLElement
+    // Short 180px dialog card near center (310..490).
+    innerCard.getBoundingClientRect = () => rect(460, 310, 360, 180)
+    const infoBtn = dlg.querySelector('button[aria-label="More details"]') as HTMLButtonElement
+    // Trigger sits near bottom of card (y=445..469): only 13px left inside card, plenty in viewport!
+    infoBtn.getBoundingClientRect = () => rect(620, 445, 24, 24)
+
+    await act(async () => infoBtn.click())
+
+    const tip = dlg.querySelector('[role="tooltip"]') as HTMLElement
+    expect(tip).toBeTruthy()
+    // Should use dialog viewport space (~317px below or ~431px above), NOT be crushed to <=20px inside the card!
+    expect(parseFloat(tip.style.maxHeight)).toBeGreaterThan(100)
+  })
+
+  it('avoids sr-only focus traps and aria-hidden violations for InfoTip links and closes on bubble blur', async () => {
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <InfoTip label="Learn more">
+          See <a href="#docs">documentation</a> for details.
+        </InfoTip>,
+      ),
+    )
+
+    // Closed sr-only text must not contain interactive links (no hidden tab stops).
+    expect(host.querySelector('.sr-only a')).toBeNull()
+    expect(host.querySelector('.sr-only')?.textContent).toContain('documentation')
+
+    const btn = host.querySelector('button[aria-label="Learn more"]') as HTMLButtonElement
+    btn.getBoundingClientRect = () => rect(200, 200, 24, 24)
+    await act(async () => btn.click())
+
+    const bubble = document.body.querySelector('[data-over-preview]') as HTMLElement
+    expect(bubble).toBeTruthy()
+    expect(bubble.getAttribute('aria-hidden')).toBeNull()
+
+    const link = bubble.querySelector('a') as HTMLAnchorElement
+    expect(link).toBeTruthy()
+
+    const outside = document.body.appendChild(document.createElement('button'))
+    outside.textContent = 'Outside'
+    vi.useFakeTimers()
+    link.focus()
+    await act(async () => {
+      outside.focus()
+      link.dispatchEvent(
+        new FocusEvent('focusout', { relatedTarget: outside, bubbles: true }),
+      )
+      await vi.advanceTimersByTimeAsync(200)
+    })
+    expect(document.body.querySelector('[data-over-preview]')).toBeNull()
+    vi.useRealTimers()
   })
 })

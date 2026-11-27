@@ -134,9 +134,9 @@ export function Dialog({
             tabIndex={-1}
             // The Studio's live picture leaves itself out under this panel.
             data-over-preview
-            initial={reduce ? false : { opacity: 0, scale: 0.96, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
             onAnimationComplete={() => notifyPreviewOverlays()}
             className={cx(
               'pointer-events-auto flex max-h-[92dvh] w-full flex-col overflow-hidden border border-line-strong bg-surface-1 shadow-pop outline-none',
@@ -295,9 +295,9 @@ export function ConfirmDialog({
             aria-labelledby="fc-confirm-title"
             // The Studio's live picture leaves itself out under this card.
             data-over-preview
-            initial={reduce ? false : { opacity: 0, scale: 0.96, y: 6 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
             onAnimationComplete={() => notifyPreviewOverlays()}
             className="pointer-events-auto w-full max-w-[300px] rounded-[12px] border border-line-strong bg-surface-1 p-4 shadow-pop"
           >
@@ -394,9 +394,9 @@ export function Sheet({ open, onClose, title, tools, children, footer }: SheetPr
             tabIndex={-1}
             // The Studio's live picture leaves itself out under this panel.
             data-over-preview
-            initial={reduce ? false : { x: 32, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
             onAnimationComplete={() => notifyPreviewOverlays()}
             className="pointer-events-auto flex h-full w-full max-w-[480px] flex-col border-l border-line-strong bg-surface-1 shadow-pop outline-none"
           >
@@ -542,10 +542,10 @@ const ToastCard = forwardRef<
       // The Studio's live picture leaves itself out under this panel.
       data-over-preview
       layout={!reduce}
-      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97, transition: { duration: 0.14 } }}
-      transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.14 } }}
+      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
       onAnimationComplete={() => notifyPreviewOverlays()}
       role={t.tone === 'error' ? 'alert' : 'status'}
       className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-panel border border-line-strong bg-surface-1 p-3.5 pr-2 shadow-pop"

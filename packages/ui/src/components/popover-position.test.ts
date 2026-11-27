@@ -111,4 +111,31 @@ describe('computePopoverPosition', () => {
     expect(pos.maxHeight).toBe(564 - 88)
     expect(pos.top + pos.maxHeight).toBeLessThanOrEqual(564)
   })
+
+  it('clamps vertical placement to both bounds.top and bounds.bottom - height', () => {
+    const bounds: SafeBounds = { left: 8, top: 80, right: 800, bottom: 600 }
+    // Anchor sits above protected top bound; bottom placement must clamp down to bounds.top.
+    const fromAbove = computePopoverPosition({
+      anchor: box(100, 40, 80, 20),
+      surface: { width: 200, height: 100, scrollHeight: 100 },
+      bounds,
+      placement: 'bottom',
+      align: 'start',
+      gap: 6,
+    })
+    expect(fromAbove.placedSide).toBe('bottom')
+    expect(fromAbove.top).toBe(bounds.top)
+
+    // Anchor sits below protected bottom bound; top placement must clamp up to bounds.bottom - height.
+    const fromBelow = computePopoverPosition({
+      anchor: box(100, 650, 80, 20),
+      surface: { width: 200, height: 20, scrollHeight: 20 },
+      bounds,
+      placement: 'top',
+      align: 'start',
+      gap: 6,
+    })
+    expect(fromBelow.placedSide).toBe('top')
+    expect(fromBelow.top + 20).toBeLessThanOrEqual(bounds.bottom)
+  })
 })

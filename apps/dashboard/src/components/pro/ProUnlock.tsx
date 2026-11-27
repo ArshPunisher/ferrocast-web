@@ -74,9 +74,9 @@ export function ProUnlock({ pro }: { pro: ProView | null }) {
       <motion.div
         ref={panelRef}
         data-over-preview
-        initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: reduce ? 0.16 : 0.28, ease }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: reduce ? 0.16 : 0.2, ease }}
         onAnimationComplete={() => notifyPreviewOverlays()}
         className="grid justify-items-center gap-3 rounded-panel border border-line-strong bg-surface-1 px-6 pt-6 pb-5 text-center shadow-pop"
       >

@@ -4,10 +4,52 @@
 // with it), and the bubble is drawn via PopoverSurface so edges never cut it off and the
 // preview leaves room for it.
 
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import {
+  Children,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Info } from '@phosphor-icons/react'
 import { cx } from '../cx'
 import { PopoverSurface } from './popover-surface'
+
+function textOf(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(textOf).join('')
+  if (isValidElement<{ children?: ReactNode }>(node)) return textOf(node.props.children)
+  return ''
+}
+
+function hasInteractive(node: ReactNode): boolean {
+  let found = false
+  Children.forEach(node, (child) => {
+    if (found || !isValidElement<{ children?: ReactNode; tabIndex?: number }>(child)) return
+    if (
+      typeof child.type === 'string' &&
+      (child.type === 'a' ||
+        child.type === 'button' ||
+        child.type === 'input' ||
+        child.type === 'select' ||
+        child.type === 'textarea')
+    ) {
+      found = true
+      return
+    }
+    if (typeof child.props.tabIndex === 'number' && child.props.tabIndex >= 0) {
+      found = true
+      return
+    }
+    if (child.props.children !== undefined && hasInteractive(child.props.children)) {
+      found = true
+    }
+  })
+  return found
+}
 
 export function InfoTip({
   children,
@@ -31,17 +73,11 @@ export function InfoTip({
   const bubble = useRef<HTMLElement>(null)
   const [open, setOpen] = useState(false)
   const [pinned, setPinned] = useState(false)
-  // Keep tips inside an enclosing modal dialog or preview-overlapping drawer so they don't float detached.
-  const [withinEl, setWithinEl] = useState<Element | null>(null)
   const closing = useRef<number | undefined>(undefined)
-
-  const syncBounds = () => {
-    setWithinEl(btn.current?.closest('dialog, [data-over-preview]') ?? null)
-  }
+  const interactive = hasInteractive(children)
 
   const show = () => {
     window.clearTimeout(closing.current)
-    syncBounds()
     setOpen(true)
   }
   // A short wait, so the pointer can move onto the bubble (it may hold a link).
@@ -59,6 +95,12 @@ export function InfoTip({
     setPinned(false)
   }, [])
 
+  const onFocusLeave = (related: EventTarget | null) => {
+    const next = related as Node | null
+    if (btn.current?.contains(next) || bubble.current?.contains(next)) return
+    hide()
+  }
+
   useEffect(() => () => window.clearTimeout(closing.current), [])
 
   return (
@@ -72,12 +114,9 @@ export function InfoTip({
         onPointerEnter={(e) => e.pointerType === 'mouse' && show()}
         onPointerLeave={(e) => e.pointerType === 'mouse' && !pinned && hide()}
         onFocus={show}
-        onBlur={(e) => {
-          if (!bubble.current?.contains(e.relatedTarget as Node | null)) hide()
-        }}
+        onBlur={(e) => onFocusLeave(e.relatedTarget)}
         onClick={() => {
           window.clearTimeout(closing.current)
-          syncBounds()
           if (pinned) {
             setPinned(false)
             setOpen(false)
@@ -97,20 +136,24 @@ export function InfoTip({
       >
         <Info size={16} weight="bold" aria-hidden />
       </button>
-      <span id={textId} className="sr-only">
-        {children}
-      </span>
+      {!open && (
+        <span id={textId} className="sr-only">
+          {textOf(children)}
+        </span>
+      )}
       <PopoverSurface
         open={open}
         onClose={close}
         anchorRef={btn}
         surfaceRef={bubble}
-        withinEl={withinEl}
+        id={textId}
+        role={interactive ? 'region' : 'tooltip'}
+        aria-label={interactive ? label : undefined}
         placement={above ? 'top' : 'bottom'}
         align="center"
         gap={6}
         edgePadding={8}
-        aria-hidden
+        onBlur={(e) => onFocusLeave(e.relatedTarget)}
         onPointerEnter={show}
         onPointerLeave={() => !pinned && hide()}
         className="z-[1000] max-w-[min(300px,calc(100vw-16px))] rounded-[10px] border border-line bg-surface-1 px-3 py-2 text-[14px] leading-snug font-normal tracking-normal text-pretty text-text-2 shadow-pop"

@@ -652,6 +652,7 @@ export function Shell({ children, demo }: { children: ReactNode; demo: boolean }
         {/* Top bar */}
         <header
           ref={headerRef}
+          data-app-header=""
           className={cx(
             'sticky top-0 z-20 border-b border-line bg-bg/95 pt-[env(safe-area-inset-top)] supports-[backdrop-filter]:bg-bg/85 supports-[backdrop-filter]:backdrop-blur-sm',
             // The Studio on a computer starts at its own one-row header (owner, 10 Nov): no
