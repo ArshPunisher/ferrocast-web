@@ -694,6 +694,10 @@ export function usePlatformsListController({
 
   const saver = useSaveOrder(api, onSaved)
   const save = (next: DestinationView[], label: string) => {
+    // The question being asked belongs to the list as it was; the newest edit replaces it, and
+    // nothing is edited while an answer is on its way.
+    if (saver.askBusy) return
+    saver.dismissAsk()
     setRows(next)
     const all = (
       canvas === 'all' ? next : canvas === 'main' ? [...next, ...others] : [...others, ...next]
@@ -709,6 +713,8 @@ export function usePlatformsListController({
 
   const move = (from: number, to: number) => {
     if (to < 0 || to >= rows.length || from === to) return
+    // The main and vertical pictures are ordered separately; a row never hops between them.
+    if (rows[from]?.canvas !== rows[to]?.canvas) return
     const next = [...rows]
     const [x] = next.splice(from, 1)
     if (x) next.splice(to, 0, x)
@@ -748,7 +754,11 @@ export function usePlatformsListController({
   const protect = (on: boolean) =>
     void run('protect', () => api.setProtect(on), {
       success: on ? 'Upload protection is on.' : 'Upload protection is off.',
-    }).then((r) => r && onProtect?.(r.protect))
+    }).then((r) => {
+      if (!r) return
+      if (onProtect) onProtect(r.protect)
+      else onSaved()
+    })
 
   const autoQuality = (on: boolean) =>
     void run('auto-quality', () => api.setAutoQuality(on), {
@@ -792,7 +802,8 @@ export function usePlatformsListController({
       alive = false
       window.removeEventListener('focus', onFocus)
     }
-  }, [usesObs, videoKbps, conn, view, resyncs])
+    // `view` is rebuilt on every live frame, so only the stream starting or stopping reloads it.
+  }, [usesObs, videoKbps, conn, view.live, resyncs])
 
   const currentFetched = fetchedSettings && fetchedSettings.conn === conn ? fetchedSettings : null
   const chosenVideoKbps = videoKbps ?? currentFetched?.video_kbps ?? null

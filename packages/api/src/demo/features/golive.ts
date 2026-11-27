@@ -672,9 +672,8 @@ export class DemoGoLive {
       return this.view()
     }
 
-    if (this.live() || this.verticalLive()) {
-      this.host.broadcastLive({ v: 1, type: 'golive', data: this.frame() })
-    }
+    // As the engine: a saved change is announced live or not, so no screen keeps the old numbers.
+    this.host.broadcastLive({ v: 1, type: 'golive', data: this.frame() })
     return this.view()
   }
 

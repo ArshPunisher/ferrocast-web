@@ -1,7 +1,7 @@
 // Saving the destinations while live asks first when the engine says so: the upload won't
 // carry the new one, or it was the last one. One place for every screen that ticks or unticks.
 
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { ApiError } from '@ferrocast/api'
 import { Button, Dialog } from '@ferrocast/ui'
 import type { useGoLive } from './golive'
@@ -34,24 +34,31 @@ export function useSaveOrder(
   dismissAsk: () => void
 } {
   const [ask, setAsk] = useState<Ask | null>(null)
-  const request = (all: Order, confirm: Confirm = {}) =>
-    api.saveOrder(all, confirm).then(
+  // Bumped whenever a question is dismissed, so an answer that arrives later for an older request
+  // (a closed dialog, a newer edit) never opens a question about a list that is gone.
+  const epoch = useRef(0)
+  const request = (all: Order, confirm: Confirm = {}) => {
+    const mine = epoch.current
+    return api.saveOrder(all, confirm).then(
       () => ({ ok: true as const }),
       (e: unknown) => {
         if (
           e instanceof ApiError &&
           (e.code === 'golive_upload_exceeded' || e.code === 'golive_last_destination')
         ) {
+          if (epoch.current !== mine) return null
           setAsk({ code: e.code, message: e.message, hint: e.hint ?? '', all })
           return null
         }
         throw e
       },
     )
+  }
   const last = ask?.code === 'golive_last_destination'
   const [failed, setFailed] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const dismissAsk = () => {
+    epoch.current += 1
     setAsk(null)
     setFailed(null)
   }

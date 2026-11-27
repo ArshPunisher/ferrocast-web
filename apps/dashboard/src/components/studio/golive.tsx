@@ -101,11 +101,15 @@ const NAMES: Record<Exclude<Service, 'custom'>, string> = {
  *  whether OBS is streaming from the OBS health reading (OBS starts and stops on its own). */
 export function useMerged(view: GoLiveView | null): GoLiveView | null {
   const frame = useLive((s) => s.studio.golive)
+  const frameAt = useLive((s) => s.goliveFrameAt)
+  const viewAt = useLive((s) => s.goliveViewAt)
   const health = useObsHealth()
   return useMemo(() => {
     if (!view) return null
     const obs = health ? { ...view.obs, streaming: health.streaming } : view.obs
-    if (!frame) return { ...view, obs }
+    // A change the engine just answered is newer than the last live frame; the frame must not
+    // put the old destinations back until a newer one arrives.
+    if (!frame || viewAt > frameAt) return { ...view, obs }
     return {
       ...view,
       obs,
@@ -122,7 +126,7 @@ export function useMerged(view: GoLiveView | null): GoLiveView | null {
         ffmpeg: frame.ffmpeg ?? view.cut.ffmpeg,
       },
     }
-  }, [view, frame, health])
+  }, [view, frame, frameAt, viewAt, health])
 }
 
 export function GoLiveTab() {

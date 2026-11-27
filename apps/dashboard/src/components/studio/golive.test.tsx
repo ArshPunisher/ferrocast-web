@@ -4,7 +4,15 @@ import { createRoot, type Root } from 'react-dom/client'
 import type { DestinationView, GoLiveView } from '@ferrocast/api'
 import { useLive } from '../../lib/store'
 import { setPictureSource } from '../../lib/picture'
-import { AllFailedBanner, GoLiveTab, LiveCard, Platforms, RowText, liveStatus } from './golive'
+import {
+  AllFailedBanner,
+  GoLiveTab,
+  LiveCard,
+  Platforms,
+  RowText,
+  liveStatus,
+  useMerged,
+} from './golive'
 import { describeDestinationRate, describeStreamCap } from './bitrate-summary'
 import { GoLiveDock, LiveLine } from './desk/golive-dock'
 import { DeskProvider, type Desk } from './desk/common'
@@ -1053,6 +1061,43 @@ describe('U2 Platforms and RowText shared-bitrate explanation', () => {
     }
   })
 
+  it('Platforms does not reload the stream settings on every live frame', async () => {
+    setPictureSource('ferrocast')
+    const mk = (n: number): GoLiveView =>
+      ({
+        ingest: 'rtmp://127.0.0.1:1935/live',
+        obs: { connected: false, points_here: false, streaming: false },
+        live: true,
+        stats: { kbps: 6000 + n },
+        vertical_live: false,
+        vertical_stats: { kbps: 0 },
+        destinations: [baseDest({ id: 'youtube', kind: 'youtube', name: 'YouTube' })],
+        upload: null,
+        protect: true,
+        aitum_ok: false,
+        auto_quality: true,
+        cut: { source: 'canvas', ffmpeg: { state: 'ready' }, state: null, config: { kbps: 4500 } },
+        advanced: { rules: {}, per: {} },
+      }) as unknown as GoLiveView
+    const request = vi.fn(async () => ({ video_kbps: 6000, audio_kbps: 160 }))
+    useLive.setState({ conn: { client: { request } } as never })
+    await renderNode(<Platforms view={mk(0)} onSaved={() => {}} />)
+    await act(async () => {
+      setPictureSource('ferrocast')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const first = request.mock.calls.length
+    expect(first).toBeGreaterThan(0)
+    for (let i = 1; i <= 3; i++) {
+      await act(async () => {
+        root!.render(<Platforms view={mk(i)} onSaved={() => {}} />)
+        await Promise.resolve()
+      })
+    }
+    expect(request.mock.calls.length).toBe(first)
+  })
+
   it('Platforms tags fetchedSettings with conn, refetches on view change, and prefers explicit audioKbps', async () => {
     setPictureSource('ferrocast')
     const yt = baseDest({ id: 'youtube', kind: 'youtube', name: 'YouTube', health: null })
@@ -1686,5 +1731,60 @@ describe('per-destination quality integration in GoLiveDock and Platforms', () =
       useLive.setState({ conn: null })
       setPictureSource('ferrocast')
     }
+  })
+})
+
+describe('useMerged: a saved change is newer than an older live frame', () => {
+  function Probe({ view }: { view: GoLiveView }) {
+    const merged = useMerged(view)
+    return <span data-probe>{merged?.destinations[0]?.resolved_quality?.kbps}</span>
+  }
+  const dest = (kbps: number): DestinationView =>
+    baseDest({
+      resolved_quality: {
+        width: 1280,
+        height: 720,
+        fps: 30,
+        kbps,
+        codec: 'h264',
+        audio_kbps: 160,
+        auto_fitted: false,
+        separate_encode: false,
+        group_id: 'main',
+        shared_with: [],
+      },
+    })
+  const viewWith = (kbps: number): GoLiveView =>
+    ({
+      destinations: [dest(kbps)],
+      live: false,
+      obs: { connected: false, points_here: false, streaming: false },
+      stats: {},
+      vertical_stats: {},
+      cut: { source: 'canvas', ffmpeg: { state: 'ready' }, state: null },
+    }) as unknown as GoLiveView
+
+  it('keeps the saved numbers until a newer frame arrives', async () => {
+    const frame = {
+      live: false,
+      stats: {},
+      destinations: [dest(6000)],
+    } as unknown as NonNullable<ReturnType<typeof useLive.getState>['studio']['golive']>
+    useLive.setState((s) => ({
+      studio: { ...s.studio, golive: frame },
+      goliveFrameAt: 1000,
+      goliveViewAt: 2000,
+    }))
+    useLive.setState({
+      conn: { client: { request: vi.fn(async () => ({})) } } as never,
+    })
+    const el = await renderNode(<Probe view={viewWith(3000)} />)
+    expect(el.querySelector('[data-probe]')?.textContent).toBe('3000')
+
+    // A frame that arrives afterwards is authoritative again.
+    await act(async () => {
+      useLive.setState({ goliveFrameAt: 3000 })
+    })
+    expect(el.querySelector('[data-probe]')?.textContent).toBe('6000')
   })
 })

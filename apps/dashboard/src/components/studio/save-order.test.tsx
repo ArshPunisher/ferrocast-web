@@ -21,6 +21,7 @@ function Host({
   return (
     <>
       <button onClick={() => void saver.request(order)}>untick</button>
+      <button onClick={saver.dismissAsk}>close</button>
       {saver.dialog}
     </>
   )
@@ -123,5 +124,22 @@ describe('useSaveOrder', () => {
     expect(document.body.textContent).toContain('Stop sending to your last platform?')
     await click('Stop sending')
     expect(onSaved).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a question that arrives after it was dismissed', async () => {
+    let refuse: (e: unknown) => void = () => {}
+    const saveOrder = vi.fn().mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          refuse = reject
+        }),
+    )
+    await mount(saveOrder)
+    await click('untick')
+    await click('close')
+    await act(async () => {
+      refuse(new ApiError(409, 'golive_last_destination', 'Last one.', null))
+    })
+    expect(document.body.textContent).not.toContain('Stop sending to your last platform?')
   })
 })
