@@ -4,7 +4,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import type { Preflight } from '@ferrocast/api'
 import { useLive } from '../../../lib/store'
 import { ReadyCheck, ReadyCheckRecallChip, ReadyPlacementContext } from './ready-check'
-import { beginReadyCheckSession, resetReadyCheckState } from './ready-check-state'
+import {
+  beginReadyCheckSession,
+  getReadyCheckState,
+  resetReadyCheckState,
+  setReadyCheckFound,
+} from './ready-check-state'
 
 let root: Root | null = null
 
@@ -80,6 +85,44 @@ describe('ReadyCheck Option 1 pill and upward card', () => {
     })
 
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('can be dismissed from the collapsed pill, and stays away until a different problem turns up', async () => {
+    const mic = { id: 'mic:Mic', label: 'Mic', status: 'fail' as const, detail: 'Muted.' }
+    const cam = { id: 'cam:Webcam', label: 'Webcam', status: 'warn' as const, detail: 'Hidden.' }
+    setupApi({ preflight: { ready: false, checks: [mic] } })
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <ReadyPlacementContext.Provider value="right">
+          <ReadyCheck recovered={null} onClose={vi.fn()} />
+          <ReadyCheckRecallChip variant="status-bar" />
+        </ReadyPlacementContext.Provider>,
+      ),
+    )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3100)
+    })
+    // Collapsed, with a close button right on it.
+    expect(host.querySelector('button[aria-expanded="false"]')).toBeTruthy()
+    const x = host.querySelector('button[aria-label="Dismiss ready check"]') as HTMLButtonElement
+    expect(x).toBeTruthy()
+    await act(async () => x.click())
+    expect(host.querySelector('section[aria-label="Ready check"]')).toBeNull()
+    expect(host.querySelector('button[aria-label^="Show ready check"]')).toBeTruthy()
+
+    const id = getReadyCheckState()!.sessionId
+    // The same problem again, or one fewer: still dismissed.
+    await act(async () => setReadyCheckFound(id, { ready: false, checks: [mic] }))
+    expect(host.querySelector('section[aria-label="Ready check"]')).toBeNull()
+    await act(async () => setReadyCheckFound(id, { ready: true, checks: [] }))
+    expect(host.querySelector('section[aria-label="Ready check"]')).toBeNull()
+    // A problem it had not shown: it comes back, collapsed.
+    await act(async () => setReadyCheckFound(id, { ready: false, checks: [cam] }))
+    const pill = host.querySelector('button[aria-expanded]') as HTMLButtonElement
+    expect(pill.getAttribute('aria-expanded')).toBe('false')
+    expect(pill.textContent).toContain('1 to fix')
   })
 
   it('shows "N to fix (M blocking)", expands upward, fixes issues, collapses with Escape and dismisses/restores focus', async () => {

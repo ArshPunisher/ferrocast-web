@@ -104,8 +104,9 @@ export function ReadyCheck({
 
   const rootRef = useRef<HTMLElement>(null)
   const pillRef = useRef<HTMLButtonElement>(null)
+  const pillWrapRef = useRef<HTMLDivElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
-  usePreviewHole(pillRef, { active: !dismissed && !expanded, deps: [placement] })
+  usePreviewHole(pillWrapRef, { active: !dismissed && !expanded, deps: [placement, !!found] })
   usePreviewHole(cardRef, {
     active: !dismissed && expanded,
     deps: [placement, found?.checks.length],
@@ -328,27 +329,49 @@ export function ReadyCheck({
     >
       {/* Collapsed trigger pill (hidden while the card is expanded so the header summary is shown once). */}
       {!expanded && (
-        <button
-          ref={pillRef}
-          type="button"
+        <div
+          ref={pillWrapRef}
           data-over-preview
-          aria-expanded={false}
-          onClick={handleExpand}
           className={cx(
-            'fc-press pointer-events-auto inline-flex h-9 max-w-full items-center gap-1.5 rounded-full border bg-surface-1 pr-3 pl-2.5 text-[12.5px] font-bold whitespace-nowrap text-text shadow-2 transition-[background-color,border-color,transform] duration-150 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+            'pointer-events-auto inline-flex max-w-full items-center rounded-full border bg-surface-1 shadow-2',
             pillToneClass,
           )}
         >
-          <SeverityIcon tone={tone} size={15} />
-          <span className="min-w-0 truncate">
-            <span>Ready check</span>
-            <span className="text-text-3">{' · '}</span>
-            <span className={cx('font-semibold', pillSubClass)}>{summaryText}</span>
-          </span>
-          <span className="ml-0.5 inline-grid shrink-0 place-items-center text-text-3" aria-hidden>
-            <CaretUp size={13} weight="bold" />
-          </span>
-        </button>
+          <button
+            ref={pillRef}
+            type="button"
+            aria-expanded={false}
+            onClick={handleExpand}
+            className={cx(
+              'fc-press inline-flex h-9 min-w-0 items-center gap-1.5 rounded-full pr-2 pl-2.5 text-[12.5px] font-bold whitespace-nowrap text-text transition-[background-color,transform] duration-150 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
+              !found && 'pr-3',
+            )}
+          >
+            <SeverityIcon tone={tone} size={15} />
+            <span className="min-w-0 truncate">
+              <span>Ready check</span>
+              <span className="text-text-3">{' · '}</span>
+              <span className={cx('font-semibold', pillSubClass)}>{summaryText}</span>
+            </span>
+            <span
+              className="ml-0.5 inline-grid shrink-0 place-items-center text-text-3"
+              aria-hidden
+            >
+              <CaretUp size={13} weight="bold" />
+            </span>
+          </button>
+          {found && (
+            <button
+              type="button"
+              onClick={handleDismiss}
+              aria-label="Dismiss ready check"
+              title="Dismiss"
+              className="fc-press mr-1 grid size-7 shrink-0 place-items-center rounded-full text-text-3 transition-colors hover:bg-surface-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+            >
+              <X size={13} weight="bold" aria-hidden />
+            </button>
+          )}
+        </div>
       )}
 
       <div role="status" aria-live="polite" className="sr-only">

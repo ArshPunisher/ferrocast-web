@@ -11,6 +11,8 @@ export interface ReadyCheckBarState {
   active: boolean
   checking: boolean
   dismissed: boolean
+  /** The problems that were there when it was dismissed: a different one shows it again. */
+  dismissedIds: string[]
   expanded: boolean
   found: Preflight | null
   count: number
@@ -47,6 +49,7 @@ function createInitialState(hasRecovered: boolean): ReadyCheckBarState {
     active: true,
     checking: true,
     dismissed: false,
+    dismissedIds: [],
     expanded: hasRecovered,
     found: null,
     count: 0,
@@ -112,12 +115,17 @@ export function setReadyCheckFound(sessionId: number, found: Preflight): void {
   if (!state || state.sessionId !== sessionId) return
   const count = found.checks.length
   const blocking = found.checks.filter((c) => c.status === 'fail').length
+  // Once dismissed it stays away until a problem it has not shown before turns up. One fixed
+  // (fewer problems) does not bring it back.
+  const known = new Set(state.dismissedIds)
+  const newProblem = state.dismissed && found.checks.some((c) => !known.has(c.id))
   state = {
     ...state,
     checking: false,
     found,
     count,
     blocking,
+    ...(newProblem ? { dismissed: false, expanded: false } : {}),
   }
   emit()
 }
@@ -136,7 +144,13 @@ export function setReadyCheckExpanded(
 
 export function dismissReadyCheck(): void {
   if (!state) return
-  state = { ...state, expanded: false, dismissed: true, pendingFocus: 'recall' }
+  state = {
+    ...state,
+    expanded: false,
+    dismissed: true,
+    dismissedIds: (state.found?.checks ?? []).map((c) => c.id),
+    pendingFocus: 'recall',
+  }
   emit()
 }
 
