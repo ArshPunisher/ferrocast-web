@@ -201,4 +201,95 @@ describe('DemoEngine Chat TTS', () => {
 
     sock.close()
   })
+
+  it('blocks adversarial BiDi/zero-width/post-clean slurs, spaced-dot links, display_name links, and strips synth markup', async () => {
+    const { demo: d, client, ingest } = setup()
+    const overlays = await client.overlays()
+    const alertsOverlay = overlays.find((o) => o.widgets.some((w) => w.kind === 'alerts'))!
+    const token = /\/o\/([^/]+)\//.exec(alertsOverlay.url)![1]!
+    const frames: { type: string; data: Record<string, unknown> }[] = []
+    const sock = d.socket(`ws://127.0.0.1:47820/o/${token}/ws`)
+    sock.onmessage = (ev: { data: unknown }) => {
+      frames.push(JSON.parse(String(ev.data)) as { type: string; data: Record<string, unknown> })
+    }
+    await new Promise((r) => setTimeout(r, 10))
+
+    const filter = await client.filters()
+    await client.saveFilters({
+      ...filter,
+      words: { ...filter.words, enabled: true, lookalikes: true, list: ['scam', 'bad phrase'] },
+    })
+    const base = await client.tts()
+    await client.saveTts({
+      ...base,
+      enabled: true,
+      hold_for_approval: false,
+      read_names: true,
+      chat: {
+        ...base.chat!,
+        enabled: true,
+        mode: 'everyone',
+        cooldown_s: 0,
+        global_cooldown_s: 0,
+        skip_links: true,
+      },
+    })
+
+    const split1 = `${'re'}t-${'t'}ard`
+    const split2 = `${'nig'}g-${'g'}er`
+    const split3 = `${'fag'}g-${'g'}ot`
+    const wrapped = `x${'fa'}-${'ggot'}y`
+    const bidiSlur = `${'nig'}g\u{2066}${'g'}er`
+    const wholeSplit = `${'sp'}-${'ic'}`
+    const emailSplit = `${'nig'} ab@cd.ef ${'ger'}`
+
+    for (const hostile of [
+      'bad ab@cd.ef phrase',
+      'sc\u{2066}am',
+      'sc\u{202e}am',
+      'sc\u{fe0f}am',
+      split1,
+      split2,
+      split3,
+      wrapped,
+      bidiSlur,
+      wholeSplit,
+      emailSplit,
+      'check https:\u{200b}//evil.\u{200b}com',
+      'visit evil.\u{2066}com',
+      'visit evil .com',
+      'visit evil. com',
+      'visit \u{ff45}\u{ff56}\u{ff49}\u{ff4c}.\u{ff43}\u{ff4f}\u{ff4d}',
+    ]) {
+      ingest(chatMsg('u_hostile', hostile))
+    }
+
+    // Link or slur in display_name must also be blocked.
+    for (const badName of [
+      'scam.\u{200b}com',
+      'evil .com',
+      'evil. com',
+      bidiSlur,
+      'bad ab@cd.ef phrase',
+    ]) {
+      const msg = chatMsg('u_name', 'hello chat')
+      msg.actor.display_name = badName
+      ingest(msg)
+    }
+
+    expect(frames.filter((f) => f.type === 'tts')).toHaveLength(0)
+
+    // Embedded synth commands and SSML markup are stripped before emitting tts frame.
+    ingest(chatMsg('u_ok', '[[inpt PHON]] [[slnc 99999]] <speak>hello</speak>'))
+    const ttsFrames = frames.filter((f) => f.type === 'tts')
+    expect(ttsFrames).toHaveLength(1)
+    const spoken = String(ttsFrames[0]!.data.text)
+    expect(spoken).not.toContain('[')
+    expect(spoken).not.toContain(']')
+    expect(spoken).not.toContain('<')
+    expect(spoken).not.toContain('>')
+    expect(spoken).toContain('number')
+
+    sock.close()
+  })
 })

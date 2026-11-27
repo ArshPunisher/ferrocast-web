@@ -14,7 +14,13 @@ import { DemoClips } from './features/clips'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { THEME_IDS } from '../types'
 import { DEFAULT_CHAT_TTS, validateChatTts } from '../tts-voices'
-import { containsSevereSlur, hasAnyLink, isEmailToken } from './chat-tts-guard'
+import {
+  cleanChatTtsText,
+  containsSevereSlur,
+  hasAnyLink,
+  hasBlockedWord,
+  normalizeChatTtsText,
+} from './chat-tts-guard'
 import { AlertQueue, type QueueAction } from '../queue'
 import { accountUrl, resolveLinks, validateCreatorLinks } from '../links'
 import { anySample, namedActor, sample } from '../samples'
@@ -3207,8 +3213,9 @@ export class DemoEngine {
       else if (f.type === 'mention') parts.push(`@${f.login}`)
       else if (f.type === 'link' && chat.skip_links) return
     }
-    let raw = parts.join(' ').trim()
+    let raw = normalizeChatTtsText(parts.join(' ')).trim()
     if (!raw) return
+    const normName = normalizeChatTtsText(actor.display_name)
 
     if (chat.mode === 'command') {
       const prefix = chat.command.trim().toLowerCase()
@@ -3232,33 +3239,44 @@ export class DemoEngine {
       }
     }
 
-    if (chat.skip_links && hasAnyLink(raw)) {
+    const nameForSpeech = this.tts.read_names && !actor.anonymous
+    if (chat.skip_links && (hasAnyLink(raw) || (nameForSpeech && hasAnyLink(normName)))) {
       return
     }
     const words = raw.split(/\s+/).filter(Boolean)
     if (chat.skip_emote_spam && (emoteCount > 5 || (emoteCount >= 3 && words.length < 2))) return
 
-    if (containsSevereSlur(raw) || containsSevereSlur(actor.display_name)) return
-    if (this.filters.words.enabled) {
-      const lowerWords = raw.toLowerCase()
-      for (const bw of this.filters.words.list) {
-        const needle = bw.trim().toLowerCase()
-        if (needle && lowerWords.includes(needle)) return
-      }
-    }
+    if (containsSevereSlur(raw) || containsSevereSlur(normName)) return
+    const blocked = (s: string) =>
+      this.filters.words.enabled &&
+      hasBlockedWord(s, this.filters.words.list, this.filters.words.lookalikes)
+    if (blocked(raw) || blocked(normName)) return
 
-    let cleaned = [
-      ...raw
+    const body = cleanChatTtsText(
+      raw
         .split(/\s+/)
-        .filter((w) => !w.startsWith('@') && !isEmailToken(w))
-        .map((w) => ((w.match(/\d/g)?.length ?? 0) >= 5 ? 'number' : w))
+        .filter((w) => !w.startsWith('@'))
         .join(' '),
-    ]
-      .slice(0, chat.max_chars)
-      .join('')
-      .trim()
-    if (!cleaned) return
-    if (this.tts.read_names) cleaned = `${actor.display_name} says: ${cleaned}`
+      chat.max_chars,
+    )
+    if (!body) return
+    const cleanName = nameForSpeech ? cleanChatTtsText(normName, 40) : ''
+    const cleaned = cleanName ? `${cleanName} says: ${body}` : body
+
+    if (
+      chat.skip_links &&
+      (hasAnyLink(body) || (cleanName && hasAnyLink(cleanName)) || hasAnyLink(cleaned))
+    ) {
+      return
+    }
+    if (
+      containsSevereSlur(body) ||
+      (cleanName && containsSevereSlur(cleanName)) ||
+      containsSevereSlur(cleaned)
+    ) {
+      return
+    }
+    if (blocked(body) || (cleanName && blocked(cleanName)) || blocked(cleaned)) return
 
     const userKey = `${e.platform}:${actor.id ?? actor.login ?? actor.display_name}`
     const cdMs = chat.cooldown_s * 1000

@@ -15,15 +15,245 @@ const SHORT_DOMAINS = [
   't.ly',
 ]
 
+const GENERIC_TLDS = new Set([
+  'com',
+  'net',
+  'org',
+  'dev',
+  'app',
+  'xyz',
+  'info',
+  'biz',
+  'live',
+  'link',
+  'site',
+  'online',
+  'store',
+  'shop',
+  'club',
+  'top',
+  'vip',
+  'fun',
+  'pro',
+  'art',
+  'blog',
+  'chat',
+  'click',
+  'cloud',
+  'games',
+  'icu',
+  'lol',
+  'monster',
+  'rest',
+  'sbs',
+  'space',
+  'tech',
+  'today',
+  'website',
+  'win',
+  'zip',
+  'gay',
+  'ink',
+])
+
+const COUNTRY_TLDS = new Set([
+  'ac',
+  'ae',
+  'ag',
+  'ai',
+  'al',
+  'am',
+  'ar',
+  'at',
+  'au',
+  'az',
+  'ba',
+  'bd',
+  'be',
+  'bg',
+  'bh',
+  'br',
+  'by',
+  'bz',
+  'ca',
+  'cc',
+  'cf',
+  'ch',
+  'cl',
+  'cn',
+  'co',
+  'cx',
+  'cz',
+  'de',
+  'dk',
+  'ee',
+  'eg',
+  'es',
+  'fi',
+  'fm',
+  'fo',
+  'fr',
+  'ga',
+  'ge',
+  'gg',
+  'gl',
+  'gq',
+  'gr',
+  'gy',
+  'hk',
+  'hr',
+  'hu',
+  'id',
+  'ie',
+  'il',
+  'im',
+  'in',
+  'io',
+  'ir',
+  'is',
+  'it',
+  'jo',
+  'jp',
+  'ke',
+  'kr',
+  'kw',
+  'kz',
+  'la',
+  'lb',
+  'lc',
+  'li',
+  'lk',
+  'lt',
+  'lu',
+  'lv',
+  'ly',
+  'ma',
+  'md',
+  'me',
+  'mk',
+  'ml',
+  'mn',
+  'ms',
+  'mu',
+  'mx',
+  'my',
+  'ng',
+  'nl',
+  'no',
+  'np',
+  'nu',
+  'nz',
+  'om',
+  'pe',
+  'ph',
+  'pk',
+  'pl',
+  'pt',
+  'pw',
+  'qa',
+  'ro',
+  'rs',
+  'ru',
+  'sa',
+  'sc',
+  'se',
+  'sg',
+  'sh',
+  'si',
+  'sk',
+  'so',
+  'su',
+  'th',
+  'tk',
+  'to',
+  'tr',
+  'tv',
+  'tw',
+  'ua',
+  'uk',
+  'us',
+  'uz',
+  'vg',
+  'vn',
+  'ws',
+  'za',
+])
+
+const UNAMBIGUOUS_SPACED_TLDS = new Set([
+  'com',
+  'net',
+  'org',
+  'xyz',
+  'dev',
+  'app',
+  'biz',
+  'icu',
+  'sbs',
+  'monster',
+  'website',
+  'io',
+  'gg',
+  'ly',
+  'co',
+  'uk',
+  'ru',
+  'de',
+  'fr',
+  'jp',
+  'cn',
+  'br',
+  'kr',
+  'pl',
+  'nl',
+  'se',
+  'cz',
+  'ua',
+  'tr',
+  'hk',
+  'sg',
+  'tw',
+  'vg',
+  'tk',
+  'pw',
+  'cc',
+  'ws',
+])
+
+function isTld(t: string): boolean {
+  return GENERIC_TLDS.has(t) || COUNTRY_TLDS.has(t)
+}
+
+function stripPort(host: string): string {
+  const idx = host.lastIndexOf(':')
+  if (idx > 0 && /^\d+$/.test(host.slice(idx + 1))) return host.slice(0, idx)
+  return host
+}
+
 function stripTokenPunct(token: string): string {
   return token.replace(/^[\s.,!?;:()[\]{}<>"'`]+|[\s.,!?;:()[\]{}<>"'`]+$/g, '')
 }
 
+function isInvisibleOrControl(ch: string): boolean {
+  const cp = ch.codePointAt(0) ?? 0
+  if (isInvisible(ch)) return true
+  if (cp === 0x09 || cp === 0x0a || cp === 0x0d || cp === 0x20) return false
+  return cp < 0x20 || (cp >= 0x7f && cp <= 0x9f)
+}
+
+export function normalizeChatTtsText(text: string): string {
+  let out = ''
+  for (const ch of text.normalize('NFKC')) {
+    if (!isInvisibleOrControl(ch)) out += ch
+  }
+  return out
+}
+
 export function isEmailToken(raw: string): boolean {
-  const token = stripTokenPunct(raw)
+  const token = stripTokenPunct(normalizeChatTtsText(raw))
   if (
     !token ||
     token.includes('/') ||
+    token.includes('\\') ||
     token.includes(':') ||
     token.includes('?') ||
     token.includes('#')
@@ -37,23 +267,76 @@ export function isEmailToken(raw: string): boolean {
   const domain = token.slice(at + 1)
   if (!local || !domain || !domain.includes('.')) return false
   if (domain.startsWith('.') || domain.endsWith('.') || domain.includes('..')) return false
-  const tld = domain.slice(domain.lastIndexOf('.') + 1)
-  return /^[a-zA-Z]{2,}$/.test(tld)
+  const tld = domain.slice(domain.lastIndexOf('.') + 1).toLowerCase()
+  return /^[a-z]{2,}$/.test(tld)
+}
+
+function collapseSpacedDots(s: string): string {
+  const tokens = s.split(/\s+/).filter(Boolean)
+  if (tokens.length < 2) return s
+  const out: string[] = []
+  for (const tok of tokens) {
+    const prev = out[out.length - 1]
+    if (prev) {
+      if (tok.startsWith('.') && !tok.startsWith('..') && /[\p{L}\p{N}]$/u.test(prev)) {
+        const hostPart = tok.slice(1).split(/[/?#@]/)[0] ?? ''
+        const tld = stripPort(hostPart).replace(/[^a-z0-9]+$/i, '')
+        if (isTld(tld)) {
+          out[out.length - 1] = `${prev}${tok}`
+          continue
+        }
+      }
+      if (prev.endsWith('.') && !prev.endsWith('..') && /[\p{L}\p{N}]\.$/u.test(prev)) {
+        const trimmed = tok.replace(/[^a-z0-9/]+$/gi, '')
+        const hasPath = /[/?#@]/.test(trimmed)
+        const hostPart = trimmed.split(/[/?#@]/)[0] ?? ''
+        const tld = stripPort(hostPart).replace(/[^a-z0-9]+$/i, '')
+        if (hasPath ? isTld(tld) : UNAMBIGUOUS_SPACED_TLDS.has(tld)) {
+          out[out.length - 1] = `${prev}${tok}`
+          continue
+        }
+      }
+    }
+    out.push(tok)
+  }
+  return out.join(' ')
 }
 
 export function hasAnyLink(text: string): boolean {
-  if (/(?:https?:\/\/|www\.)/i.test(text)) return true
-  for (const rawTok of text.split(/\s+/)) {
-    const tok = stripTokenPunct(rawTok)
-    if (!tok) continue
-    if (isEmailToken(tok)) continue
-    // Catch domain + @handle/path (e.g. evil.com/@promo, youtube.com/@Handle) and common TLDs.
-    if (
-      /^[a-z0-9.-]+\.[a-z]{2,}(?:\/|[?#@]|$)/i.test(tok) ||
-      SHORT_DOMAINS.some((d) => tok.toLowerCase() === d || tok.toLowerCase().startsWith(`${d}/`))
-    ) {
-      return true
-    }
+  const norm = normalizeChatTtsText(text).toLowerCase()
+  const pre = norm
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ')
+    .replaceAll('[ . ]', '.')
+    .replaceAll('( . )', '.')
+    .replaceAll('{ . }', '.')
+    .replaceAll('[.]', '.')
+    .replaceAll('(.)', '.')
+    .replaceAll('{.}', '.')
+    .replaceAll(' dot ', '.')
+    .replaceAll(' . ', '.')
+    .replaceAll(' : //', '://')
+    .replaceAll(': //', '://')
+    .replaceAll(' ://', '://')
+    .replaceAll(':// ', '://')
+    .replaceAll('www . ', 'www.')
+    .replaceAll('www. ', 'www.')
+  if (/(?:https?|hxxps?):\/\/|www\./i.test(pre) || pre.includes('://')) return true
+  const spaced = collapseSpacedDots(pre)
+  for (const rawTok of spaced.split(/\s+/)) {
+    if (!rawTok || isEmailToken(rawTok)) continue
+    const w = rawTok.replace(/^[^\p{L}\p{N}/.:]+|[^\p{L}\p{N}/.:]+$/gu, '')
+    const withoutScheme = w.replace(/^(?:https?|hxxps?):\/\//i, '')
+    const rawHost = withoutScheme.split(/[/?#]/)[0] ?? ''
+    const host = stripPort(rawHost)
+      .replace(/\.+$/, '')
+      .replace(/^www\./i, '')
+    if (!host || host.includes('..')) continue
+    const parts = host.split('.')
+    const tld = parts[parts.length - 1] ?? ''
+    if (parts.length >= 2 && parts.every(Boolean) && isTld(tld)) return true
+    if (SHORT_DOMAINS.some((d) => host === d || rawTok.startsWith(`${d}/`))) return true
   }
   return false
 }
@@ -133,11 +416,17 @@ function isInvisible(c: string): boolean {
   const cp = c.codePointAt(0) ?? 0
   return (
     cp === 0x00ad ||
+    cp === 0x034f ||
+    cp === 0x061c ||
+    cp === 0x180e ||
+    (cp >= 0x0300 && cp <= 0x036f) ||
     (cp >= 0x200b && cp <= 0x200f) ||
     (cp >= 0x202a && cp <= 0x202e) ||
-    (cp >= 0x2060 && cp <= 0x2064) ||
-    (cp >= 0x2066 && cp <= 0x2069) ||
-    cp === 0xfeff
+    (cp >= 0x2060 && cp <= 0x206f) ||
+    (cp >= 0xfe00 && cp <= 0xfe0f) ||
+    cp === 0xfeff ||
+    (cp >= 0xe0000 && cp <= 0xe007f) ||
+    (cp >= 0xe0100 && cp <= 0xe01ef)
   )
 }
 
@@ -334,27 +623,85 @@ function matchesSetWithOptionalPlural(token: string, hashes: Set<string>): boole
   )
 }
 
-function containsSevereSlurIn(
-  folded: string,
+function foldChunk(chunk: string, keepDouble: (c: string) => boolean): string {
+  let mapped = ''
+  for (const ch of chunk.toLowerCase()) {
+    const l = lookalike(ch)
+    if (/[\p{L}\p{N}]/u.test(l)) mapped += l
+  }
+  return squeezeWith(mapped, keepDouble)
+}
+
+function matchesSlurToken(
+  token: string,
   wholeWord: Set<string>,
   substring: Set<string>,
   minLen: number,
   maxLen: number,
 ): boolean {
-  const tokens = folded.split(' ').filter(Boolean)
-  for (const tok of tokens) {
-    if (wholeWord.has(sha256Prefix16Hex(tok))) return true
-    if (containsSubtokenHash(tok, substring, minLen, maxLen)) return true
+  if (wholeWord.has(sha256Prefix16Hex(token))) return true
+  if (
+    token.endsWith('s') &&
+    [...token].length >= 5 &&
+    wholeWord.has(sha256Prefix16Hex(token.slice(0, -1)))
+  ) {
+    return true
   }
+  return containsSubtokenHash(token, substring, minLen, maxLen)
+}
+
+function containsSevereSlurWithPolicy(
+  norm: string,
+  keepDouble: (c: string) => boolean,
+  wholeWord: Set<string>,
+  substring: Set<string>,
+  minLen: number,
+  maxLen: number,
+): boolean {
+  const chunks = norm
+    .split(/\s+/)
+    .map((raw) => foldChunk(raw, keepDouble))
+    .filter(Boolean)
+
+  for (const chunk of chunks) {
+    if (matchesSlurToken(chunk, wholeWord, substring, minLen, maxLen)) return true
+  }
+
+  const tokens: string[] = []
+  let run = ''
+  for (const c of chunks) {
+    if ([...c].length === 1) {
+      run += c
+    } else {
+      if (run) {
+        tokens.push(squeezeWith(run, keepDouble))
+        run = ''
+      }
+      tokens.push(c)
+    }
+  }
+  if (run) tokens.push(squeezeWith(run, keepDouble))
+
+  for (const tok of tokens) {
+    if (matchesSlurToken(tok, wholeWord, substring, minLen, maxLen)) return true
+  }
+
   for (let span = 2; span <= 4; span++) {
     for (let i = 0; i + span <= tokens.length; i++) {
-      const joined = tokens.slice(i, i + span).join('')
-      if (
-        matchesSetWithOptionalPlural(joined, wholeWord) ||
-        matchesSetWithOptionalPlural(joined, substring) ||
-        containsSubtokenHash(joined, substring, minLen, maxLen)
-      ) {
-        return true
+      const joined = squeezeWith(tokens.slice(i, i + span).join(''), keepDouble)
+      const len = [...joined].length
+      if (len >= 4 && len <= maxLen + 2) {
+        if (wholeWord.has(sha256Prefix16Hex(joined))) return true
+        if (
+          joined.endsWith('s') &&
+          len >= 5 &&
+          wholeWord.has(sha256Prefix16Hex(joined.slice(0, -1)))
+        ) {
+          return true
+        }
+      }
+      if (len >= minLen && len <= maxLen + 1) {
+        if (matchesSetWithOptionalPlural(joined, substring)) return true
       }
     }
   }
@@ -362,8 +709,104 @@ function containsSevereSlurIn(
 }
 
 export function containsSevereSlur(text: string): boolean {
-  const folded1 = foldWith(text, () => false)
-  if (containsSevereSlurIn(folded1, WHOLE_WORD_FOLDED_1, SUBSTRING_FOLDED_1, 5, 12)) return true
-  const foldedGo = foldWith(text, (c) => c === 'g' || c === 'o')
-  return containsSevereSlurIn(foldedGo, WHOLE_WORD_FOLDED_GO, SUBSTRING_FOLDED_GO, 5, 8)
+  const norm = normalizeChatTtsText(text)
+  if (
+    containsSevereSlurWithPolicy(norm, () => false, WHOLE_WORD_FOLDED_1, SUBSTRING_FOLDED_1, 5, 12)
+  ) {
+    return true
+  }
+  return containsSevereSlurWithPolicy(
+    norm,
+    (c) => c === 'g' || c === 'o',
+    WHOLE_WORD_FOLDED_GO,
+    SUBSTRING_FOLDED_GO,
+    5,
+    8,
+  )
+}
+
+function containsTerm(folded: string, needle: string): boolean {
+  if (needle.includes(' ') || [...needle].length >= 5) {
+    const joined = folded.replaceAll(' ', '')
+    return folded.includes(needle) || joined.includes(needle.replaceAll(' ', ''))
+  }
+  return folded.split(' ').some((w) => w === needle)
+}
+
+function containsPlain(text: string, needle: string): boolean {
+  let idx = text.indexOf(needle)
+  while (idx !== -1) {
+    const before = idx > 0 ? text[idx - 1]! : ''
+    const after = idx + needle.length < text.length ? text[idx + needle.length]! : ''
+    const beforeAlnum = before ? /[\p{L}\p{N}]/u.test(before) : false
+    const afterAlnum = after ? /[\p{L}\p{N}]/u.test(after) : false
+    if (!beforeAlnum && !afterAlnum) return true
+    idx = text.indexOf(needle, idx + 1)
+  }
+  return false
+}
+
+function collapseIntraWordSeparators(text: string): string {
+  return text
+    .split(/\s+/)
+    .map((w) => [...w].filter((c) => /[\p{L}\p{N}]/u.test(c)).join(''))
+    .filter(Boolean)
+    .join(' ')
+}
+
+export function hasBlockedWord(
+  text: string,
+  list: readonly string[],
+  lookalikes: boolean,
+): boolean {
+  if (list.length === 0) return false
+  const norm = normalizeChatTtsText(text)
+  if (lookalikes) {
+    const folded = foldWith(norm, () => false)
+    const collapsed = foldWith(collapseIntraWordSeparators(norm), () => false)
+    for (const rawTerm of list) {
+      const needle = foldWith(rawTerm, () => false)
+      if (!needle) continue
+      if (containsTerm(folded, needle) || containsTerm(collapsed, needle)) return true
+    }
+    return false
+  }
+  const plain = norm.toLowerCase()
+  for (const rawTerm of list) {
+    const needle = normalizeChatTtsText(rawTerm).trim().toLowerCase()
+    if (needle && containsPlain(plain, needle)) return true
+  }
+  return false
+}
+
+function squeezeRuns(word: string, max: number): string {
+  let out = ''
+  let last = ''
+  let run = 0
+  for (const ch of word) {
+    run = ch === last ? run + 1 : 1
+    last = ch
+    if (run <= max) out += ch
+  }
+  return out
+}
+
+export function cleanChatTtsText(text: string, maxChars: number): string {
+  const stripped = normalizeChatTtsText(text).replace(/[[\]<>]/g, ' ')
+  const words = stripped
+    .split(/\s+/)
+    .filter((w) => w && !hasAnyLink(w) && !w.includes('@') && !isEmailToken(w))
+    .map((w) => ((w.match(/\d/g)?.length ?? 0) >= 5 ? 'number' : squeezeRuns(w, 3)))
+    .filter((w) => /[\p{L}\p{N}]/u.test(w))
+  let out = ''
+  let outLen = 0
+  for (const w of words) {
+    const wLen = [...w].length
+    const sep = outLen > 0 ? 1 : 0
+    if (outLen + wLen + sep > maxChars) break
+    if (outLen > 0) out += ' '
+    out += w
+    outLen += wLen + sep
+  }
+  return out
 }
