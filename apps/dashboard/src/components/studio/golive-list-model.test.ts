@@ -785,10 +785,52 @@ describe('golive-list-model (List 3b API state mapping)', () => {
       ],
     })
     const vm = buildGoLiveDockVM(view, { usesObs: false, qualityOptionsById: {} })
-    // A is the offender; B is already in its encode, so only C is a useful match.
-    expect(vm.footer).toMatchObject({
-      mode: 'strip',
-      action: { kind: 'match_to_share', destId: 'a', quality: { mode: 'custom', width: 1920 } },
+    // A shares its encode with B: moving A to C would leave both encodes running, so no match is
+    // offered, only Manage.
+    expect(vm.footer).toMatchObject({ mode: 'strip', action: { kind: 'manage' } })
+
+    // With A alone in its encode, matching another encode does retire one.
+    const alone = makeView({
+      ...view,
+      destinations: [
+        {
+          ...view.destinations[0]!,
+          resolved_quality: {
+            ...view.destinations[0]!.resolved_quality!,
+            group_id: 'g-a',
+            shared_with: [],
+          },
+        },
+        {
+          ...view.destinations[1]!,
+          resolved_quality: {
+            ...view.destinations[1]!.resolved_quality!,
+            group_id: 'g-b',
+            shared_with: [],
+          },
+        },
+        view.destinations[2]!,
+      ],
     })
+    expect(
+      buildGoLiveDockVM(alone, { usesObs: false, qualityOptionsById: {} }).footer,
+    ).toMatchObject({
+      action: { kind: 'match_to_share', destId: 'a', quality: { mode: 'custom', width: 1280 } },
+    })
+  })
+
+  it('counts an unticked backup that took over as live', () => {
+    const view = makeView({
+      live: true,
+      destinations: [
+        makeDest({
+          enabled: false,
+          backup_for: 'youtube',
+          health: { state: 'live', kbps: 6160, dropped: 0, since_ms: 1000 },
+        }),
+      ],
+    })
+    const vm = buildGoLiveDockVM(view, { usesObs: false, qualityOptionsById: {} })
+    expect(vm.mainRows[0]).toMatchObject({ tagKind: 'live' })
   })
 })

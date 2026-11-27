@@ -903,6 +903,90 @@ describe('One Modal B PlatformsQualityModal component', () => {
       expect(dialog.textContent).toContain('YouTube quality')
     })
 
+    it('keeps an edit made after reopening when an older save finishes', async () => {
+      let finish: (v: unknown) => void = () => {}
+      const request = vi.fn(async (method: string, path: string) => {
+        if (method === 'PUT' && path.includes('/destinations/twitch/quality')) {
+          return new Promise((resolve) => {
+            finish = resolve
+          })
+        }
+        return {}
+      })
+      const dialog = await show({ initialDestId: 'twitch' }, request as never)
+      await act(async () =>
+        dialog.querySelector<HTMLButtonElement>('[data-soft-fix="1080p"]')!.click(),
+      )
+      await act(async () => {
+        apply(dialog).click()
+      })
+      await rerender({ open: false, initialDestId: 'twitch' })
+      await rerender({ open: true, initialDestId: 'twitch' })
+      await setOwn(dialog)
+      await typeMbps(dialog, '3')
+      await act(async () => {
+        finish(makeView())
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(dialog.querySelector<HTMLInputElement>('input[type="number"]')!.value).toBe('3')
+    })
+
+    it('does not close or reset a newer add form when an older add finishes', async () => {
+      let finish: (v: unknown) => void = () => {}
+      const request = vi.fn(async (method: string, path: string) => {
+        if (method === 'POST' && path.endsWith('/golive/destinations')) {
+          return new Promise((resolve) => {
+            finish = resolve
+          })
+        }
+        return {}
+      })
+      const dialog = await show({}, request as never)
+      const fill = async (name: string, value: string) => {
+        const input = dialog.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+          `[name="${name}"]`,
+        )!
+        await act(async () => {
+          const proto =
+            input instanceof window.HTMLTextAreaElement
+              ? window.HTMLTextAreaElement.prototype
+              : window.HTMLInputElement.prototype
+          const setter = Object.getOwnPropertyDescriptor(proto, 'value')!.set!
+          setter.call(input, value)
+          input.dispatchEvent(new Event('input', { bubbles: true }))
+        })
+      }
+      const open = async () =>
+        act(async () =>
+          dialog.querySelector<HTMLButtonElement>('[aria-label="Add a destination"]')!.click(),
+        )
+      await open()
+      await fill('name', 'Relay')
+      await fill('url', 'rtmp://example.com/live')
+      await fill('stream-key', 'abc')
+      await act(async () => {
+        Array.from(dialog.querySelectorAll<HTMLButtonElement>('button'))
+          .find((b) => b.textContent?.trim() === 'Add server')!
+          .click()
+      })
+      // Cancel while it is pending, then open Add again.
+      await act(async () =>
+        Array.from(dialog.querySelectorAll<HTMLButtonElement>('button'))
+          .find((b) => b.textContent?.trim() === 'Cancel')!
+          .click(),
+      )
+      await open()
+      await fill('name', 'Other')
+      await act(async () => {
+        finish({ id: 'custom_1', name: 'Relay' })
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(dialog.textContent).toContain('Paste a server address')
+      expect(dialog.querySelector<HTMLInputElement>('[name="name"]')!.value).toBe('Other')
+    })
+
     it('shows the question about the list above both panes, so a phone sees it on the list step', async () => {
       vi.stubGlobal(
         'matchMedia',
@@ -1054,5 +1138,42 @@ describe('One Modal B PlatformsQualityModal component', () => {
     await new Promise((r) => setTimeout(r, 60))
     await act(async () => host!.querySelector('button')!.click())
     expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks again when the inputs change, even right after a request started', async () => {
+    installDialogPolyfill()
+    const request = vi.fn(async () => OPTS_1440)
+    useLive.setState({ conn: { client: { request } } as never })
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    function Probe({ view }: { view: GoLiveView }) {
+      useQualityOptions(view, true, false)
+      return null
+    }
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    await act(async () => root!.render(<Probe view={makeView()} />))
+    const first = request.mock.calls.length
+    // The source's picture changes (same bitrate, same destinations): a new answer is needed.
+    const next = makeView({
+      encode_groups: [
+        {
+          id: 'main',
+          canvas: 'main',
+          width: 1280,
+          height: 720,
+          fps: 60,
+          kbps: 16000,
+          codec: 'h264',
+          members: ['youtube'],
+          live_fps: null,
+          live_kbps: null,
+          dropped_frames: null,
+          encode_ms: null,
+        },
+      ],
+    })
+    await act(async () => root!.render(<Probe view={next} />))
+    expect(request.mock.calls.length).toBe(first + 1)
   })
 })

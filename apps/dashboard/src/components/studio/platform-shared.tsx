@@ -252,7 +252,11 @@ function qualityOptionsSig(view: GoLiveView | null): string {
         }:${d.resolved_quality?.kbps ?? 0}:${d.capped?.summary ?? ''}`,
     )
     .join('|')
-  return `${budgetSig}||${destSig}`
+  // The source's own picture: a change of size or rate changes what Match main sends.
+  const groupSig = (view.encode_groups ?? [])
+    .map((g) => `${g.id}:${g.width}x${g.height}@${g.fps}:${g.kbps}:${g.codec}`)
+    .join('|')
+  return `${budgetSig}||${destSig}||${groupSig}`
 }
 
 export function useQualityOptions(
@@ -270,12 +274,16 @@ export function useQualityOptions(
   const sig = qualityOptionsSig(view)
 
   const startedAtRef = useRef(0)
+  const startedSigRef = useRef('')
   const reload = useCallback(async () => {
     if (!enabled || usesObs || !client || !view) return
     // Two callers asking in the same moment (a screen turning the feed on and a dialog opening)
     // share one request.
-    if (Date.now() - startedAtRef.current < 50) return
+    // (Only for the same inputs: a changed signature always asks again.)
+    const sigNow = qualityOptionsSig(view)
+    if (Date.now() - startedAtRef.current < 50 && startedSigRef.current === sigNow) return
     startedAtRef.current = Date.now()
+    startedSigRef.current = sigNow
     const id = ++reqIdRef.current
     setLoading(true)
     setError(null)
@@ -331,6 +339,7 @@ export function useAddDestinationState({
   const [err, setErr] = useState<{ field: string; message: string } | null>(null)
   const [reach, setReachNow] = useState<Reach | null>(null)
   const tries = useRef(0)
+  const formEpoch = useRef(0)
   const setReach = (r: Reach | null) => {
     tries.current += 1
     setReachNow(r)
@@ -385,6 +394,7 @@ export function useAddDestinationState({
     !(!!direct && canvas === 'vertical')
 
   const reset = () => {
+    formEpoch.current += 1
     setName('')
     setUrl('')
     setKey('')
@@ -397,6 +407,7 @@ export function useAddDestinationState({
   const submit = () => {
     if (!canAdd) return
     setErr(null)
+    const mineForm = formEpoch.current
     void run(
       'add',
       () =>
@@ -414,6 +425,12 @@ export function useAddDestinationState({
     ).then((d) => {
       if (!d) return
       const createdId = (d as { id?: string }).id
+      // The list refreshes either way; the form is only reset and closed if it is still the one
+      // this request was made from (not cancelled, or opened again, since).
+      if (formEpoch.current !== mineForm) {
+        onAdded(createdId)
+        return
+      }
       reset()
       onAdded(createdId)
       onClose()

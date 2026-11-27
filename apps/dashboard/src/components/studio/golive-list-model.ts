@@ -128,7 +128,9 @@ function formatSummaryMbps(kbps: number): string {
 }
 
 export function summarizeEncodeGroups(view: GoLiveView): EncodeGroupSummary | null {
-  const enabled = view.destinations.filter((d) => d.enabled && !d.standby_for)
+  const enabled = view.destinations.filter(
+    (d) => (d.enabled || (d.backup_for && d.health?.state === 'live')) && !d.standby_for,
+  )
   if (enabled.length === 0) return null
 
   const totalKbps = enabled.reduce((acc, d) => acc + destUploadKbps(d, view), 0)
@@ -182,6 +184,15 @@ function findBudgetMatchPeer(
   )
   const limits = optsById[dest.id]?.custom_limits
   const ownGroup = dest.resolved_quality?.group_id ?? null
+  // Moving only helps if it leaves its own encode with nobody in it.
+  if (
+    ownGroup &&
+    allDestinations.filter(
+      (p) => p.enabled && p.canvas === dest.canvas && p.resolved_quality?.group_id === ownGroup,
+    ).length > 1
+  ) {
+    return null
+  }
   for (const peer of sameCanvasPeers) {
     const pq = peer.resolved_quality!
     // Joining an encode this destination is already part of changes nothing for the PC.
@@ -213,7 +224,8 @@ function findBudgetMatchPeer(
 
 /** A destination is LIVE only while its own push reports it is delivering. */
 function isSending(d: DestinationView, canvasLive: boolean): boolean {
-  return Boolean(canvasLive && d.enabled && d.health?.state === 'live')
+  // An unticked backup that took over for a failed platform is sending too.
+  return Boolean(canvasLive && (d.enabled || d.backup_for) && d.health?.state === 'live')
 }
 
 function findBudgetOffenderIds(view: GoLiveView): Set<string> {

@@ -543,14 +543,15 @@ export function PlatformsQualityModal({
         onOptimisticSwitch?.(destId, null)
       }
       // The engine accepted it: publish that whichever session is showing now.
-      delete draftsRef.current[destId]
       setAccepted((prev) => ({ ...prev, [destId]: payload }))
       useLive.getState().setGoLiveView(nextView)
       onUpdated?.(nextView)
       onReloadOptions()
       onSaved()
       const mine = session === sessionRef.current
-      if (selectedIdRef.current === destId) userEditedRef.current = false
+      // Clean up the draft only for the session that made the save.
+      if (mine) delete draftsRef.current[destId]
+      if (mine && selectedIdRef.current === destId) userEditedRef.current = false
       if (mine && initialDestId) {
         onClose()
       } else if (mine && selectedIdRef.current === destId) {
