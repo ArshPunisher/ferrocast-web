@@ -1,5 +1,18 @@
 # Status
 
+## 28 Nov 2026 (3.8.0: platforms dialog fixes, Video device, meters)
+
+- **Platforms and quality dialog:** Match main shows what the engine will send (its own result,
+  its notes, never an invented session count); edits stay per platform and a saved quality shows
+  at once; locked for OBS and a paired phone; Escape goes back one step; the list question is
+  seen on a phone; the bitrate box can be cleared and typed.
+- **Demo planner:** the shared cap leaves explicit custom qualities alone, as the engine does.
+- **Studio:** one "Video device" entry for cameras and capture cards; advanced audio rows grow
+  with their push rows; the ready check closes from its collapsed pill and returns only for a new
+  problem; a sound with no live signal reads Not connected instead of a frozen bar.
+- Open: the engine keeps answering with the last level for an unplugged sound (see the notes
+  report); the web side no longer draws it.
+
 ## 18 Nov 2026 (3.3.0: smoother streams and a source drawer that works, branch own-engine-only)
 
 Released as 3.3.0 with the engine (its CHANGELOG has the streamer's list).
