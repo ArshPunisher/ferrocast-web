@@ -562,6 +562,7 @@ describe('AudioDock row and strip Remove', () => {
     await flush()
 
     const sliderB = host.querySelector('[role="slider"][aria-label="Mic volume"]')
-    expect(sliderB?.getAttribute('aria-disabled')).not.toBe('true')
+    expect(sliderB).not.toBeNull()
+    expect(sliderB!.getAttribute('aria-disabled')).not.toBe('true')
   })
 })
