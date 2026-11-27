@@ -1,5 +1,5 @@
 // The "Go live to" panel: List 3b rows (fixed two lines, state tag, matching icon pip,
-// status popover, compact footer summary/strip) + Modal A quality picker.
+// status popover, compact footer summary/strip) + unified One Modal B quality editor.
 
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -23,7 +23,6 @@ import {
 } from '@phosphor-icons/react'
 import {
   Button,
-  Dialog,
   IconButton,
   InfoLine,
   InfoTip,
@@ -37,8 +36,8 @@ import { useAction, type Resource } from '../../../lib/hooks'
 import { useUsesObs } from '../../../lib/picture'
 import { useLive } from '../../../lib/store'
 import { LoadError } from '../../Panel'
-import { DestinationQualityModal, useQualityOptions } from '../destination-quality-picker'
-import { Logo, Platforms, useGoLive } from '../golive'
+import { Logo, useGoLive } from '../golive'
+import { PlatformsQualityModal, useQualityOptions } from '../platforms-quality-modal'
 import {
   buildGoLiveDockVM,
   type DestinationRowVM,
@@ -92,14 +91,14 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
   const { run, busy } = useAction()
   const readyState = useReadyCheckState()
   const hasFloatingReady = Boolean(readyState?.active && !readyState.dismissed)
-  const [managing, setManaging] = useState<'main' | 'vertical' | null>(null)
   const [optimizing, setOptimizing] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const lastFailedOrderRef = useRef<{ id: string; enabled: boolean }[] | null>(null)
 
   const [switchingTargets, setSwitchingTargets] = useState<Record<string, string>>({})
-  const [modalTarget, setModalTarget] = useState<{
-    destId: string
+  const [platformModal, setPlatformModal] = useState<{
+    mode: 'gear' | 'row' | 'add_vertical'
+    destId: string | null
     triggerEl: HTMLElement | null
   } | null>(null)
   const [statusPop, setStatusPop] = useState<{
@@ -277,12 +276,17 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
       case 'manage':
         setStatusPop(null)
         setNeedsLookOpen(false)
-        setManaging(d.canvas === 'vertical' ? 'vertical' : 'main')
+        setPlatformModal({
+          mode: 'gear',
+          destId: d.id,
+          triggerEl: sourceEl ?? statusAnchorRef.current ?? needsLookAnchorRef.current,
+        })
         return
       case 'open_quality':
         setStatusPop(null)
         setNeedsLookOpen(false)
-        setModalTarget({
+        setPlatformModal({
+          mode: 'row',
           destId: d.id,
           triggerEl: sourceEl ?? statusAnchorRef.current ?? needsLookAnchorRef.current,
         })
@@ -334,7 +338,7 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         })
         return
       case 'manage':
-        setManaging('main')
+        setPlatformModal({ mode: 'gear', destId: null, triggerEl: null })
         return
     }
   }
@@ -391,13 +395,13 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               data-quality-trigger={d.id}
               disabled={r.line2.disabled}
               aria-haspopup="dialog"
-              aria-expanded={modalTarget?.destId === d.id}
+              aria-expanded={platformModal?.destId === d.id}
               aria-label={`Change quality for ${d.name}: ${r.line2.text}`}
               onClick={(e) => {
                 if (r.line2.kind !== 'quality' || r.line2.disabled) return
                 setStatusPop(null)
                 setNeedsLookOpen(false)
-                setModalTarget({ destId: d.id, triggerEl: e.currentTarget })
+                setPlatformModal({ mode: 'row', destId: d.id, triggerEl: e.currentTarget })
               }}
               className="inline-flex h-[20px] max-w-full items-center gap-1 truncate text-left text-[12px] font-medium text-text-2 hover:text-text disabled:cursor-default disabled:opacity-70 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fc-accent)]"
             >
@@ -485,10 +489,6 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
     statusPop && vm
       ? ([...vm.mainRows, ...vm.verticalRows].find((r) => r.dest.id === statusPop.destId) ?? null)
       : null
-  const activeModalDest =
-    modalTarget && view
-      ? (view.destinations.find((d) => d.id === modalTarget.destId) ?? null)
-      : null
   const footerStrip = vm?.footer.mode === 'strip' ? vm.footer : null
   const footerSummary = vm?.footer.mode === 'summary' ? vm.footer : null
 
@@ -522,7 +522,9 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               size="sm"
               variant="ghost"
               label="Manage platforms"
-              onClick={() => setManaging('main')}
+              onClick={(e) =>
+                setPlatformModal({ mode: 'gear', destId: null, triggerEl: e.currentTarget })
+              }
             >
               <GearSix size={15} />
             </IconButton>
@@ -542,7 +544,13 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
             {mine.length === 0 ? (
               <div className="flex flex-col items-start gap-3 p-3">
                 <p className="m-0 text-[14.5px] text-text-2">No platforms yet.</p>
-                <Button size="sm" variant="primary" onClick={() => setManaging('main')}>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={(e) =>
+                    setPlatformModal({ mode: 'gear', destId: null, triggerEl: e.currentTarget })
+                  }
+                >
                   Add a platform
                 </Button>
               </div>
@@ -563,7 +571,13 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               {tall.length > 0 && <ul className="flex flex-col">{vm.verticalRows.map(row)}</ul>}
               <button
                 type="button"
-                onClick={() => setManaging('vertical')}
+                onClick={(e) =>
+                  setPlatformModal({
+                    mode: 'add_vertical',
+                    destId: null,
+                    triggerEl: e.currentTarget,
+                  })
+                }
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] font-semibold text-text-2 hover:text-text"
               >
                 <Plus size={14} weight="bold" aria-hidden />
@@ -783,34 +797,13 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
         )}
       </PopoverSurface>
 
-      {/* Shared Modal A for Row Quality or Popover "Open quality" */}
-      {view && activeModalDest && (
-        <DestinationQualityModal
-          open
-          onClose={() => setModalTarget(null)}
-          triggerEl={modalTarget?.triggerEl ?? null}
-          dest={activeModalDest}
-          allDestinations={view.destinations}
-          usesObs={usesObs}
-          isRemote={isRemote}
-          live={activeModalDest.canvas === 'vertical' ? view.vertical_live : view.live}
-          ffmpegDownloading={
-            activeModalDest.canvas === 'vertical' &&
-            view.cut.source === 'cut' &&
-            view.cut.ffmpeg.state === 'downloading'
-          }
-          ffmpegPercent={
-            activeModalDest.canvas === 'vertical' &&
-            view.cut.source === 'cut' &&
-            view.cut.ffmpeg.state === 'downloading'
-              ? view.cut.ffmpeg.percent
-              : undefined
-          }
-          ignoreServiceLimits={Boolean(view.advanced?.ignore_service_limits)}
-          optionsResponse={qualityOpts.data}
-          loading={qualityOpts.loading}
-          error={qualityOpts.error}
-          onReloadOptions={qualityOpts.reload}
+      {/* Single unified One Modal B dialog for Manage platforms, row quality, and Add */}
+      {view && (
+        <PlatformsQualityModal
+          open={platformModal !== null}
+          onClose={() => setPlatformModal(null)}
+          view={view}
+          onSaved={res.reload}
           onUpdated={handleQualityUpdated}
           onOptimisticSwitch={(destId, label) =>
             setSwitchingTargets((prev) => {
@@ -822,27 +815,21 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
               return { ...prev, [destId]: label }
             })
           }
+          initialDestId={platformModal?.destId ?? null}
+          initialMode={platformModal?.mode === 'add_vertical' ? 'add' : 'editor'}
+          addCanvas={platformModal?.mode === 'add_vertical' ? 'vertical' : 'main'}
+          canvasFilter="all"
+          triggerEl={platformModal?.triggerEl ?? null}
+          usesObs={usesObs}
+          isRemote={isRemote}
+          videoKbps={desk.prefs.data?.video_kbps}
+          audioKbps={desk.prefs.data?.audio_kbps}
+          optionsResponse={qualityOpts.data}
+          loading={qualityOpts.loading}
+          error={qualityOpts.error}
+          onReloadOptions={qualityOpts.reload}
         />
       )}
-
-      <Dialog
-        compact
-        open={managing !== null}
-        onClose={() => setManaging(null)}
-        size="lg"
-        title={managing === 'vertical' ? 'Your vertical platforms' : 'Your platforms'}
-      >
-        {view && managing && (
-          <Platforms
-            view={view}
-            onSaved={res.reload}
-            canvas={managing}
-            videoKbps={desk.prefs.data?.video_kbps}
-            audioKbps={desk.prefs.data?.audio_kbps}
-            inDialog
-          />
-        )}
-      </Dialog>
       {saver.dialog}
     </section>
   )

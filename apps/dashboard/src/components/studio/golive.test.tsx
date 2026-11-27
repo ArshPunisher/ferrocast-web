@@ -1478,18 +1478,22 @@ describe('per-destination quality integration in GoLiveDock and Platforms', () =
       expect(statusPop).not.toBeNull()
       expect(statusPop?.textContent).toContain('YouTube dropped the connection.')
 
-      // Tapping Twitch quality trigger opens Modal A, turns off Match main, picks 720p30 + 3 Mbps, applies.
+      // Tapping Twitch quality trigger opens One Modal B, switches to Set my own, picks 720p30 + 3 Mbps, applies.
       await act(async () => {
         host.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!.click()
         await new Promise((r) => setTimeout(r, 0))
       })
-      const modal = document.querySelector<HTMLDialogElement>('[data-quality-modal="twitch"]')!
+      const modal = document.querySelector<HTMLDialogElement>('[data-platforms-modal]')!
       expect(modal).not.toBeNull()
+      expect(modal.textContent).toContain('Twitch quality')
+      const setOwnRadio = Array.from(
+        modal.querySelectorAll<HTMLButtonElement>('[role="radio"]'),
+      ).find((b) => b.textContent?.includes('Set my own'))!
       await act(async () => {
-        modal.querySelector<HTMLButtonElement>('button[role="switch"]')!.click()
+        setOwnRadio.click()
       })
-      const btn720 = Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).find(
-        (b) => b.textContent?.trim() === '720p',
+      const btn720 = Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+        b.textContent?.startsWith('720p'),
       )!
       const btn30 = Array.from(modal.querySelectorAll<HTMLButtonElement>('button')).find(
         (b) => b.textContent?.trim() === '30',

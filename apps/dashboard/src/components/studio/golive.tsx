@@ -3,11 +3,12 @@
 // the upload check as a table (4B), a health line per platform while live (5A), and a dialog
 // for a server of your own (7). API.md §4 "Go live everywhere".
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   ArrowCounterClockwise,
   ArrowsClockwise,
   Broadcast,
+  CaretDown,
   CaretRight,
   CheckCircle,
   Copy,
@@ -15,7 +16,6 @@ import {
   Gauge,
   Info,
   LockSimple,
-  MinusCircle,
   Pause,
   Plus,
   Plug,
@@ -30,26 +30,16 @@ import {
   aitumClashes,
   allDestinationsFailed,
   andList,
-  describeError,
-  directKind,
   goliveApi,
   PASTE_BRANDS,
-  urlAfterBrand,
-  type PasteBrand,
   goingTo,
   healthText,
   mbps,
   onCanvas,
   reconnectingText,
-  studioEngineApi,
-  viaOf,
-  withVia,
   type Canvas,
   type DestinationView,
-  type DirectKind,
   type GoLiveView,
-  type Network,
-  type Reach,
   type RuleCode,
   type Service,
   type UploadCheck,
@@ -58,12 +48,9 @@ import {
   Badge,
   Button,
   Dialog,
-  Field,
   IconButton,
   InfoLine,
   InfoTip,
-  Input,
-  PlatformMark,
   Skeleton,
   Switch,
   cx,
@@ -76,19 +63,28 @@ import { useAction, useClient, useNow, useResource } from '../../lib/hooks'
 import { useLive } from '../../lib/store'
 import { href } from '../../lib/router'
 import { useMode } from '../../lib/mode'
-import { setPictureSource, usePictureSource, useUsesObs } from '../../lib/picture'
-import {
-  describeDestinationRate,
-  describeStreamCapFromView,
-  describeUploadNeed,
-  type DestinationRateDisplay,
-} from './bitrate-summary'
+import { setPictureSource, usePictureSource } from '../../lib/picture'
+import { describeDestinationRate, type DestinationRateDisplay } from './bitrate-summary'
 import { AdvancedCard, ProtectionRule } from './golive-advanced'
-import { DestinationQualityPicker, useQualityOptions } from './destination-quality-picker'
+import {
+  AddDestinationFormBody,
+  DIRECT_NAMES,
+  Logo,
+  ReachLine,
+  liveStatus,
+  platformTileTone,
+  useAddDestinationState,
+  usePlatformsListController,
+  useQualityOptions,
+} from './platform-shared'
+import { PlatformsQualityModal } from './platforms-quality-modal'
+import { buildQualitySummaryText } from './quality-modal-model'
 import { useSaveOrder } from './save-order'
 import { useStudio } from './common'
 import { useObsHealth } from './obs'
 import { InBar, StudioDesk } from './desk/desk'
+
+export { Logo, liveStatus }
 
 export function useGoLive() {
   const client = useClient()
@@ -99,30 +95,6 @@ const NAMES: Record<Exclude<Service, 'custom'>, string> = {
   twitch: 'Twitch',
   youtube: 'YouTube',
   kick: 'Kick',
-}
-
-export function Logo({ kind, size = 30 }: { kind: Service; size?: number }) {
-  return (
-    <span
-      className="grid shrink-0 place-items-center bg-surface-3"
-      // A light wash of the platform's own colour, so each row is known at a glance.
-      style={{
-        width: size,
-        height: size,
-        borderRadius: size <= 22 ? 5 : 8,
-        ...(kind !== 'custom' && {
-          background: `color-mix(in srgb, var(--fc-${kind}) 14%, var(--fc-surface-1))`,
-        }),
-      }}
-      aria-hidden
-    >
-      {kind === 'custom' ? (
-        <Broadcast size={Math.round(size * 0.55)} className="text-text-2" />
-      ) : (
-        <PlatformMark platform={kind} size={Math.round(size * 0.55)} />
-      )}
-    </span>
-  )
 }
 
 /** The view with newer readings on top: the live frame's destinations and numbers, and
@@ -577,123 +549,6 @@ function elapsed(ms: number): string {
 
 // ---------------------------------------------------------------- 2A: the platforms
 
-/**
- * What a destination's row says about itself on the right: while the stream runs, where it
- * is (starting, connecting, live with its rate, reconnecting, failed, paused, off); before, its rate.
- */
-export function liveStatus(d: DestinationView, streaming: boolean, plan: number): string {
-  // A backup waiting for its main one isn't sending: not "Starting" for the whole stream.
-  if (streaming && d.standby_for) return 'Standby'
-  // An active backup isn't ticked but is sending: it shows its health, not Off.
-  if (!d.enabled && !(streaming && d.backup_for)) return streaming ? 'Off' : ''
-  if (!streaming) return d.health?.state === 'failed' ? 'Failed' : mbps(d.health?.kbps || plan)
-  switch (d.health?.state) {
-    case undefined:
-    case 'waiting':
-      return 'Starting'
-    case 'connecting':
-      return 'Connecting'
-    case 'reconnecting':
-      return 'Reconnecting'
-    case 'failed':
-      return 'Failed'
-    case 'paused':
-      return 'Paused'
-    case 'stopped':
-      return 'Stopped'
-    default:
-      // Live but nothing measured yet: said so, not the plan's number as if it were going out.
-      return d.health?.kbps ? mbps(d.health.kbps) : 'Live'
-  }
-}
-
-function platformTileTone(
-  d: DestinationView,
-  streaming: boolean,
-): {
-  tileCls: string
-  icon: typeof CheckCircle
-  word: string
-  badgeCls: string
-} {
-  if (d.blocked) {
-    return {
-      tileCls: 'border-danger/40 bg-danger-soft/45',
-      icon: WarningCircle,
-      word: 'Action needed',
-      badgeCls: 'border border-danger/40 bg-surface-1 text-danger',
-    }
-  }
-  if (streaming && d.standby_for) {
-    return {
-      tileCls: 'border-line bg-surface-2/70',
-      icon: MinusCircle,
-      word: 'Standby',
-      badgeCls: 'border border-line bg-surface-1 text-text-2',
-    }
-  }
-  if (!d.enabled && !(streaming && d.backup_for)) {
-    return {
-      tileCls: 'border-line bg-surface-2/70',
-      icon: MinusCircle,
-      word: 'Off',
-      badgeCls: 'border border-line bg-surface-1 text-text-2',
-    }
-  }
-  if (d.health?.state === 'failed') {
-    return {
-      tileCls: 'border-danger/40 bg-danger-soft/45',
-      icon: WarningCircle,
-      word: 'Failed',
-      badgeCls: 'border border-danger/40 bg-surface-1 text-danger',
-    }
-  }
-  if (d.health?.state === 'reconnecting') {
-    return {
-      tileCls: 'border-warn/40 bg-warn-soft/35',
-      icon: ArrowsClockwise,
-      word: 'Reconnecting',
-      badgeCls: 'border border-warn/45 bg-surface-1 text-warn',
-    }
-  }
-  if (d.health?.state === 'paused') {
-    return {
-      tileCls: 'border-warn/40 bg-warn-soft/35',
-      icon: Pause,
-      word: 'Paused',
-      badgeCls: 'border border-warn/45 bg-surface-1 text-warn',
-    }
-  }
-  if (streaming && d.health?.state === 'live') {
-    return {
-      tileCls: 'border-line bg-surface-1',
-      icon: CheckCircle,
-      word: 'Live',
-      badgeCls: 'border border-ok/35 bg-surface-1 text-ok',
-    }
-  }
-  if (streaming) {
-    const word =
-      d.health?.state === 'connecting'
-        ? 'Connecting'
-        : d.health?.state === 'stopped'
-          ? 'Stopped'
-          : 'Starting'
-    return {
-      tileCls: 'border-line bg-surface-1',
-      icon: d.health?.state === 'stopped' ? MinusCircle : ArrowsClockwise,
-      word,
-      badgeCls: 'border border-line bg-surface-1 text-text-2',
-    }
-  }
-  return {
-    tileCls: 'border-line bg-surface-1',
-    icon: CheckCircle,
-    word: 'Ready',
-    badgeCls: 'border border-ok/35 bg-surface-1 text-ok',
-  }
-}
-
 export function Platforms({
   view,
   onSaved,
@@ -701,7 +556,6 @@ export function Platforms({
   canvas = 'main',
   videoKbps,
   audioKbps,
-  inDialog = false,
 }: {
   view: GoLiveView
   onSaved: () => void
@@ -709,188 +563,32 @@ export function Platforms({
   canvas?: Canvas | undefined
   videoKbps?: number | undefined
   audioKbps?: number | undefined
-  inDialog?: boolean | undefined
 }) {
-  const api = useGoLive()
-  const { run, busy } = useAction()
-  const mine = onCanvas(view.destinations, canvas)
-  const others = view.destinations.filter((d) => !mine.includes(d))
-  const [rows, setRows] = useState(mine)
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState<DestinationView | null>(null)
-  const dragged = useRef<number | null>(null)
-  // A fresh view (a frame, a save) wins over local edits once it arrives.
-  const key = mine.map((d) => `${d.id}:${d.enabled}`).join(',')
-  const [seen, setSeen] = useState(key)
-  if (seen !== key) {
-    setSeen(key)
-    setRows(mine)
-  }
-  const merged = rows.map((r) => mine.find((d) => d.id === r.id) ?? r)
-
-  // What a change while live asks first (the upload won't carry it, or it was the last one).
-  const saver = useSaveOrder(api, onSaved)
-  // The other picture's destinations go along unchanged (the engine wants every one).
-  const save = (next: DestinationView[], label: string) => {
-    setRows(next)
-    const all = (canvas === 'main' ? [...next, ...others] : [...others, ...next]).map((d) => ({
-      id: d.id,
-      enabled: d.enabled,
-    }))
-    void run('order', () => saver.request(all), { success: label }).then((r) => {
-      if (r) onSaved()
-      else setRows(mine)
-    })
-  }
-  const move = (from: number, to: number) => {
-    if (to < 0 || to >= rows.length || from === to) return
-    const next = [...rows]
-    const [x] = next.splice(from, 1)
-    if (x) next.splice(to, 0, x)
-    save(next, '')
-  }
-  const onGripKey = (i: number) => (e: KeyboardEvent) => {
-    if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      move(i, i - 1)
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      move(i, i + 1)
-    }
-  }
-  const toggle = (id: string, enabled: boolean) =>
-    save(
-      rows.map((d) => (d.id === id ? { ...d, enabled } : d)),
-      '',
-    )
-  const remove = (d: DestinationView) =>
-    void run(`rm:${d.id}`, () => api.removeCustom(d.id).then(() => true), {
-      success: `${d.name} removed.`,
-    }).then((r) => {
-      setRemoving(null)
-      if (r) onSaved()
-    })
-  // "Test connection" per destination: the last result, shown under its row.
-  const [tests, setTests] = useState<Record<string, Reach>>({})
-  const test = (d: DestinationView) =>
-    void run(`test:${d.id}`, () => api.testDestination(d.id).catch(reachFailed), {
-      quiet: true,
-    }).then((r) => r && setTests((t) => ({ ...t, [d.id]: r })))
-  const protect = (on: boolean) =>
-    void run('protect', () => api.setProtect(on), {
-      success: on ? 'Upload protection is on.' : 'Upload protection is off.',
-    }).then((r) => r && onProtect?.(r.protect))
-  const autoQuality = (on: boolean) =>
-    void run('auto-quality', () => api.setAutoQuality(on), {
-      success: on ? 'Auto quality is on.' : 'Auto quality is off.',
-    }).then((r) => r && onSaved())
-
-  const vertical = canvas === 'vertical'
-  const streaming = vertical ? view.vertical_live : view.live
-  const ignoreServiceLimits = Boolean(view.advanced?.ignore_service_limits)
+  const [qualityModal, setQualityModal] = useState<{
+    destId: string
+    triggerEl: HTMLElement | null
+  } | null>(null)
   const [mode] = useMode('studio')
-  const usesObs = useUsesObs()
   const isRemote = useLive((s) => s.remote !== null)
-  const qualityOpts = useQualityOptions(view, Boolean(view), usesObs, onSaved)
-  const destinationsById = useMemo(
-    () =>
-      Object.fromEntries(
-        view.destinations.map((dest) => [dest.id, { name: dest.name, kind: dest.kind }]),
-      ),
-    [view.destinations],
-  )
+
+  const ctrl = usePlatformsListController({
+    view,
+    onSaved,
+    onProtect,
+    canvas,
+    videoKbps,
+    audioKbps,
+  })
+  const qualityOpts = useQualityOptions(view, Boolean(view), ctrl.usesObs, onSaved)
   const handleQualityUpdated = (nextView: GoLiveView) => {
     useLive.getState().setGoLiveView(nextView)
     onSaved()
   }
-  const conn = useLive((s) => s.conn)
-  const resyncs = useLive((s) => s.resyncs)
-  const [fetchedSettings, setFetchedSettings] = useState<{
-    conn: typeof conn
-    video_kbps: number | null
-    audio_kbps: number | null
-  } | null>(null)
-  useEffect(() => {
-    if (usesObs || videoKbps !== undefined || !conn) return
-    let alive = true
-    const load = () => {
-      void studioEngineApi(conn.client)
-        .studioSettings()
-        .then((s) => {
-          if (!alive) return
-          setFetchedSettings({
-            conn,
-            video_kbps: typeof s?.video_kbps === 'number' ? s.video_kbps : null,
-            audio_kbps: typeof s?.audio_kbps === 'number' ? s.audio_kbps : null,
-          })
-        })
-        .catch(() => undefined)
-    }
-    load()
-    const onFocus = () => {
-      if (!document.hidden) load()
-    }
-    window.addEventListener('focus', onFocus)
-    return () => {
-      alive = false
-      window.removeEventListener('focus', onFocus)
-    }
-  }, [usesObs, videoKbps, conn, view, resyncs])
-  const currentFetched = fetchedSettings && fetchedSettings.conn === conn ? fetchedSettings : null
-  const chosenVideoKbps = videoKbps ?? currentFetched?.video_kbps ?? null
-  const chosenAudioKbps = audioKbps ?? currentFetched?.audio_kbps ?? 160
-  const capSummary = useMemo(
-    () =>
-      describeStreamCapFromView(merged, chosenVideoKbps, {
-        ignoreServiceLimits,
-        live: streaming,
-        encodeBudget: view.encode_budget,
-      }),
-    [merged, chosenVideoKbps, ignoreServiceLimits, streaming, view.encode_budget],
-  )
-  const fallbackMainKbps =
-    capSummary.capped && capSummary.effectiveVideoKbps
-      ? capSummary.effectiveVideoKbps + chosenAudioKbps
-      : chosenVideoKbps
-        ? chosenVideoKbps + chosenAudioKbps
-        : 6000 + chosenAudioKbps
-  const verticalPlanKbps = view.vertical_stats.kbps || 4500 + chosenAudioKbps
-  // Before anything streamed: what the engine plans (effective main stream or vertical cut).
-  const plan = vertical ? verticalPlanKbps : view.stats.kbps || fallbackMainKbps
-  const rateOpts = useMemo(
-    () => ({
-      streamKbps: plan,
-      verticalKbps: verticalPlanKbps,
-      videoKbps: chosenVideoKbps,
-      audioKbps: chosenAudioKbps,
-      ignoreServiceLimits,
-      live: streaming,
-    }),
-    [plan, verticalPlanKbps, chosenVideoKbps, chosenAudioKbps, ignoreServiceLimits, streaming],
-  )
-  const activeTicked = merged.filter(
-    (d) =>
-      !d.blocked &&
-      !d.standby_for &&
-      (d.enabled || (streaming && !!d.backup_for && d.health?.state === 'live')),
-  )
-  const uploadSummary = useMemo(
-    () =>
-      describeUploadNeed(
-        activeTicked.map((d) => ({
-          ...d,
-          kbps: describeDestinationRate(d, capSummary, rateOpts).kbps,
-        })),
-        {
-          planKbps: plan,
-          vertical,
-          limiterName: capSummary.capped ? capSummary.limiter?.name : null,
-          limiterKbps: capSummary.capped ? capSummary.effectiveVideoKbps : null,
-          audioKbps: chosenAudioKbps,
-        },
-      ),
-    [activeTicked, capSummary, rateOpts, plan, vertical, chosenAudioKbps],
-  )
+
+  const vertical = ctrl.verticalOnly
+  const streaming = ctrl.streaming
   const panelDescription = vertical
     ? 'YouTube Shorts live, or a server of your own. Twitch and Kick take one live per channel.'
     : 'Drag to set what pauses first if your upload struggles: the bottom one.'
@@ -909,15 +607,15 @@ export function Platforms({
   const content = (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-2.5" aria-label="Platforms, top first">
-        {merged.map((d, i) => {
+        {ctrl.merged.map((d, i) => {
           const tone = platformTileTone(d, streaming)
           const StatusGlyph = tone.icon
-          const rateInfo = describeDestinationRate(d, capSummary, rateOpts)
+          const rateInfo = describeDestinationRate(d, ctrl.capSummary, ctrl.rateOpts)
           const rateText = !streaming
             ? d.enabled && d.health?.state === 'failed'
               ? 'Failed'
               : (rateInfo.rateLabel ?? '')
-            : liveStatus(d, streaming, rateInfo.kbps ?? plan)
+            : liveStatus(d, streaming, rateInfo.kbps ?? ctrl.plan)
           const showRate =
             Boolean(rateText) &&
             !['Off', 'Failed', 'Reconnecting', 'Paused', 'Standby'].includes(rateText)
@@ -926,11 +624,11 @@ export function Platforms({
               key={d.id}
               data-platform-tile={d.id}
               draggable
-              onDragStart={() => (dragged.current = i)}
+              onDragStart={() => (ctrl.dragged.current = i)}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => {
-                if (dragged.current !== null) move(dragged.current, i)
-                dragged.current = null
+                if (ctrl.dragged.current !== null) ctrl.move(ctrl.dragged.current, i)
+                ctrl.dragged.current = null
               }}
               className={cx(
                 'flex flex-col gap-2.5 rounded-[12px] border p-3.5 transition-colors',
@@ -943,7 +641,7 @@ export function Platforms({
                     type="button"
                     className="grid size-8 shrink-0 cursor-grab place-items-center rounded-[calc(var(--fc-radius-control)-2px)] text-text-2 hover:bg-surface-3 hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
                     aria-label={`Move ${d.name}: arrow up or down`}
-                    onKeyDown={onGripKey(i)}
+                    onKeyDown={ctrl.onGripKey(i)}
                   >
                     <DotsSixVertical size={16} aria-hidden />
                   </button>
@@ -970,25 +668,28 @@ export function Platforms({
                       }
                       rateInfo={rateInfo}
                     />
-                    <DestinationQualityPicker
-                      dest={d}
-                      allDestinations={view.destinations}
-                      optionsResponse={qualityOpts.data}
-                      loading={qualityOpts.loading}
-                      error={qualityOpts.error}
-                      onReloadOptions={qualityOpts.reload}
-                      onUpdated={handleQualityUpdated}
-                      destinationsById={destinationsById}
-                      usesObs={usesObs}
-                      isRemote={isRemote}
-                      live={canvas === 'vertical' ? view.vertical_live : view.live}
-                      ffmpegDownloading={
-                        canvas === 'vertical' &&
-                        view.cut.source === 'cut' &&
-                        view.cut.ffmpeg.state === 'downloading'
-                      }
-                      ignoreServiceLimits={ignoreServiceLimits}
-                    />
+                    <div className="mt-1">
+                      <button
+                        type="button"
+                        data-quality-trigger={d.id}
+                        disabled={ctrl.usesObs}
+                        aria-haspopup="dialog"
+                        aria-expanded={qualityModal?.destId === d.id}
+                        aria-label={`Change quality for ${d.name}: ${buildQualitySummaryText(d, ctrl.usesObs)}`}
+                        onClick={(e) =>
+                          setQualityModal({ destId: d.id, triggerEl: e.currentTarget })
+                        }
+                        className="fc-press inline-flex h-[24px] max-w-full items-center gap-1 rounded-full border border-line bg-surface-2 px-2.5 text-[12px] font-medium text-text-2 hover:border-line-strong hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
+                      >
+                        <span className="truncate">{buildQualitySummaryText(d, ctrl.usesObs)}</span>
+                        <CaretDown
+                          size={11}
+                          weight="bold"
+                          className="shrink-0 opacity-75"
+                          aria-hidden
+                        />
+                      </button>
+                    </div>
                     {!streaming &&
                       d.enabled &&
                       d.health?.state === 'failed' &&
@@ -1016,12 +717,14 @@ export function Platforms({
                     <Button
                       size="sm"
                       variant="outline"
-                      busy={busy === `retry:${d.id}`}
+                      busy={ctrl.busy === `retry:${d.id}`}
                       aria-label={`Retry ${d.name}`}
                       onClick={() =>
-                        void run(`retry:${d.id}`, () => api.resume(d.id).then(() => true), {
-                          success: `Trying ${d.name} again.`,
-                        }).then((r) => r && onSaved())
+                        void ctrl
+                          .run(`retry:${d.id}`, () => ctrl.api.resume(d.id).then(() => true), {
+                            success: `Trying ${d.name} again.`,
+                          })
+                          .then((r) => r && onSaved())
                       }
                     >
                       Retry
@@ -1032,9 +735,9 @@ export function Platforms({
                       size="sm"
                       variant="outline"
                       icon={<Pulse size={14} />}
-                      busy={busy === `test:${d.id}`}
+                      busy={ctrl.busy === `test:${d.id}`}
                       aria-label={`Test connection to ${d.name}`}
-                      onClick={() => test(d)}
+                      onClick={() => ctrl.test(d)}
                     >
                       Test
                     </Button>
@@ -1043,7 +746,7 @@ export function Platforms({
                     <IconButton
                       label={`Remove ${d.name}`}
                       size="sm"
-                      disabled={busy === `rm:${d.id}`}
+                      disabled={ctrl.busy === `rm:${d.id}`}
                       onClick={() => setRemoving(d)}
                     >
                       <Trash size={15} />
@@ -1053,25 +756,25 @@ export function Platforms({
                     label={`Stream to ${d.name}`}
                     hideLabel
                     checked={d.enabled}
-                    disabled={busy === 'order'}
-                    onChange={(on) => toggle(d.id, on)}
+                    disabled={ctrl.busy === 'order'}
+                    onChange={(on) => ctrl.toggle(d.id, on)}
                   />
                 </div>
               </div>
-              {tests[d.id] !== undefined && (
-                <ReachLine r={tests[d.id]!} className="pl-0 sm:pl-[92px]" />
+              {ctrl.tests[d.id] !== undefined && (
+                <ReachLine r={ctrl.tests[d.id]!} className="pl-0 sm:pl-[92px]" />
               )}
             </li>
           )
         })}
       </ul>
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-[12px] border border-line bg-surface-2 px-3.5 py-2.5 text-[14px]">
-        <b className="font-semibold text-text">{goingTo(merged)}.</b>
+        <b className="font-semibold text-text">{goingTo(ctrl.merged)}.</b>
         <div className="flex flex-wrap items-center gap-2">
-          {uploadSummary ? (
+          {ctrl.uploadSummary ? (
             <>
-              <span className="text-text-2">{uploadSummary.line}</span>
-              <InfoTip label="Why upload adds up">{uploadSummary.detail}</InfoTip>
+              <span className="text-text-2">{ctrl.uploadSummary.line}</span>
+              <InfoTip label="Why upload adds up">{ctrl.uploadSummary.detail}</InfoTip>
             </>
           ) : (
             vertical && (
@@ -1090,8 +793,8 @@ export function Platforms({
               label="Upload protection"
               description="If your upload can’t carry every platform, the bottom one pauses for a while so the ones above stay smooth."
               checked={view.protect}
-              disabled={busy === 'protect'}
-              onChange={protect}
+              disabled={ctrl.busy === 'protect'}
+              onChange={ctrl.protect}
             />
             {mode === 'advanced' && view.protect && (
               <div className="mt-3">
@@ -1104,8 +807,8 @@ export function Platforms({
               label="Auto quality"
               description="If your upload struggles, the stream’s quality drops a little so it stays smooth, then comes back by itself."
               checked={view.auto_quality}
-              disabled={busy === 'auto-quality'}
-              onChange={autoQuality}
+              disabled={ctrl.busy === 'auto-quality'}
+              onChange={ctrl.autoQuality}
             />
           </div>
         </div>
@@ -1114,31 +817,40 @@ export function Platforms({
   )
   return (
     <>
-      {inDialog ? (
-        <div id="golive-platforms" className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="m-0 text-[13.5px] text-text-2">{panelDescription}</p>
-            {addAction}
-          </div>
-          {content}
-        </div>
-      ) : (
-        <Panel
-          id="golive-platforms"
-          title={vertical ? 'Where it goes' : 'Your platforms'}
-          description={panelDescription}
-          actions={addAction}
-        >
-          {content}
-        </Panel>
-      )}
+      <Panel
+        id="golive-platforms"
+        title={vertical ? 'Where it goes' : 'Your platforms'}
+        description={panelDescription}
+        actions={addAction}
+      >
+        {content}
+      </Panel>
+      <PlatformsQualityModal
+        open={qualityModal !== null}
+        onClose={() => setQualityModal(null)}
+        view={view}
+        onSaved={onSaved}
+        onUpdated={handleQualityUpdated}
+        {...(onProtect ? { onProtect } : {})}
+        initialDestId={qualityModal?.destId ?? null}
+        canvasFilter={canvas}
+        triggerEl={qualityModal?.triggerEl ?? null}
+        usesObs={ctrl.usesObs}
+        isRemote={isRemote}
+        videoKbps={videoKbps}
+        audioKbps={audioKbps}
+        optionsResponse={qualityOpts.data}
+        loading={qualityOpts.loading}
+        error={qualityOpts.error}
+        onReloadOptions={qualityOpts.reload}
+      />
       <AddDestination
         open={adding}
         onClose={() => setAdding(false)}
         onAdded={onSaved}
         canvas={canvas}
       />
-      {saver.dialog}
+      {ctrl.saver.dialog}
       <Dialog
         open={removing !== null}
         onClose={() => setRemoving(null)}
@@ -1150,8 +862,8 @@ export function Platforms({
             <Button onClick={() => setRemoving(null)}>Keep it</Button>
             <Button
               variant="danger"
-              busy={removing !== null && busy === `rm:${removing.id}`}
-              onClick={() => removing && remove(removing)}
+              busy={removing !== null && ctrl.busy === `rm:${removing.id}`}
+              onClick={() => removing && ctrl.remove(removing, () => setRemoving(null))}
             >
               Remove
             </Button>
@@ -1491,65 +1203,6 @@ function lighterForNow(h: ReturnType<typeof healthText>): ReturnType<typeof heal
   }
 }
 
-/** A test that couldn't run (a refused address) reads like one that failed. */
-function reachFailed(e: unknown): Reach {
-  return { ok: false, message: describeError(e).message }
-}
-
-/** How "Test connection" went, under the row or in the add dialog. */
-function ReachLine({ r, className }: { r: Reach; className?: string }) {
-  const Icon = r.ok ? CheckCircle : WarningCircle
-  return (
-    <p
-      role="status"
-      className={cx(
-        'm-0 flex items-start gap-1.5 text-[13.5px] leading-snug',
-        r.ok ? 'text-text-2' : 'text-danger',
-        className,
-      )}
-    >
-      <Icon
-        size={15}
-        weight="fill"
-        className={cx('mt-[2px] shrink-0', r.ok ? 'text-ok' : 'text-danger')}
-        aria-hidden
-      />
-      <span>{r.message}</span>
-    </p>
-  )
-}
-
-function Note({ children, warn }: { children: React.ReactNode; warn?: boolean }) {
-  const Icon = warn ? Warning : Info
-  return (
-    <p
-      className={cx(
-        'm-0 flex items-start gap-2.5 rounded-control border px-3 py-2.5 text-[14px] text-text-2',
-        warn ? 'border-transparent bg-warn-soft' : 'border-line bg-surface-2',
-      )}
-    >
-      <Icon
-        size={16}
-        weight={warn ? 'fill' : 'regular'}
-        className={cx('mt-px shrink-0', warn ? 'text-warn' : 'text-accent-text')}
-        aria-hidden
-      />
-      <span>{children}</span>
-    </p>
-  )
-}
-
-// ---------------------------------------------------------------- 7: a server of your own
-
-const DIRECT_NAMES: Record<DirectKind, string> = { srt: 'SRT', rist: 'RIST', whip: 'WebRTC' }
-
-/** What the key is called for each kind of server. */
-const KEY_LABEL: Record<DirectKind, string> = {
-  srt: 'Stream ID (optional)',
-  rist: 'Passphrase or login password (optional)',
-  whip: 'Bearer token (optional)',
-}
-
 function AddDestination({
   open,
   onClose,
@@ -1561,98 +1214,7 @@ function AddDestination({
   onAdded: () => void
   canvas?: Canvas
 }) {
-  const api = useGoLive()
-  const { run, busy } = useAction()
-  const [name, setName] = useState('')
-  const [url, setUrl] = useState('')
-  const [key, setKey] = useState('')
-  const [show, setShow] = useState(false)
-  // X, Instagram or Facebook: their keys are made in their own apps, so the server and key are
-  // pasted from there. Only names the server; nothing else about sending changes.
-  const [brand, setBrand] = useState<PasteBrand | null>(null)
-  const pickBrand = (b: PasteBrand | null) => {
-    const info = PASTE_BRANDS.find((x) => x.id === b)
-    setBrand(b)
-    if (info && (!name.trim() || PASTE_BRANDS.some((x) => x.label === name))) setName(info.label)
-    // The last brand's own server goes with it; one the person typed stays.
-    const nextUrl = urlAfterBrand(url, brand, b)
-    if (nextUrl !== url) {
-      setUrl(nextUrl)
-      // A connection test of the old address says nothing about the new one.
-      setReach(null)
-    }
-    setErr((e) => (e?.field === 'brand' ? null : e))
-  }
-  const [err, setErr] = useState<{ field: string; message: string } | null>(null)
-  // The last "Test connection": cleared when the address or key changes, and a slow answer
-  // for an address since changed is dropped (each try and each change counts one).
-  const [reach, setReachNow] = useState<Reach | null>(null)
-  const tries = useRef(0)
-  const setReach = (r: Reach | null) => {
-    tries.current += 1
-    setReachNow(r)
-  }
-  const direct = directKind(url)
-  // RIST and SRTLA go over several connections at once: this computer's, asked for once
-  // the address is one of them.
-  const [networks, setNetworks] = useState<Network[] | null>(null)
-  const srtla = /^srtla:\/\//i.test(url.trim())
-  const rist = (direct === 'rist' || srtla) && canvas === 'main'
-  useEffect(() => {
-    if (!rist || networks) return
-    api
-      .networks()
-      .then(setNetworks)
-      .catch(() => setNetworks([]))
-  }, [rist, networks, api])
-  const via = viaOf(url)
-  const toggleVia = (name: string) => {
-    setUrl(withVia(url, via.includes(name) ? via.filter((v) => v !== name) : [...via, name]))
-    setReach(null)
-  }
-  const tryIt = () => {
-    setReach(null)
-    const mine = tries.current
-    void run('test', () => api.testAddress(url, key).catch(reachFailed), { quiet: true }).then(
-      (r) => {
-        if (r && tries.current === mine) setReachNow(r)
-      },
-    )
-  }
-  // What the Add button needs: Enter in a field reaches `submit` too, and must not get past it.
-  const canAdd =
-    !!name.trim() &&
-    !!url.trim() &&
-    (!!direct || !!key.trim()) &&
-    !(!!direct && canvas === 'vertical')
-  const submit = () => {
-    if (!canAdd) return
-    setErr(null)
-    void run(
-      'add',
-      () =>
-        api.addCustom(name, url, key, canvas, brand ?? undefined).catch((e: unknown) => {
-          const m = describeError(e).message
-          const field = /^(name|url|key|brand):/.exec(m)?.[1] ?? 'form'
-          setErr({ field, message: m.replace(/^(name|url|key|brand):\s*/, '') })
-          throw e
-        }),
-      {
-        quiet: true,
-        once: true,
-        success: (d) => `${d.name ?? 'Server'} added. It gets the stream next time you go live.`,
-      },
-    ).then((d) => {
-      if (!d) return
-      setName('')
-      setUrl('')
-      setKey('')
-      setBrand(null)
-      setReach(null)
-      onAdded()
-      onClose()
-    })
-  }
+  const state = useAddDestinationState({ canvas, onAdded: () => onAdded(), onClose })
   return (
     <Dialog
       open={open}
@@ -1662,184 +1224,21 @@ function AddDestination({
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button busy={busy === 'test'} disabled={!url.trim()} onClick={tryIt}>
+          <Button busy={state.busy === 'test'} disabled={!state.url.trim()} onClick={state.tryIt}>
             Test
           </Button>
-          <Button variant="primary" busy={busy === 'add'} disabled={!canAdd} onClick={submit}>
-            {brand ? `Add ${PASTE_BRANDS.find((x) => x.id === brand)?.label ?? ''}` : 'Add server'}
+          <Button
+            variant="primary"
+            busy={state.busy === 'add'}
+            disabled={!state.canAdd}
+            onClick={state.submit}
+          >
+            {state.submitLabel}
           </Button>
         </>
       }
     >
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={(e) => {
-          e.preventDefault()
-          submit()
-        }}
-      >
-        <div className="flex flex-col gap-2">
-          <span className="text-[14px] font-semibold text-text">Platform</span>
-          <div role="group" aria-label="Platform" className="flex flex-wrap gap-2">
-            {[{ id: null, label: 'Other server' }, ...PASTE_BRANDS].map((b) => (
-              <button
-                key={b.id ?? 'other'}
-                type="button"
-                aria-pressed={brand === b.id}
-                onClick={() => pickBrand(b.id)}
-                className={cx(
-                  // 44 px to press on a phone, the compact size from `sm` up.
-                  'fc-press inline-flex h-11 min-w-11 items-center justify-center rounded-full border px-3 text-[13.5px] font-semibold sm:h-9 sm:min-w-0',
-                  'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-                  brand === b.id
-                    ? 'border-accent-line bg-accent-soft text-text'
-                    : 'border-line-strong bg-surface-3 text-text-2 hover:text-text',
-                )}
-              >
-                {b.label}
-              </button>
-            ))}
-          </div>
-          {err?.field === 'brand' && (
-            <p role="alert" className="text-[13.5px] font-medium text-danger">
-              {err.message}
-            </p>
-          )}
-          {brand && (
-            <p className="text-[14px] text-text-2">
-              {PASTE_BRANDS.find((x) => x.id === brand)?.where}{' '}
-              {brand === 'facebook' ? '' : 'Ferrocast can’t make this key for you.'}
-            </p>
-          )}
-        </div>
-        <Field label="Name" error={err?.field === 'name' ? err.message : null}>
-          {(a) => (
-            <Input
-              {...a}
-              name="name"
-              value={name}
-              maxLength={40}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Backup PC"
-              autoComplete="off"
-            />
-          )}
-        </Field>
-        <Field
-          label="Server"
-          hint="rtmp://, rtmps://, srt://, srtla:// (every connection at once), rist:// or a WebRTC (WHIP) https:// address. The place you stream to gives you this."
-          error={
-            err?.field === 'url'
-              ? err.message
-              : direct && canvas === 'vertical'
-                ? `${DIRECT_NAMES[direct]} sends the main picture only. Add it under the main stream.`
-                : null
-          }
-        >
-          {(a) => (
-            <Input
-              {...a}
-              name="url"
-              value={url}
-              onChange={(e) => {
-                setUrl(e.target.value)
-                setReach(null)
-              }}
-              placeholder="rtmps://live.example.com/app"
-              inputMode="url"
-              autoComplete="off"
-              spellCheck={false}
-              className="font-mono text-[14px]"
-            />
-          )}
-        </Field>
-        <Field
-          label={direct ? KEY_LABEL[direct] : 'Stream key'}
-          hint="Kept in your computer’s keychain, never sent to Ferrocast’s servers."
-          error={err?.field === 'key' ? err.message : null}
-        >
-          {(a) => (
-            <div className="flex gap-2">
-              <Input
-                {...a}
-                name="stream-key"
-                value={key}
-                type={show ? 'text' : 'password'}
-                onChange={(e) => {
-                  setKey(e.target.value)
-                  setReach(null)
-                }}
-                autoComplete="off"
-                spellCheck={false}
-                className="min-w-0 flex-1 font-mono text-[14px]"
-              />
-              <Button size="md" onClick={() => setShow((s) => !s)} aria-pressed={show}>
-                {show ? 'Hide' : 'Show'}
-              </Button>
-            </div>
-          )}
-        </Field>
-        {rist && networks && networks.length > 1 && (
-          <div className="flex flex-col gap-2">
-            <span className="flex items-center gap-1 text-[14px] font-semibold text-text">
-              Send over
-              <InfoTip>
-                {srtla
-                  ? 'The stream is shared out over the ones picked (none: all of them), more on the stronger ones, so one dropping doesn’t stop it.'
-                  : 'Pick two, like Wi-Fi and a phone’s hotspot: every packet goes over both, so one dropping doesn’t stop the stream.'}
-              </InfoTip>
-            </span>
-            <div role="group" aria-label="Send over" className="flex flex-wrap gap-2">
-              {networks.map((n) => {
-                const on = via.includes(n.name)
-                return (
-                  <button
-                    key={n.name}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => toggleVia(n.name)}
-                    className={cx(
-                      'fc-press inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-semibold',
-                      'focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none',
-                      on
-                        ? 'border-accent-line bg-accent-soft text-text'
-                        : 'border-line bg-surface-2 text-text-2 hover:text-text',
-                    )}
-                  >
-                    {on && (
-                      <CheckCircle
-                        size={15}
-                        weight="fill"
-                        className="text-accent-text"
-                        aria-hidden
-                      />
-                    )}
-                    {n.name}
-                    <span className="font-mono text-[12.5px] font-normal text-text-3">{n.ip}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-        {err?.field === 'form' && (
-          <p role="alert" className="m-0 text-[14px] text-danger">
-            {err.message}
-          </p>
-        )}
-        {reach && <ReachLine r={reach} />}
-        <Note>
-          <b>Video only.</b> Chat, alerts and the title don’t reach this one; Ferrocast just sends
-          the stream there.
-          {direct && canvas === 'main' && (
-            <>
-              {' '}
-              {DIRECT_NAMES[direct]} goes straight from the Ferrocast Studio, so it sends when you
-              go live with the Ferrocast picture.
-            </>
-          )}
-        </Note>
-      </form>
+      <AddDestinationFormBody state={state} canvas={canvas} />
     </Dialog>
   )
 }

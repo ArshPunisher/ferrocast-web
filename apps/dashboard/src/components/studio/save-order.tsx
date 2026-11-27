@@ -23,7 +23,16 @@ type Ask = {
 export function useSaveOrder(
   api: ReturnType<typeof useGoLive>,
   onSaved: () => void,
-): { request: (all: Order, confirm?: Confirm) => Promise<{ ok: true } | null>; dialog: ReactNode } {
+): {
+  request: (all: Order, confirm?: Confirm) => Promise<{ ok: true } | null>
+  dialog: ReactNode
+  ask: Ask | null
+  last: boolean
+  askBusy: boolean
+  askFailed: string | null
+  confirmAsk: () => void
+  dismissAsk: () => void
+} {
   const [ask, setAsk] = useState<Ask | null>(null)
   const request = (all: Order, confirm: Confirm = {}) =>
     api.saveOrder(all, confirm).then(
@@ -42,6 +51,10 @@ export function useSaveOrder(
   const last = ask?.code === 'golive_last_destination'
   const [failed, setFailed] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const dismissAsk = () => {
+    setAsk(null)
+    setFailed(null)
+  }
   // The answer is sent here, so a failure (offline, a 500) is said in the dialog and can be tried
   // again; the dialog closes and `onSaved` runs only when it went through.
   const confirmAsk = () => {
@@ -63,16 +76,13 @@ export function useSaveOrder(
   const dialog = (
     <Dialog
       open={ask !== null}
-      onClose={() => {
-        setAsk(null)
-        setFailed(null)
-      }}
+      onClose={dismissAsk}
       title={last ? 'Stop sending to your last platform?' : 'Your upload may not carry this'}
       description={ask ? `${ask.message} ${ask.hint}${failed ? ` ${failed}` : ''}`.trim() : ''}
       size="sm"
       footer={
         <>
-          <Button onClick={() => setAsk(null)}>{last ? 'Keep it on' : 'Not now'}</Button>
+          <Button onClick={dismissAsk}>{last ? 'Keep it on' : 'Not now'}</Button>
           <Button variant={last ? 'danger' : 'primary'} busy={busy} onClick={confirmAsk}>
             {last ? 'Stop sending' : 'Add it anyway'}
           </Button>
@@ -80,5 +90,14 @@ export function useSaveOrder(
       }
     />
   )
-  return { request, dialog }
+  return {
+    request,
+    dialog,
+    ask,
+    last,
+    askBusy: busy,
+    askFailed: failed,
+    confirmAsk,
+    dismissAsk,
+  }
 }

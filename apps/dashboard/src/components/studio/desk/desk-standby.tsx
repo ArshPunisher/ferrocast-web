@@ -25,12 +25,14 @@ import {
   type StudioEngineStatus,
   type StudioStartOptions,
 } from '@ferrocast/api'
-import { Badge, Button, Dialog, FerroGlyph, InfoLine, InfoTip, Skeleton, cx } from '@ferrocast/ui'
+import { Badge, Button, FerroGlyph, InfoLine, InfoTip, Skeleton, cx } from '@ferrocast/ui'
 import { useClient, useNow, useResource, type Resource } from '../../../lib/hooks'
+import { useUsesObs } from '../../../lib/picture'
 import { go } from '../../../lib/router'
 import { useLive } from '../../../lib/store'
 import { isSafeModeLocked } from '../../safe-mode'
-import { Logo, Platforms } from '../golive'
+import { Logo } from '../golive'
+import { PlatformsQualityModal, useQualityOptions } from '../platforms-quality-modal'
 import { KIND_LABEL } from '../clips/labels'
 import { Thumb, useThumb } from '../clips/thumb'
 import { useEngine } from './common'
@@ -102,7 +104,13 @@ export function DeskStandby({
   const now = useNow(30_000)
 
   const [cached] = useState(() => readStandbySnapshot())
-  const [managingPlatforms, setManagingPlatforms] = useState(false)
+  const [platformModal, setPlatformModal] = useState<{
+    mode: 'editor' | 'add'
+    triggerEl: HTMLElement | null
+  } | null>(null)
+  const usesObs = useUsesObs()
+  const isRemote = useLive((s) => s.remote !== null)
+  const qualityOpts = useQualityOptions(view, Boolean(platformModal && view), usesObs, res.reload)
 
   // Every optional pre-start fetch catches gracefully: a cold real desktop engine may reject
   // live-scene queries before Start the Studio is pressed.
@@ -512,7 +520,11 @@ export function DeskStandby({
                   {verticalCount > 0 ? ` · +${verticalCount} vertical` : ''}
                 </span>
               </div>
-              <Button size="xs" variant="ghost" onClick={() => setManagingPlatforms(true)}>
+              <Button
+                size="xs"
+                variant="ghost"
+                onClick={(e) => setPlatformModal({ mode: 'editor', triggerEl: e.currentTarget })}
+              >
                 Manage
               </Button>
             </div>
@@ -525,7 +537,11 @@ export function DeskStandby({
             ) : mainDestinations.length === 0 ? (
               <div className="flex items-center justify-between gap-2 rounded-control border border-dashed border-line bg-surface-2/40 px-2.5 py-1.5 text-[12.5px] text-text-2">
                 <span>No platforms added yet.</span>
-                <Button size="xs" variant="secondary" onClick={() => setManagingPlatforms(true)}>
+                <Button
+                  size="xs"
+                  variant="secondary"
+                  onClick={(e) => setPlatformModal({ mode: 'add', triggerEl: e.currentTarget })}
+                >
                   Add
                 </Button>
               </div>
@@ -696,23 +712,31 @@ export function DeskStandby({
         </div>
       </section>
 
-      <Dialog
-        compact
-        open={managingPlatforms}
-        onClose={() => setManagingPlatforms(false)}
-        size="lg"
-        title="Your platforms"
-      >
-        {view && managingPlatforms && (
-          <Platforms
-            view={view}
-            onSaved={res.reload}
-            onProtect={(protect) => res.set((v) => ({ ...(v ?? view), protect }))}
-            canvas="main"
-            inDialog
-          />
-        )}
-      </Dialog>
+      {view && (
+        <PlatformsQualityModal
+          open={platformModal !== null}
+          onClose={() => setPlatformModal(null)}
+          view={view}
+          onSaved={res.reload}
+          onUpdated={(next) => {
+            res.set(next)
+            useLive.getState().setGoLiveView(next)
+          }}
+          onProtect={(protect) => res.set((v) => ({ ...(v ?? view), protect }))}
+          initialDestId={null}
+          initialMode={platformModal?.mode ?? 'editor'}
+          canvasFilter="all"
+          triggerEl={platformModal?.triggerEl ?? null}
+          usesObs={usesObs}
+          isRemote={isRemote}
+          videoKbps={studioSettings.data?.video_kbps}
+          audioKbps={studioSettings.data?.audio_kbps}
+          optionsResponse={qualityOpts.data}
+          loading={qualityOpts.loading}
+          error={qualityOpts.error}
+          onReloadOptions={qualityOpts.reload}
+        />
+      )}
     </div>
   )
 }
