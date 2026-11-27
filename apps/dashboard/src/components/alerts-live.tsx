@@ -244,7 +244,10 @@ export function QueuePanel({ className }: { className?: string }) {
                   className="group flex items-center gap-2.5 rounded-control px-2 py-1.5 hover:bg-surface-2"
                 >
                   <PlatformMark platform={w.alert.platform} size={13} />
-                  <span className="min-w-0 flex-1 truncate text-[14.5px] text-text-2">
+                  <span
+                    className="min-w-0 flex-1 truncate text-[14.5px] text-text-2"
+                    title={w.alert.title}
+                  >
                     {w.alert.title}
                   </span>
                   {w.priority > 0 && (
@@ -253,7 +256,7 @@ export function QueuePanel({ className }: { className?: string }) {
                   <IconButton
                     size="sm"
                     label={`Remove “${w.alert.title}” from the queue`}
-                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
                     onClick={() =>
                       act(`rm-${w.alert.alert_id}`, () => client.queueRemove(w.alert.alert_id))
                     }
@@ -312,7 +315,7 @@ export function TtsApprovals() {
       aria-labelledby="tts-title"
       className="rounded-panel border border-warn/30 bg-surface-1 shadow-1"
     >
-      <header className="flex items-center justify-between px-4 pt-3 sm:px-5">
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 pt-3 sm:px-5">
         <h2 id="tts-title" className="font-display text-[18px] font-extrabold tracking-tight">
           Read aloud?{' '}
           <span className="ml-1 font-mono text-[13px] font-medium text-text-3">{tts.length}</span>

@@ -89,7 +89,7 @@ export function VariationCards({
                 'relative flex items-start gap-2 rounded-control border transition-colors',
                 compact ? 'p-2.5' : 'p-3',
                 active
-                  ? 'border-arc bg-arc-soft/35 shadow-1'
+                  ? 'border-arc bg-arc/10 shadow-1'
                   : 'border-line bg-surface-2/70 hover:border-line-strong',
               )}
             >
@@ -100,7 +100,9 @@ export function VariationCards({
                 className="flex min-w-0 flex-1 flex-col gap-1 text-left focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
               >
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="truncate text-[14px] font-bold text-text">{label}</span>
+                  <span className="truncate text-[14px] font-bold text-text" title={label}>
+                    {label}
+                  </span>
                   {!isDefault && v.priority !== 0 && (
                     <span className="rounded-full border border-line bg-surface-1 px-2 py-0.5 font-mono text-[11px] font-semibold text-text-2 tabular-nums">
                       P{v.priority}
@@ -114,7 +116,10 @@ export function VariationCards({
                 </div>
 
                 {!isDefault && (
-                  <p className="line-clamp-1 text-[12.5px] font-medium text-text-2">
+                  <p
+                    className="line-clamp-1 text-[12.5px] font-medium text-text-2"
+                    title={describeCondition(v.condition)}
+                  >
                     {describeCondition(v.condition)}
                   </p>
                 )}

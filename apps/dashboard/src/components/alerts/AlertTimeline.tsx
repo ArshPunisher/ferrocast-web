@@ -336,7 +336,6 @@ export function AlertTimeline({
           {(p) => (
             <input
               {...p}
-              id="alert-total-duration"
               type="range"
               min={MIN_DURATION_MS}
               max={MAX_DURATION_MS}

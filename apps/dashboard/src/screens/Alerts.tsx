@@ -803,7 +803,7 @@ function RuleEditor({
       className="fc-editor flex min-h-0 flex-col bg-bg lg:h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-var(--fc-statusbar,0px))] lg:overflow-hidden"
     >
       {/* Top bar: where I am, what is unsaved, and the ways out. */}
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface-1 px-3 py-2 lg:h-[52px] lg:flex-nowrap lg:py-0">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface-1 px-3 py-2 lg:min-h-[52px] lg:flex-nowrap lg:py-1.5">
         <h1 className="sr-only">Alerts</h1>
         <label htmlFor="rule-name" className="sr-only">
           Rule name
@@ -929,11 +929,11 @@ function RuleEditor({
         {/* Centre: the live stage and, right under it, the timeline. */}
         <section
           aria-label="Live preview"
-          className="fc-scroll order-1 flex min-h-0 min-w-0 flex-col gap-3 bg-inset p-3 lg:order-none lg:flex-1 lg:overflow-y-auto"
+          className="fc-scroll @container order-1 flex min-h-0 min-w-0 flex-col gap-3 bg-inset p-3 lg:order-none lg:flex-1 lg:overflow-y-auto"
         >
-          <div className="mx-auto flex w-full shrink-0 flex-col gap-2 md:relative md:block lg:max-w-[max(340px,calc((100dvh-28rem)*16/9))]">
-            {/* Above the stage on narrow screens so wrapped controls never cover it; overlaid from md up. */}
-            <div className="flex flex-wrap items-center justify-between gap-1.5 md:pointer-events-none md:absolute md:inset-x-2 md:top-2 md:z-10 md:items-start">
+          <div className="mx-auto flex w-full shrink-0 flex-col gap-2 @[580px]:relative @[580px]:block lg:max-w-[max(340px,calc((100dvh-28rem)*16/9))]">
+            {/* Above the stage while it is narrow, so wrapped controls never cover it; overlaid once it is wide enough for one row. */}
+            <div className="flex flex-wrap items-center justify-between gap-1.5 @[580px]:pointer-events-none @[580px]:absolute @[580px]:inset-x-2 @[580px]:top-2 @[580px]:z-10 @[580px]:items-start">
               <div
                 role="group"
                 aria-label="Preview"
@@ -1166,7 +1166,10 @@ function RuleList({ list, selectedId }: { list: AlertRule[]; selectedId: string 
                 aria-hidden="true"
                 className={cx('shrink-0', active || r.enabled ? 'text-accent-text' : 'text-text-3')}
               />
-              <span className={cx('min-w-0 truncate', !r.enabled && !active && 'text-text-3')}>
+              <span
+                className={cx('min-w-0 truncate', !r.enabled && !active && 'text-text-3')}
+                title={r.name}
+              >
                 {r.name}
               </span>
               <span

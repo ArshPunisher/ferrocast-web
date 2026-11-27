@@ -38,7 +38,10 @@ export function PropertyGroup({
             {title}
           </span>
           {!open && summary && (
-            <span className="ml-auto min-w-0 truncate text-[13px] font-medium text-text-3">
+            <span
+              className="ml-auto min-w-0 truncate text-[13px] font-medium text-text-3"
+              title={summary}
+            >
               {summary}
             </span>
           )}

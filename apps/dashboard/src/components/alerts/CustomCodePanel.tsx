@@ -239,7 +239,7 @@ export function CustomCodePanel({
 
       {customEnabled && (
         <div className="flex flex-col gap-4 border-t border-line pt-4">
-          <div className="flex items-start gap-2 rounded-control border border-arc/30 bg-arc-soft/30 px-3 py-2 text-[12.5px] font-medium text-text-2">
+          <div className="flex items-start gap-2 rounded-control border border-arc/30 bg-arc/10 px-3 py-2 text-[12.5px] font-medium text-text-2">
             <ShieldCheck size={16} className="mt-0.5 shrink-0 text-arc" aria-hidden="true" />
             <span>
               HTML and CSS only: scripts, forms, frames and event handlers are removed. Pictures
@@ -284,9 +284,9 @@ export function CustomCodePanel({
                     <div
                       key={idx}
                       data-schema-field={f.key}
-                      className="flex flex-col gap-2.5 rounded-control border border-line bg-surface-1 p-3"
+                      className="@container flex flex-col gap-2.5 rounded-control border border-line bg-surface-1 p-3"
                     >
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(11.5rem,1.25fr)]">
+                      <div className="grid grid-cols-1 gap-2 @lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(11.5rem,1.25fr)]">
                         <div className="flex min-w-0 flex-col gap-1">
                           <label
                             htmlFor={`fk-${idx}`}
