@@ -366,3 +366,13 @@ main:focus {
     transform: none !important;
   }
 }
+
+/* Arrow icons inside buttons nudge forward on hover. */
+.btn .ic-go {
+  transition: transform 240ms var(--fc-ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn-primary:hover .ic-go {
+    transform: translateX(3px);
+  }
+}

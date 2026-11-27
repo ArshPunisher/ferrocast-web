@@ -40,7 +40,7 @@ export const FAQ: FaqGroup[] = [
       },
       {
         q: 'Which platforms does Ferrocast support?',
-        a: 'Twitch, YouTube and Kick, all at once if you multistream. Tips come from Razorpay (including UPI), Stripe and Ko-fi. Ferrocast works with OBS Studio and any app that has a browser source.',
+        a: 'Twitch, YouTube and Kick for chat, alerts and moderation. You can go live on all of them at once, plus Facebook and up to 8 servers of your own. Tips come from Razorpay (including UPI), Stripe and Ko-fi. Ferrocast works with OBS Studio and any app that has a browser source.',
       },
       {
         q: 'Why is there no TikTok support?',

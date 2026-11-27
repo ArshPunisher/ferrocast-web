@@ -1,0 +1,79 @@
+---
+// The closing call to action on the new pages: a dark panel with the Spark behind it.
+import { BRAND_PAINT_THEMED, sparkShapes } from '@ferrocast/ui/brand'
+import Icon from './Icon.astro'
+interface Props {
+  title: string
+  text: string
+  secondary?: { href: string; label: string }
+}
+const { title, text, secondary } = Astro.props
+const spark = sparkShapes(BRAND_PAINT_THEMED)
+---
+
+<section class="section cta-wrap">
+  <div class="container">
+    <div class="cta-band">
+      <svg class="cta-spark" viewBox="0 0 64 64" aria-hidden="true" set:html={spark} />
+      <h2 class="display-2">{title}</h2>
+      <p>{text}</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="/download/">
+          Download
+          <Icon name="arrow-right" weight="bold" size={18} class="ic-go" />
+        </a>
+        {secondary && (
+          <a class="btn btn-secondary" href={secondary.href}>
+            {secondary.label}
+          </a>
+        )}
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .cta-wrap {
+    padding-top: 24px;
+  }
+  .cta-band {
+    position: relative;
+    display: grid;
+    gap: 22px;
+    justify-items: start;
+    overflow: hidden;
+    padding: clamp(28px, 5vw, 64px);
+    border-radius: var(--fc-radius-panel);
+    background: var(--fc-canvas);
+    color: #e9eff5;
+  }
+  .cta-band h2 {
+    max-width: 16ch;
+    color: #f3f6fa;
+  }
+  .cta-band p {
+    max-width: 44ch;
+    color: #bccad8;
+    font-size: 1.125rem;
+  }
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .cta-band .btn-secondary {
+    background: transparent;
+    color: #e9eff5;
+    border-color: #3d4e60;
+  }
+  .cta-spark {
+    position: absolute;
+    right: -30px;
+    bottom: -30px;
+    width: 260px;
+    height: 260px;
+    opacity: 0.14;
+    pointer-events: none;
+    color: #e9eff5;
+  }
+</style>

@@ -1,0 +1,501 @@
+---
+// Overlays and widgets: what can go on screen, filterable, and how it gets into OBS.
+import Base from '../../layouts/Base.astro'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import Icon from '../../components/Icon.astro'
+import InfoTip from '../../components/InfoTip.astro'
+import CtaBand from '../../components/CtaBand.astro'
+import { PAGES } from '../../data/pages'
+import { SITE } from '../../data/company'
+import { webPage } from '../../data/schema'
+
+const page = PAGES.widgets
+const widgets = [
+  {
+    k: 'alerts',
+    cls: 'big',
+    icon: 'bell-ringing',
+    c: '#ffa424',
+    t: 'Alerts',
+    d: 'Follows, subs, raids and tips, each with its own look.',
+  },
+  {
+    k: 'chat',
+    cls: 'wide',
+    icon: 'chats-circle',
+    c: '#33d4ff',
+    t: 'Chat',
+    d: 'Every platform in one box.',
+  },
+  {
+    k: 'goals',
+    cls: '',
+    icon: 'target',
+    c: '#53fc18',
+    t: 'Goal',
+    d: 'A bar that fills toward your goal.',
+  },
+  {
+    k: 'info',
+    cls: '',
+    icon: 'list-bullets',
+    c: '#a970ff',
+    t: 'Event list',
+    d: 'Your latest events, in order.',
+  },
+  {
+    k: 'info',
+    cls: 'wide',
+    icon: 'text-aa',
+    c: '#ff7ab6',
+    t: 'Label',
+    d: 'Plain text from your stream, styled your way.',
+  },
+  {
+    k: 'info',
+    cls: 'wide',
+    icon: 'users',
+    c: '#5fdcff',
+    t: 'Viewers',
+    d: 'Your live viewer count.',
+  },
+]
+const filters = [
+  ['all', 'All'],
+  ['alerts', 'Alerts'],
+  ['chat', 'Chat'],
+  ['goals', 'Goals'],
+  ['info', 'Info'],
+]
+const facts = [
+  { icon: 'plus-circle', t: 'Add to OBS', d: 'One button puts the overlay in your scene.' },
+  { icon: 'lock-key', t: 'A private link', d: 'Keep it to yourself. Revoke it any time.' },
+  {
+    icon: 'lightning',
+    t: 'Test before you go live',
+    d: 'Fire a sample alert with one click.',
+    tip: true,
+  },
+  {
+    icon: 'paint-brush',
+    t: 'Your own CSS',
+    d: 'Every alert accepts custom CSS, scoped to that alert.',
+  },
+]
+---
+
+<Base
+  page={page}
+  schema={[webPage(page.title, new URL(page.path, SITE.url).href, page.description)]}
+>
+  <section class="container hero">
+    <div class="copy">
+      <Breadcrumbs page={page} />
+      <h1 class="display-1 rise" style="--d: 0">
+        Every widget. One browser source.
+      </h1>
+      <p class="lede rise" style="--d: 1">
+        Alerts, chat, goals and more on a single overlay. Add it to OBS in one click.
+      </p>
+      <div class="cta-row rise" style="--d: 2">
+        <a class="btn btn-primary" href="/download/">
+          Download
+          <Icon name="arrow-right" weight="bold" size={18} class="ic-go" />
+        </a>
+        <a class="btn btn-secondary" href="#gallery">
+          Browse widgets
+        </a>
+      </div>
+    </div>
+    <div class="cascade rise" style="--d: 2">
+      <div class="frame a">
+        <img
+          src="/media/features/overlays.webp"
+          width="1440"
+          height="900"
+          alt="The Overlays page with two overlays and Add to OBS buttons"
+        />
+      </div>
+      <div class="frame b">
+        <img
+          src="/media/features/alerts.webp"
+          width="1440"
+          height="900"
+          alt="The Alerts page"
+          loading="lazy"
+        />
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="gallery">
+    <div class="container">
+      <h2 class="display-2 sec-title">Pick what goes on screen.</h2>
+      <div class="chips" role="group" aria-label="Filter widgets">
+        {filters.map(([k, l], i) => (
+          <button type="button" aria-pressed={i === 0 ? 'true' : 'false'} data-f={k}>
+            {l}
+          </button>
+        ))}
+      </div>
+      <div class="gal">
+        {widgets.map((w) => (
+          <article class={`wt ${w.cls}`} data-k={w.k}>
+            <div class="art" style={`--c: ${w.c}`}>
+              <Icon name={w.icon} weight="duotone" size={64} />
+            </div>
+            <div class="txt">
+              <h3>{w.t}</h3>
+              <p>{w.d}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section tight">
+    <div class="container obs">
+      <div>
+        <h2 class="display-2">Into OBS in one click.</h2>
+        <div class="facts">
+          {facts.map((f) => (
+            <div class="fl">
+              <span class="tile">
+                <Icon name={f.icon} weight="light" size={24} />
+              </span>
+              <span>
+                <b>{f.t}</b>
+                <span class="d">
+                  {f.d}
+                  {f.tip && (
+                    <InfoTip id="tip-test" label="About test buttons">
+                      Test buttons work even before any account is connected.
+                    </InfoTip>
+                  )}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div class="frame">
+        <div class="frame-in">
+          <img
+            src="/media/features/overlays.webp"
+            width="1440"
+            height="900"
+            loading="lazy"
+            alt="Overlay cards with an Add to OBS button"
+          />
+          <span class="pulse-ring" aria-hidden="true"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <CtaBand
+    title="Build your overlay."
+    text="Free and open source. No account needed."
+    secondary={{ href: '/features/overlays/', label: 'More on overlays' }}
+  />
+</Base>
+
+<script>
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('.chips button')]
+  const tiles = [...document.querySelectorAll<HTMLElement>('.wt')]
+  for (const b of buttons)
+    b.addEventListener('click', () => {
+      const f = b.dataset.f
+      for (const x of buttons) x.setAttribute('aria-pressed', String(x === b))
+      for (const t of tiles) {
+        const show = f === 'all' || t.dataset.k === f
+        if (show) {
+          t.hidden = false
+          requestAnimationFrame(() => t.classList.remove('fade'))
+        } else {
+          t.classList.add('fade')
+          window.setTimeout(() => {
+            if (t.classList.contains('fade')) t.hidden = true
+          }, 300)
+        }
+      }
+    })
+</script>
+
+<style>
+  .hero {
+    display: grid;
+    gap: 44px;
+    align-items: center;
+    padding-block: 32px 40px;
+  }
+  .copy {
+    display: grid;
+    gap: 22px;
+    justify-items: start;
+  }
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .rise {
+    animation: rise 800ms var(--fc-ease-out) both;
+    animation-delay: calc(var(--d, 0) * 90ms);
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+  }
+  @media (min-width: 960px) {
+    .hero {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 56px;
+      padding-block: 56px;
+    }
+  }
+  .frame {
+    padding: 8px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-3);
+    box-shadow: var(--fc-shadow-2);
+  }
+  .frame img {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    background: var(--fc-canvas);
+  }
+  .frame-in {
+    position: relative;
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--fc-canvas);
+  }
+  .frame-in img {
+    border-radius: 0;
+  }
+  .cascade {
+    position: relative;
+    padding-bottom: 40px;
+  }
+  .cascade .a {
+    width: 86%;
+  }
+  .cascade .b {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 58%;
+  }
+  @media (min-width: 900px) {
+    .cascade .a {
+      transform: rotate(-1.6deg);
+    }
+    .cascade .b {
+      transform: rotate(2.2deg);
+    }
+    .cascade .frame {
+      transition: transform 500ms var(--fc-ease-out);
+    }
+  }
+  @media (hover: hover) and (min-width: 900px) {
+    .cascade:hover .a {
+      transform: rotate(-0.6deg) translateY(-4px);
+    }
+    .cascade:hover .b {
+      transform: rotate(1deg) translateY(-6px);
+    }
+  }
+  .sec-title {
+    margin-bottom: 36px;
+  }
+  .tight {
+    padding-top: 0;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 28px;
+  }
+  .chips button {
+    height: 40px;
+    padding: 0 18px;
+    border: 1px solid var(--fc-line-strong);
+    border-radius: 999px;
+    background: var(--fc-surface-1);
+    color: var(--fc-text-2);
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    cursor: pointer;
+    transition:
+      background-color 200ms var(--fc-ease-out),
+      color 200ms var(--fc-ease-out),
+      border-color 200ms var(--fc-ease-out),
+      transform 120ms var(--fc-ease-out);
+  }
+  .chips button:active {
+    transform: scale(0.97);
+  }
+  .chips button[aria-pressed='true'] {
+    background: var(--fc-btn-primary);
+    border-color: var(--fc-btn-primary);
+    color: #fff;
+  }
+  .gal {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 640px) {
+    .gal {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (min-width: 1000px) {
+    .gal {
+      grid-template-columns: repeat(4, 1fr);
+      grid-auto-rows: minmax(210px, auto);
+    }
+    .big {
+      grid-column: span 2;
+      grid-row: span 2;
+    }
+    .wide {
+      grid-column: span 2;
+    }
+  }
+  .wt {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+    transition:
+      opacity 320ms var(--fc-ease-out),
+      transform 320ms var(--fc-ease-out),
+      box-shadow 320ms var(--fc-ease-out);
+  }
+  .wt[hidden] {
+    display: none;
+  }
+  .wt.fade {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  @media (hover: hover) {
+    .wt:hover {
+      box-shadow: var(--fc-shadow-2);
+      transform: translateY(-3px);
+    }
+  }
+  .art {
+    position: relative;
+    flex: 1;
+    display: grid;
+    place-items: center;
+    min-height: 120px;
+    background: var(--fc-canvas);
+    color: #e9eff5;
+  }
+  .art::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.85;
+    background:
+      radial-gradient(70% 90% at 30% 30%, rgb(51 212 255 / 0.22), transparent 70%),
+      radial-gradient(60% 80% at 90% 100%, rgb(255 164 36 / 0.14), transparent 70%);
+  }
+  .art :global(.icon) {
+    position: relative;
+    color: var(--c, #33d4ff);
+  }
+  .big .art :global(.icon) {
+    width: 96px;
+    height: 96px;
+  }
+  .txt {
+    display: grid;
+    gap: 4px;
+    padding: 18px 20px 20px;
+  }
+  .txt h3 {
+    font-size: 1.25rem;
+  }
+  .txt p {
+    color: var(--fc-text-2);
+  }
+  .obs {
+    display: grid;
+    gap: 40px;
+    align-items: center;
+  }
+  @media (min-width: 960px) {
+    .obs {
+      grid-template-columns: 1fr 1.15fr;
+      gap: 72px;
+    }
+  }
+  .facts {
+    display: grid;
+    gap: 22px;
+    margin-top: 28px;
+  }
+  .fl {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 16px;
+  }
+  .tile {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-2);
+    color: var(--fc-text-2);
+  }
+  .fl b {
+    display: block;
+    font-family: var(--fc-font-display);
+    font-size: 1.1875rem;
+    letter-spacing: -0.02em;
+  }
+  .d {
+    color: var(--fc-text-2);
+  }
+  .pulse-ring {
+    position: absolute;
+    left: 6.4%;
+    top: 58%;
+    width: 15.6%;
+    height: 4.6%;
+    border: 2px solid var(--fc-accent);
+    border-radius: 8px;
+    box-shadow: 0 0 0 9999px rgb(8 12 18 / 0.35);
+    animation: pulse-ring 2.4s var(--fc-ease-out) infinite;
+  }
+  @keyframes pulse-ring {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pulse-ring {
+      animation: none;
+    }
+  }
+</style>

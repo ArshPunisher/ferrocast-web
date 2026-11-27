@@ -1,0 +1,426 @@
+---
+// Multistream: one stream out to every platform. A diagram you can switch, the three steps
+// on a real Studio screenshot, quality per platform, and the questions people ask.
+import Base from '../../layouts/Base.astro'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import Icon from '../../components/Icon.astro'
+import FanDiagram from '../../components/FanDiagram.astro'
+import InfoTip from '../../components/InfoTip.astro'
+import QaList from '../../components/QaList.astro'
+import CtaBand from '../../components/CtaBand.astro'
+import { ICON_PATHS } from '@ferrocast/ui/platform-icons'
+import { PAGES } from '../../data/pages'
+import { SITE } from '../../data/company'
+import { faqPage, webPage } from '../../data/schema'
+
+const page = PAGES.multistream
+const faq = [
+  {
+    q: 'Does it cost anything?',
+    a: 'No. Multistreaming is free, with no account, no trial and no limits on streams. Pro is optional and adds other things.',
+  },
+  {
+    q: 'Does it use my internet?',
+    a: 'Yes. Ferrocast sends one copy to each platform from your PC, so your upload speed has to cover all of them. The Studio shows what it needs before you go live, and upload protection steps in if the connection drops.',
+  },
+  {
+    q: 'Can I use my own server?',
+    a: 'Yes. Add up to 8 servers of your own with an address and a key, next to Twitch, YouTube, Kick and Facebook.',
+  },
+  {
+    q: 'Can one platform get a different picture?',
+    a: 'Yes. Each destination has its own quality, and it can take the upright picture instead of the landscape one.',
+  },
+  {
+    q: 'Do I need OBS?',
+    a: 'No. The Studio is built in. OBS still works if you prefer it.',
+  },
+]
+const steps = [
+  { icon: 'link', t: 'Connect', d: 'Sign in once per platform.', r: '7,12,26,21' },
+  { icon: 'toggle-right', t: 'Switch on', d: 'Pick where to go.', r: '51,11,8,24' },
+  {
+    icon: 'broadcast',
+    t: 'Go live',
+    d: 'One click. Ferrocast checks your upload first.',
+    r: '6,35,31,5',
+  },
+]
+const platforms = ['twitch', 'youtube', 'kick', 'facebook'] as const
+---
+
+<Base
+  page={page}
+  schema={[webPage(page.title, new URL(page.path, SITE.url).href, page.description), faqPage(faq)]}
+>
+  <section class="container hero">
+    <div class="copy">
+      <Breadcrumbs page={page} />
+      <h1 class="display-1 rise" style="--d: 0">
+        One stream. Every platform.
+      </h1>
+      <p class="lede rise" style="--d: 1">
+        Go live on Twitch, YouTube, Kick and Facebook at once. Free, from your own PC.
+      </p>
+      <div class="cta-row rise" style="--d: 2">
+        <a class="btn btn-primary" href="/download/">
+          Download
+          <Icon name="arrow-right" weight="bold" size={18} class="ic-go" />
+        </a>
+        <a class="btn btn-secondary" href="#how">
+          How it works
+        </a>
+      </div>
+    </div>
+    <div class="diagram rise" style="--d: 2">
+      <FanDiagram id="ms" />
+    </div>
+  </section>
+
+  <section class="container">
+    <div class="facts">
+      <div class="fact">
+        <b>Free</b>
+        <span>No fee, no account, no limits on streams.</span>
+      </div>
+      <div class="fact">
+        <b>Quality per platform</b>
+        <span>Each place gets the picture it needs.</span>
+      </div>
+      <div class="fact">
+        <b>Your upload</b>
+        <span>
+          Sent from your PC.
+          <InfoTip id="tip-up" label="About your upload">
+            Each platform gets its own copy, so your upload speed must cover all of them. The Studio
+            shows what it needs before you go live.
+          </InfoTip>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="container">
+      <h2 class="display-2 sec-title">Three switches.</h2>
+      <div class="how">
+        <div class="steps" role="group" aria-label="How it works">
+          {steps.map((s, n) => (
+            <button
+              type="button"
+              class="step"
+              aria-pressed={n === 0 ? 'true' : 'false'}
+              data-r={s.r}
+            >
+              <span class="tile">
+                <Icon name={s.icon} weight="light" size={24} />
+              </span>
+              <span>
+                <b>{s.t}</b>
+                <span class="d">{s.d}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <div class="shot">
+          <div class="frame">
+            <div class="frame-in">
+              <img
+                src="/media/features/studio.webp"
+                width="1440"
+                height="900"
+                loading="lazy"
+                alt="The Studio's Go live page: Twitch and YouTube switched on, Kick off"
+              />
+              <span class="ring" id="ring" aria-hidden="true"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section tight">
+    <div class="container zoom">
+      <div class="frame">
+        <div class="frame-in crop">
+          <img
+            src="/media/features/studio.webp"
+            width="1440"
+            height="900"
+            loading="lazy"
+            alt="Each platform row shows its own bitrate"
+          />
+        </div>
+      </div>
+      <div class="zoom-copy">
+        <span class="chip">New in 3.8.0</span>
+        <h2 class="display-2">Each place, its own quality.</h2>
+        <p>Twitch can take more than Facebook. Set every destination on its own row.</p>
+        <div class="plats" role="img" aria-label="Twitch, YouTube, Kick, Facebook">
+          {platforms.map((p) => (
+            <svg
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              fill={`var(--fc-${p})`}
+              aria-hidden="true"
+            >
+              <path d={ICON_PATHS[p]}></path>
+            </svg>
+          ))}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section tight">
+    <div class="container">
+      <h2 class="display-3 sec-title">Questions</h2>
+      <QaList items={faq} />
+    </div>
+  </section>
+
+  <CtaBand
+    title="Go live everywhere."
+    text="One download. Connect your platforms and flip the switches."
+    secondary={{ href: '/docs/getting-started/', label: 'Getting started' }}
+  />
+</Base>
+
+<script>
+  const steps = [...document.querySelectorAll<HTMLButtonElement>('.step')]
+  const ring = document.getElementById('ring')
+  const place = (r: string) => {
+    const [l, t, w, h] = r.split(',')
+    if (!ring) return
+    ring.style.left = `${l}%`
+    ring.style.top = `${t}%`
+    ring.style.width = `${w}%`
+    ring.style.height = `${h}%`
+  }
+  for (const s of steps) {
+    s.addEventListener('click', () => {
+      for (const x of steps) x.setAttribute('aria-pressed', String(x === s))
+      place(s.dataset.r ?? '')
+    })
+  }
+  place(steps[0]?.dataset.r ?? '')
+</script>
+
+<style>
+  .hero {
+    display: grid;
+    gap: 40px;
+    align-items: center;
+    padding-block: 32px 24px;
+  }
+  .copy {
+    display: grid;
+    gap: 22px;
+    justify-items: start;
+  }
+  .copy .lede {
+    max-width: 40ch;
+  }
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .rise {
+    animation: rise 800ms var(--fc-ease-out) both;
+    animation-delay: calc(var(--d, 0) * 90ms);
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+  }
+  .diagram {
+    padding: clamp(14px, 3vw, 28px) clamp(14px, 3vw, 28px) 34px;
+    border-radius: 20px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+    box-shadow: var(--fc-shadow-2);
+  }
+  @media (min-width: 960px) {
+    .hero {
+      grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+      gap: 56px;
+      padding-block: 56px 40px;
+    }
+  }
+  .facts {
+    display: grid;
+    margin-top: 40px;
+    border-top: 1px solid var(--fc-line);
+  }
+  .fact {
+    display: grid;
+    gap: 6px;
+    align-content: start;
+    padding-block: 28px;
+  }
+  .fact b {
+    font-family: var(--fc-font-display);
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+  }
+  .fact > span {
+    max-width: 32ch;
+    color: var(--fc-text-2);
+  }
+  @media (min-width: 760px) {
+    .facts {
+      grid-template-columns: 1fr 1.3fr 1fr;
+    }
+    .fact {
+      padding: 32px 32px 32px 0;
+    }
+    .fact + .fact {
+      padding-left: 32px;
+      border-left: 1px solid var(--fc-line);
+    }
+  }
+  .sec-title {
+    margin-bottom: 36px;
+  }
+  .tight {
+    padding-top: 0;
+  }
+  .how,
+  .zoom {
+    display: grid;
+    gap: 36px;
+    align-items: start;
+  }
+  @media (min-width: 960px) {
+    .how {
+      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+      gap: 64px;
+    }
+    .zoom {
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 64px;
+      align-items: center;
+    }
+  }
+  .steps {
+    display: grid;
+    gap: 6px;
+  }
+  .step {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 16px;
+    align-items: start;
+    width: 100%;
+    padding: 18px;
+    border: 1px solid transparent;
+    border-radius: var(--fc-radius-panel);
+    background: none;
+    color: var(--fc-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      background-color 240ms var(--fc-ease-out),
+      border-color 240ms var(--fc-ease-out);
+  }
+  .tile {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-2);
+    color: var(--fc-text-2);
+    transition:
+      background-color 240ms var(--fc-ease-out),
+      color 240ms var(--fc-ease-out);
+  }
+  .step b {
+    display: block;
+    font-family: var(--fc-font-display);
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+  }
+  .step .d {
+    display: block;
+    margin-top: 2px;
+    color: var(--fc-text-3);
+  }
+  .step[aria-pressed='true'] {
+    background: var(--fc-surface-1);
+    border-color: var(--fc-line);
+    box-shadow: var(--fc-shadow-1);
+  }
+  .step[aria-pressed='true'] .tile {
+    background: var(--fc-btn-primary);
+    color: #fff;
+    border-color: transparent;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .step:hover {
+      background: var(--fc-surface-2);
+    }
+    .step[aria-pressed='true']:hover {
+      background: var(--fc-surface-1);
+    }
+  }
+  .frame {
+    padding: 8px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-3);
+    box-shadow: var(--fc-shadow-2);
+  }
+  .frame-in {
+    position: relative;
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--fc-canvas);
+  }
+  .frame-in img {
+    width: 100%;
+    height: auto;
+  }
+  .ring {
+    position: absolute;
+    border: 2px solid var(--fc-accent);
+    border-radius: 10px;
+    box-shadow: 0 0 0 9999px rgb(8 12 18 / 0.38);
+    pointer-events: none;
+    transition:
+      left 480ms var(--fc-ease-out),
+      top 480ms var(--fc-ease-out),
+      width 480ms var(--fc-ease-out),
+      height 480ms var(--fc-ease-out);
+  }
+  .crop {
+    aspect-ratio: 16 / 10;
+  }
+  .crop img {
+    width: 188%;
+    max-width: none;
+    margin: -6.5% 0 0 -9.5%;
+  }
+  .zoom-copy {
+    display: grid;
+    gap: 18px;
+    justify-items: start;
+  }
+  .zoom-copy p {
+    max-width: 46ch;
+    color: var(--fc-text-2);
+    font-size: 1.125rem;
+  }
+  .plats {
+    display: inline-flex;
+    gap: 10px;
+  }
+</style>

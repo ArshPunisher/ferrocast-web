@@ -205,6 +205,72 @@ export const PAGES = {
     ogKicker: 'Contact',
     crumb: 'Contact',
   }),
+  multistream: p({
+    path: '/features/multistream/',
+    title: 'Free multistreaming to every platform | Ferrocast',
+    description:
+      'Go live on Twitch, YouTube, Kick and Facebook at once, plus up to 8 servers of your own. Free, no limits on streams, sent from your PC.',
+    ogTitle: 'One stream. Every platform.',
+    ogKicker: 'Multistream',
+    crumb: 'Multistream',
+    parent: '/features/',
+  }),
+  verticalDual: p({
+    path: '/features/vertical-dual-output/',
+    title: 'Vertical and horizontal live output | Ferrocast',
+    description:
+      'Send a landscape picture and an upright one at the same time from one Studio. Each destination picks its own canvas, so Shorts and your channel both fit.',
+    ogTitle: 'Wide and tall, live together',
+    ogKicker: 'Vertical + horizontal',
+    crumb: 'Vertical + horizontal',
+    parent: '/features/',
+  }),
+  widgets: p({
+    path: '/features/widgets/',
+    title: 'Stream overlays and widgets for OBS | Ferrocast',
+    description:
+      'Alerts, chat, goals, labels, viewer count and an event list on one overlay. Add it to OBS in one click, keep the link private and revoke it any time.',
+    ogTitle: 'Every widget, one browser source',
+    ogKicker: 'Overlays and widgets',
+    crumb: 'Widgets',
+    parent: '/features/',
+  }),
+  useGaming: p({
+    path: '/use-cases/gaming/',
+    title: 'Stream tools for gaming | Ferrocast',
+    description:
+      'Put alerts, chat and goals over your game, send an upright copy to Shorts, and save clips. Free, open source and running on your own PC.',
+    ogTitle: 'Built for gaming',
+    ogKicker: 'Use case',
+    crumb: 'Gaming',
+  }),
+  useChatting: p({
+    path: '/use-cases/just-chatting/',
+    title: 'Stream tools for just chatting | Ferrocast',
+    description:
+      'Read Twitch, YouTube and Kick chat in one list, run polls, read messages aloud and bring on guests. Free, open source and running on your PC.',
+    ogTitle: 'Built for talking',
+    ogKicker: 'Use case',
+    crumb: 'Just chatting',
+  }),
+  useIrl: p({
+    path: '/use-cases/irl/',
+    title: 'Stream tools for IRL streams | Ferrocast',
+    description:
+      'Run Ferrocast on a laptop and keep chat, alerts and one-click bans working wherever you stream from. Free and open source, no mobile app needed.',
+    ogTitle: 'Built for the road',
+    ogKicker: 'Use case',
+    crumb: 'IRL',
+  }),
+  vs: p({
+    path: '/vs-streamlabs/',
+    title: 'Ferrocast vs Streamlabs: features side by side',
+    description:
+      'What Ferrocast and Streamlabs each do for streamers, feature by feature, and what Streamlabs has that Ferrocast does not. Checked 27 November 2026.',
+    ogTitle: 'Ferrocast vs Streamlabs',
+    ogKicker: 'Compare',
+    crumb: 'vs Streamlabs',
+  }),
 } satisfies Record<string, PageMeta>
 
 export type PageKey = keyof typeof PAGES

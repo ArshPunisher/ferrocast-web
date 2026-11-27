@@ -282,6 +282,28 @@ export const SMALL: SmallFeature[] = [
     one: 'Tips and messages read out, with a voice you pick.',
   },
   {
+    id: 'clips',
+    group: 'live',
+    icon: 'scissors',
+    name: 'Clips',
+    one: 'Keep your best moments, right from the app.',
+  },
+  {
+    id: 'polls',
+    group: 'chat',
+    icon: 'chart-bar-horizontal',
+    name: 'Polls',
+    isNew: true,
+    one: 'Ask chat on Twitch and YouTube. Viewers can also type !vote.',
+  },
+  {
+    id: 'insights',
+    group: 'chat',
+    icon: 'chart-line-up',
+    name: 'Stream insights',
+    one: 'See how each stream did. A free account keeps 30 days, Pro a year.',
+  },
+  {
     id: 'recap',
     group: 'chat',
     icon: 'chart-line-up',

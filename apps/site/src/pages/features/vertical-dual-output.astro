@@ -1,0 +1,526 @@
+---
+// Vertical and horizontal output: one Studio, two canvases, each destination picks its own.
+import Base from '../../layouts/Base.astro'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import Icon from '../../components/Icon.astro'
+import InfoTip from '../../components/InfoTip.astro'
+import QaList from '../../components/QaList.astro'
+import CtaBand from '../../components/CtaBand.astro'
+import { ICON_PATHS } from '@ferrocast/ui/platform-icons'
+import { BRAND_PAINT_THEMED, sparkShapes } from '@ferrocast/ui/brand'
+import { PAGES } from '../../data/pages'
+import { SITE } from '../../data/company'
+import { faqPage, webPage } from '../../data/schema'
+
+const page = PAGES.verticalDual
+const spark = sparkShapes(BRAND_PAINT_THEMED)
+const faq = [
+  { q: 'Do I need a second PC?', a: 'No. Both pictures come from the same Studio on the same PC.' },
+  {
+    q: 'Does it cost anything?',
+    a: 'No. Vertical and horizontal output are part of the free app.',
+  },
+  {
+    q: 'Which destinations can take upright?',
+    a: 'Twitch, YouTube, Kick, Facebook and your own server, as long as it is not sent over SRT, RIST or WebRTC.',
+  },
+]
+---
+
+<Base
+  page={page}
+  schema={[webPage(page.title, new URL(page.path, SITE.url).href, page.description), faqPage(faq)]}
+>
+  <section class="container hero">
+    <div class="copy">
+      <Breadcrumbs page={page} />
+      <h1 class="display-1 rise" style="--d: 0">
+        Landscape and upright. Live at once.
+      </h1>
+      <p class="lede rise" style="--d: 1">
+        Send the wide picture to Twitch and Kick, and an upright one to Shorts. One stream, two
+        canvases.
+      </p>
+      <div class="cta-row rise" style="--d: 2">
+        <a class="btn btn-primary" href="/download/">
+          Download
+          <Icon name="arrow-right" weight="bold" size={18} class="ic-go" />
+        </a>
+        <a class="btn btn-secondary" href="/features/multistream/">
+          Multistream
+        </a>
+      </div>
+    </div>
+    <div class="vstage rise" style="--d: 2">
+      <div class="vrow" id="vrow" data-mode="both">
+        <figure class="vcap vcap-l">
+          <div class="vf vf-l">
+            <div class="scene">
+              <svg viewBox="0 0 64 64" aria-hidden="true" set:html={spark} />
+            </div>
+            <figcaption>16:9</figcaption>
+          </div>
+          <div class="vlab">
+            {(['twitch', 'youtube', 'kick'] as const).map((k) => (
+              <svg
+                viewBox="0 0 24 24"
+                width="16"
+                height="16"
+                fill={`var(--fc-${k})`}
+                aria-hidden="true"
+              >
+                <path d={ICON_PATHS[k]}></path>
+              </svg>
+            ))}
+            <span>Landscape</span>
+          </div>
+        </figure>
+        <figure class="vcap vcap-p">
+          <div class="vf vf-p">
+            <div class="scene">
+              <svg viewBox="0 0 64 64" aria-hidden="true" set:html={spark} />
+            </div>
+            <figcaption>9:16</figcaption>
+          </div>
+          <div class="vlab">
+            <svg
+              viewBox="0 0 24 24"
+              width="16"
+              height="16"
+              fill="var(--fc-youtube)"
+              aria-hidden="true"
+            >
+              <path d={ICON_PATHS.youtube}></path>
+            </svg>
+            <span>Upright</span>
+          </div>
+        </figure>
+      </div>
+      <div class="seg" role="group" aria-label="Preview">
+        <button type="button" aria-pressed="false" data-m="landscape">
+          Landscape
+        </button>
+        <button type="button" aria-pressed="false" data-m="upright">
+          Upright
+        </button>
+        <button type="button" aria-pressed="true" data-m="both">
+          Both
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container vgrid">
+      <div class="vtext">
+        <h2 class="display-2">Pick a canvas for each destination.</h2>
+        <p>Every destination chooses landscape or upright on its own. Nothing to export twice.</p>
+        <p class="good">
+          <InfoTip id="tip-sr" label="Good to know">
+            Destinations sent over SRT, RIST or WebRTC take the landscape picture only.
+          </InfoTip>
+          <span class="muted">Good to know</span>
+        </p>
+      </div>
+      <div
+        class="route"
+        role="img"
+        aria-label="Your scene goes out landscape to Twitch and Kick, and upright to YouTube Shorts"
+      >
+        <div class="rt">
+          <span class="shape">
+            <i class="l"></i>
+          </span>
+          <span>
+            <b>Your scene</b>
+            <span class="pl">
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="var(--fc-twitch)"
+                aria-hidden="true"
+              >
+                <path d={ICON_PATHS.twitch}></path>
+              </svg>
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="var(--fc-kick)"
+                aria-hidden="true"
+              >
+                <path d={ICON_PATHS.kick}></path>
+              </svg>
+              <span>Landscape</span>
+            </span>
+          </span>
+        </div>
+        <div class="rt-arrow" aria-hidden="true">
+          <Icon name="arrows-split" weight="light" size={28} />
+        </div>
+        <div class="rt">
+          <span class="shape">
+            <i class="p"></i>
+          </span>
+          <span>
+            <b>Your scene, upright</b>
+            <span class="pl">
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="var(--fc-youtube)"
+                aria-hidden="true"
+              >
+                <path d={ICON_PATHS.youtube}></path>
+              </svg>
+              <span>Shorts</span>
+            </span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section tight">
+    <div class="container uses">
+      <article class="use first">
+        <Icon name="device-mobile" weight="light" size={40} />
+        <h3>Shorts, live</h3>
+        <p>Go live upright while your main stream keeps going. Same session, same chat.</p>
+      </article>
+      <article class="use">
+        <Icon name="broadcast" weight="light" size={36} />
+        <h3>No second setup</h3>
+        <p>One Studio makes both pictures.</p>
+      </article>
+      <article class="use">
+        <Icon name="currency-circle-dollar" weight="light" size={36} />
+        <h3>Free</h3>
+        <p>Part of the free app.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section tight">
+    <div class="container">
+      <h2 class="display-3 sec-title">Questions</h2>
+      <QaList items={faq} />
+    </div>
+  </section>
+
+  <CtaBand
+    title="Wide and tall, together."
+    text="Download Ferrocast and give each destination the canvas it wants."
+    secondary={{ href: '/docs/getting-started/', label: 'Getting started' }}
+  />
+</Base>
+
+<script>
+  const row = document.getElementById('vrow')
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('.seg button')]
+  for (const b of buttons)
+    b.addEventListener('click', () => {
+      row?.setAttribute('data-mode', b.dataset.m ?? 'both')
+      for (const x of buttons) x.setAttribute('aria-pressed', String(x === b))
+    })
+</script>
+
+<style>
+  .hero {
+    display: grid;
+    gap: 40px;
+    align-items: center;
+    padding-block: 32px;
+  }
+  .copy {
+    display: grid;
+    gap: 22px;
+    justify-items: start;
+  }
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .rise {
+    animation: rise 800ms var(--fc-ease-out) both;
+    animation-delay: calc(var(--d, 0) * 90ms);
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+  }
+  @media (min-width: 960px) {
+    .hero {
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 56px;
+      padding-block: 56px 48px;
+    }
+  }
+  .seg {
+    display: inline-flex;
+    gap: 2px;
+    padding: 4px;
+    border-radius: 12px;
+    background: var(--fc-surface-3);
+  }
+  .seg button {
+    height: 40px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 9px;
+    background: none;
+    color: var(--fc-text-2);
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    cursor: pointer;
+    transition:
+      background-color 220ms var(--fc-ease-out),
+      color 220ms var(--fc-ease-out),
+      box-shadow 220ms var(--fc-ease-out);
+  }
+  .seg button[aria-pressed='true'] {
+    background: var(--fc-surface-1);
+    color: var(--fc-text);
+    box-shadow: var(--fc-shadow-1);
+  }
+  .vstage {
+    display: grid;
+    gap: 22px;
+    justify-items: center;
+    padding: clamp(20px, 4vw, 44px);
+    border-radius: 24px;
+    border: 1px solid rgb(255 255 255 / 0.06);
+    background:
+      radial-gradient(60% 70% at 30% 40%, rgb(51 212 255 / 0.14), transparent 70%),
+      radial-gradient(50% 60% at 85% 80%, rgb(255 164 36 / 0.1), transparent 70%), #0c1218;
+    --fc-twitch: #a970ff;
+    --fc-youtube: #ff3b4e;
+    --fc-kick: #53fc18;
+  }
+  .vstage .seg {
+    background: rgb(255 255 255 / 0.1);
+  }
+  .vstage .seg button {
+    color: #bccad8;
+  }
+  .vstage .seg button[aria-pressed='true'] {
+    background: #e9eff5;
+    color: #0e1014;
+  }
+  .vrow {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: clamp(14px, 3vw, 32px);
+    width: 100%;
+  }
+  .vcap {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+    transition:
+      opacity 480ms var(--fc-ease-out),
+      transform 480ms var(--fc-ease-out),
+      filter 480ms var(--fc-ease-out);
+  }
+  .vcap-l {
+    width: 58%;
+  }
+  .vcap-p {
+    width: 22%;
+  }
+  .vf {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    background: linear-gradient(135deg, #0f1a24 0%, #17212b 100%);
+    box-shadow: 0 30px 60px -30px rgb(0 0 0 / 0.8);
+  }
+  .vf-l {
+    aspect-ratio: 16 / 9;
+  }
+  .vf-p {
+    aspect-ratio: 9 / 16;
+  }
+  .scene {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+  }
+  .scene::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.75;
+    filter: blur(34px);
+    background: conic-gradient(
+      from 210deg at 50% 55%,
+      rgb(169 112 255 / 0.35),
+      rgb(255 59 78 / 0.3),
+      rgb(83 252 24 / 0.22),
+      rgb(51 212 255 / 0.35),
+      rgb(169 112 255 / 0.35)
+    );
+  }
+  .scene svg {
+    position: relative;
+    width: 34%;
+    height: auto;
+    color: #eef0f4;
+  }
+  .vf-p .scene svg {
+    width: 62%;
+  }
+  .vf figcaption {
+    position: absolute;
+    left: 10px;
+    bottom: 8px;
+    color: #bccad8;
+    font: 600 0.75rem var(--fc-font-mono);
+  }
+  .vlab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #bccad8;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .vrow[data-mode='landscape'] .vcap-p,
+  .vrow[data-mode='upright'] .vcap-l {
+    opacity: 0.22;
+    transform: scale(0.94);
+    filter: saturate(0.4);
+  }
+  .vgrid {
+    display: grid;
+    gap: 36px;
+    align-items: center;
+  }
+  @media (min-width: 960px) {
+    .vgrid {
+      grid-template-columns: 1fr 1fr;
+      gap: 72px;
+    }
+  }
+  .vtext h2 {
+    max-width: 14ch;
+  }
+  .vtext p {
+    margin-top: 14px;
+    max-width: 44ch;
+    color: var(--fc-text-2);
+    font-size: 1.125rem;
+  }
+  .vtext .good {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    font-size: 0.9375rem;
+  }
+  .route {
+    display: grid;
+    gap: 14px;
+    padding: clamp(18px, 3vw, 30px);
+    border-radius: 20px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+    box-shadow: var(--fc-shadow-1);
+  }
+  .rt {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: center;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-2);
+  }
+  .shape {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 44px;
+  }
+  .shape i {
+    display: block;
+    border: 2px solid var(--fc-text-2);
+    border-radius: 4px;
+  }
+  .shape .l {
+    width: 56px;
+    height: 32px;
+  }
+  .shape .p {
+    width: 24px;
+    height: 42px;
+  }
+  .rt b {
+    display: block;
+    font-family: var(--fc-font-display);
+    font-size: 1.0625rem;
+  }
+  .pl {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+    color: var(--fc-text-2);
+    font-size: 0.9375rem;
+  }
+  .rt-arrow {
+    justify-self: center;
+    color: var(--fc-text-3);
+  }
+  .tight {
+    padding-top: 0;
+  }
+  .sec-title {
+    margin-bottom: 28px;
+  }
+  .uses {
+    display: grid;
+    gap: 14px;
+  }
+  @media (min-width: 900px) {
+    .uses {
+      grid-template-columns: 1.3fr 1fr 1fr;
+    }
+  }
+  .use {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    padding: 26px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+  }
+  .use.first {
+    background: var(--fc-btn-soft);
+    border-color: transparent;
+  }
+  .use h3 {
+    font-size: 1.375rem;
+  }
+  .use p {
+    color: var(--fc-text-2);
+  }
+  .use :global(.icon) {
+    color: var(--fc-btn-primary);
+  }
+</style>
