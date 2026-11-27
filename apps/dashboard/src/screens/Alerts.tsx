@@ -68,7 +68,7 @@ import { AlertStage, alertHasSound } from '../components/AlertStage'
 import { AlertTimeline } from '../components/alerts/AlertTimeline'
 import { CustomCodePanel } from '../components/alerts/CustomCodePanel'
 import { PropertyGroup } from '../components/alerts/PropertyGroup'
-import { DockHandle, useDockWidth } from '../components/alerts/DockHandle'
+import { DockHandle, useDockPair } from '../components/alerts/DockHandle'
 import { LEFT_DOCK, RIGHT_DOCK } from '../lib/dock-size'
 import { TokenChipField, tokensForAlert } from '../components/alerts/TokenChipField'
 import { VariationCards } from '../components/alerts/VariationCards'
@@ -665,8 +665,7 @@ function RuleEditor({
   const { run, busy } = useAction()
   const [draft, setDraft] = useState(rule)
   const [vi, setVi] = useState(0)
-  const leftDock = useDockWidth(LEFT_DOCK)
-  const rightDock = useDockWidth(RIGHT_DOCK)
+  const { left: leftDock, right: rightDock } = useDockPair(LEFT_DOCK, RIGHT_DOCK)
   const [previewPlatform, setPreviewPlatform] = useState<Platform>(() =>
     rule.kinds[0] === 'tip' ? 'tips' : (platformsFor(rule.kinds[0] ?? 'follow')[0] ?? 'twitch'),
   )
@@ -801,7 +800,7 @@ function RuleEditor({
   return (
     <div
       data-testid="alert-editor"
-      className="fc-editor flex min-h-0 flex-col bg-bg lg:h-[calc(100dvh-var(--fc-top,56px)-var(--fc-statusbar,0px))] lg:overflow-hidden"
+      className="fc-editor flex min-h-0 flex-col bg-bg lg:h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-var(--fc-statusbar,0px))] lg:overflow-hidden"
     >
       {/* Top bar: where I am, what is unsaved, and the ways out. */}
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line bg-surface-1 px-3 py-2 lg:h-[52px] lg:flex-nowrap lg:py-0">
@@ -922,6 +921,7 @@ function RuleEditor({
             growsRight={1}
             onResize={leftDock.set}
             onReset={leftDock.reset}
+            autoFit={false}
             className="-right-1.5"
           />
         </div>
@@ -1069,6 +1069,7 @@ function RuleEditor({
             growsRight={-1}
             onResize={rightDock.set}
             onReset={rightDock.reset}
+            autoFit={false}
             className="-left-1.5"
           />
           <aside

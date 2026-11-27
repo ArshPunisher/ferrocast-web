@@ -119,7 +119,7 @@ function Phone({ view, cut }: { view: GoLiveView; cut: CutShown | null }) {
         ? null
         : 'Nothing coming in from OBS yet'
   return (
-    <figure className="m-0 flex flex-col items-center gap-2.5 justify-self-center md:sticky md:top-4">
+    <figure className="m-0 flex flex-col items-center gap-2.5 justify-self-center md:sticky md:top-[calc(var(--fc-top,56px)+16px)]">
       <div className="rounded-[30px] border border-line-strong bg-black p-2 shadow-2">
         <div className="relative grid aspect-[9/16] h-[420px] place-items-center overflow-hidden rounded-[22px] bg-[#0a0b0d]">
           {cut && <CutPreview cut={cut.cut} image={cut.image} ratio={cut.ratio} width={236} bare />}

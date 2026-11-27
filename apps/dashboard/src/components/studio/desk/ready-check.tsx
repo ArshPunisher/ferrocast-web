@@ -15,7 +15,7 @@ import {
   X,
 } from '@phosphor-icons/react'
 import type { EngineRecovered, Preflight, PreflightCheck } from '@ferrocast/api'
-import { cx } from '@ferrocast/ui'
+import { cx, usePreviewHole } from '@ferrocast/ui'
 import { useAction } from '../../../lib/hooks'
 import { useStudio } from '../common'
 import { useEngine } from './common'
@@ -105,6 +105,11 @@ export function ReadyCheck({
   const rootRef = useRef<HTMLElement>(null)
   const pillRef = useRef<HTMLButtonElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
+  usePreviewHole(pillRef, { active: !dismissed && !expanded, deps: [placement] })
+  usePreviewHole(cardRef, {
+    active: !dismissed && expanded,
+    deps: [placement, found?.checks.length],
+  })
   const pendingCardFocusRef = useRef(false)
   const pendingNextControlFocusRef = useRef(false)
   const cardId = useId()

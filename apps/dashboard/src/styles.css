@@ -670,6 +670,64 @@ body[data-scene-drag] iframe {
   border-bottom: 0;
 }
 
+.fc-contain-stage,
+.fc-contain-dock {
+  contain: layout style;
+}
+.fc-contain-style {
+  contain: style;
+}
+.fc-desk[data-dock-ws] {
+  min-height: 0;
+}
+
+@media (min-width: 900px) {
+  .fc-desk[data-dock-ws] {
+    height: calc(
+      100dvh - var(--fc-top, 56px) - var(--fc-banners, 0px) - var(--fc-statusbar, 0px) - 24px
+    );
+  }
+  .fc-shell-col:has(.fc-desk[data-dock-ws]) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .fc-shell-col:has(.fc-desk[data-dock-ws]) > header,
+  .fc-shell-col:has(.fc-desk[data-dock-ws]) > [data-banners-wrap] {
+    flex: none;
+  }
+  .fc-shell-col:has(.fc-desk[data-dock-ws]) > main {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .fc-shell-col:has(.fc-desk[data-dock-ws])
+    > main
+    > *:not(:has(.fc-desk[data-dock-ws])):not(.fc-desk[data-dock-ws]) {
+    flex: none;
+  }
+  .fc-shell-col:has(.fc-desk[data-dock-ws]) > main :has(.fc-desk[data-dock-ws]) {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0%;
+    min-height: 0;
+  }
+  .fc-shell-col:has(.fc-desk[data-dock-ws])
+    > main
+    :has(> .fc-desk[data-dock-ws])
+    > *:not(.fc-desk[data-dock-ws]) {
+    flex: none;
+  }
+  .fc-shell-col:has(.fc-desk[data-dock-ws]) .fc-desk[data-dock-ws] {
+    flex: 1 1 0%;
+    min-height: 0;
+    height: auto;
+  }
+}
+
 /* Settings › Appearance and Accessibility (lib/appearance.ts). */
 :root[data-reduce-motion='true'] *,
 :root[data-reduce-motion='true'] *::before,

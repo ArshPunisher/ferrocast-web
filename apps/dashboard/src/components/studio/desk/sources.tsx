@@ -60,7 +60,7 @@ import {
   type EngineItemEdit,
   type EngineProjector,
 } from '@ferrocast/api'
-import { ConfirmDialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
+import { ConfirmDialog, IconButton, Input, Skeleton, cx, usePreviewHole } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { os, shortcut } from '../../../lib/os'
@@ -173,6 +173,11 @@ export function SourcesDock() {
   // Where the pointer is while dragging: a chip with the source's name follows it.
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null)
   const [drop, setDrop] = useState<{ id: number; after: boolean } | null>(null)
+  const ghostRef = useRef<HTMLDivElement>(null)
+  usePreviewHole(ghostRef, {
+    active: Boolean(ghost && dragging !== null),
+    deps: [ghost?.x, ghost?.y],
+  })
   const siblingsOf = (id: number): EngineItem[] | null => {
     if (!list) return null
     if (list.some((i) => i.id === id)) return list
@@ -1053,7 +1058,10 @@ export function SourcesDock() {
     >
       {ghost && dragging !== null && (
         <div
+          ref={ghostRef}
           aria-hidden
+          data-source-ghost
+          data-over-preview
           className="pointer-events-none fixed z-50 flex max-w-[260px] cursor-grabbing items-center gap-2 rounded-[10px] border border-[var(--fc-accent)] bg-surface-1 py-1.5 pr-3 pl-1.5 text-[14.5px] font-bold text-text shadow-pop"
           style={{ left: ghost.x + 14, top: ghost.y - 18 }}
         >

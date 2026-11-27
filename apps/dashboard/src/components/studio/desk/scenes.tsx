@@ -29,7 +29,7 @@ import {
   Trash,
 } from '@phosphor-icons/react'
 import { type EngineScene, type EngineTransition } from '@ferrocast/api'
-import { ConfirmDialog, IconButton, Input, Skeleton, cx } from '@ferrocast/ui'
+import { ConfirmDialog, IconButton, Input, Skeleton, cx, usePreviewHole } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { done, useAction } from '../../../lib/hooks'
@@ -214,6 +214,11 @@ export function ScenesDock() {
   const [dragging, setDragging] = useState<string | null>(null)
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null)
   const [drop, setDrop] = useState<SceneDrop | null>(null)
+  const ghostRef = useRef<HTMLDivElement>(null)
+  usePreviewHole(ghostRef, {
+    active: Boolean(ghost && dragging),
+    deps: [ghost?.x, ghost?.y],
+  })
 
   const clearSuppress = useCallback(() => {
     const s = suppressRef.current
@@ -762,8 +767,10 @@ export function ScenesDock() {
     <section aria-label="Scenes" className="flex min-h-0 flex-1 flex-col">
       {ghost && dragging && (
         <div
+          ref={ghostRef}
           aria-hidden
           data-scene-ghost
+          data-over-preview
           className="pointer-events-none fixed z-50 flex max-w-[260px] cursor-grabbing items-center gap-2 rounded-[10px] border border-[var(--fc-accent)] bg-surface-1 py-1.5 pr-3 pl-2 text-[13.5px] font-bold text-text shadow-pop"
           style={{ left: ghost.x + 14, top: ghost.y - 18 }}
         >

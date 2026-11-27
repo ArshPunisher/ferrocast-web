@@ -54,16 +54,28 @@ import {
   Badge,
   Button,
   Dialog,
+  DIVIDER_DRAG_EVENT,
+  type DividerDragPayload,
   IconButton,
   InfoTip,
   Input,
+  PREVIEW_LIVE_RESIZE_EVENT,
+  type PreviewLiveResizePayload,
+  SCALE_CHANGED_EVENT,
   Select,
   Skeleton,
+  collectPreviewHoles,
   cx,
+  findUnregisteredPreviewOverlays,
+  isSafeStillUrl,
+  isValidPreviewLiveResizePayload,
+  isValidScaleChangedPayload,
+  subscribePreviewOverlays,
 } from '@ferrocast/ui'
 import { isSafeModeLocked } from '../../safe-mode'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
+import { THEME_APPLIED_EVENT } from '../../../lib/themes'
 import { shortcut } from '../../../lib/os'
 import { installPreviewInput, picturesTakeMouse } from '../../../lib/preview-input'
 import { done, useAction, useResource } from '../../../lib/hooks'
@@ -429,46 +441,24 @@ const MAX_HOLES = 16
  * picture would keep the last holes it had, painting over menus and guides. */
 export const MAX_SENT_HOLES = 64
 
-/** The guides' lines, the group box and the overflow mask are holes too, but not the kind of
- * crowd that hides the picture: they aren't counted against `MAX_HOLES`. They are against the
- * engine's limit, so when there are too many the ones that matter least (these) go first. */
-const isGuide = (el: Element): boolean => el.hasAttribute('data-guide-hole')
-
-/** The holes to send: menus and panels first and all of them, then as many guide holes as fit.
- * Null: too many menus and panels (hide the picture). */
-function capHoles(first: Hole[], guides: Hole[]): Hole[] | null {
-  if (first.length > MAX_HOLES) return null
-  return [...first, ...guides.slice(0, Math.max(0, MAX_SENT_HOLES - first.length))]
-}
-
 /**
  * What lies over the box: the app's view can't be drawn under the page, so it leaves its
  * picture out where menus and panels are (`holes`, from the box's top left) and they show
  * there. Null: hide it all (a panel being dragged, or too much over it).
  */
 export function overPreview(box: DOMRect, edge = EDGE): Hole[] | null {
-  const r = new DOMRect(box.x - edge, box.y - edge, box.width + 2 * edge, box.height + 2 * edge)
-  if (document.body.dataset.dockDrag) return null
-  const holes: Hole[] = []
-  const guides: Hole[] = []
-  for (const el of document.querySelectorAll(OVER)) {
-    // A modal dialog's own box is the whole window; its panel says it's over the preview.
-    if (el instanceof HTMLDialogElement) continue
-    const b = el.getBoundingClientRect()
-    if (b.width < 1 || b.height < 1) continue
-    if (b.right > r.left && b.left < r.right && b.bottom > r.top && b.top < r.bottom) {
-      // Its rounded corners too, so the picture shows round them, not a square of the page.
-      const rad = Math.min(200, parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0)
-      const hole = { x: b.left - box.x, y: b.top - box.y, w: b.width, h: b.height, r: rad }
-      ;(isGuide(el) ? guides : holes).push(hole)
-    }
-  }
-  return capHoles(holes, guides)
+  return collectPreviewHoles(box, edge, {
+    maxOverlays: MAX_HOLES,
+    maxHoles: MAX_SENT_HOLES,
+    extraDomSelector: OVER,
+  })
 }
 
 /** Where the page's content shows: below the top bar, above the phone tab bar (when shown). */
 function viewBand(): { top: number; bottom: number } {
-  const top = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0
+  const headerEl =
+    document.querySelector('header[data-app-header]') ?? document.querySelector('header')
+  const top = headerEl?.getBoundingClientRect().bottom ?? 0
   const tabs = document.querySelector('[data-tab-bar]')?.getBoundingClientRect()
   const bottom =
     tabs && tabs.height > 0 ? Math.min(tabs.top, window.innerHeight) : window.innerHeight
@@ -555,10 +545,50 @@ function PreviewBoxes({ running }: { running: boolean }) {
     }
     measure()
     if (typeof ResizeObserver === 'undefined') return () => setStageSize(null)
-    const ro = new ResizeObserver(measure)
+    let roRaf = 0
+    let livePaused = false
+    let dividerPaused = false
+    let pendingMeasure = false
+    const flushMeasure = () => {
+      if (livePaused || dividerPaused || document.body.dataset.dockDrag) {
+        pendingMeasure = true
+        return
+      }
+      pendingMeasure = false
+      measure()
+    }
+    const scheduleMeasure = () => {
+      if (roRaf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        flushMeasure()
+        return
+      }
+      roRaf = requestAnimationFrame(() => {
+        roRaf = 0
+        flushMeasure()
+      })
+    }
+    const onLivePause = (e: Event) => {
+      const detail = (e as CustomEvent<unknown>).detail
+      if (!isValidPreviewLiveResizePayload(detail)) return
+      livePaused = detail.active
+      if (!livePaused && !dividerPaused && pendingMeasure) scheduleMeasure()
+    }
+    const onDividerPause = (e: Event) => {
+      const detail = (e as CustomEvent<DividerDragPayload | undefined>).detail
+      if (!detail) return
+      dividerPaused = Boolean(detail.active)
+      if (!livePaused && !dividerPaused && pendingMeasure) scheduleMeasure()
+    }
+    const ro = new ResizeObserver(scheduleMeasure)
     ro.observe(el)
+    window.addEventListener(PREVIEW_LIVE_RESIZE_EVENT, onLivePause)
+    window.addEventListener(DIVIDER_DRAG_EVENT, onDividerPause)
     return () => {
+      if (roRaf) cancelAnimationFrame(roRaf)
       ro.disconnect()
+      window.removeEventListener(PREVIEW_LIVE_RESIZE_EVENT, onLivePause)
+      window.removeEventListener(DIVIDER_DRAG_EVENT, onDividerPause)
       setStageSize(null)
     }
   }, [studio, tall, pv.view])
@@ -596,12 +626,19 @@ function PreviewBoxes({ running }: { running: boolean }) {
   }, [studio, tall])
   // The scenes shown, for the still during a window resize (read there, not a reason to
   // place the picture again).
+  const currentScene = scenes.data?.current ?? ''
+  const previewScene = scenes.data?.preview ?? ''
+  const verticalScene = vertical?.current ?? ''
   const shown = useRef({ current: '', preview: '', vertical: '' })
   shown.current = {
-    current: scenes.data?.current ?? '',
-    preview: scenes.data?.preview ?? '',
-    vertical: vertical?.current ?? '',
+    current: currentScene,
+    preview: previewScene,
+    vertical: verticalScene,
   }
+  const warmStillRef = useRef<(() => void) | null>(null)
+  useEffect(() => {
+    if (currentScene || previewScene || verticalScene) warmStillRef.current?.()
+  }, [currentScene, previewScene, verticalScene])
   // One placement at a time, in the order asked, the newest waiting one winning: sent many a
   // frame (a menu sliding, a dialog opening), they could land out of order, and an older one
   // without the dialog's shade left the picture bright under it (owner's recording, 11 Nov).
@@ -641,6 +678,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
     if (!running || !desktop || !el) return
     let raf = 0
     let last = ''
+    const warned = new WeakSet<Element>()
     // One placement at a time, in order, the newest waiting one winning (see `placer`).
     const put = placer.current
     const place = (box: HTMLElement | null): PreviewRect | null => {
@@ -686,77 +724,170 @@ function PreviewBoxes({ running }: { running: boolean }) {
           }
         : null
     }
+    const STILL_TTL_MS = 10_000
+    const LIVE_RESIZE_GRACE_MS = 350
+    const LIVE_RESIZE_WATCHDOG_MS = 3000
     let again = 0
+    let thawTimer = 0
+    let watchdogTimer = 0
     let alive = true
-    // Resizing the window: the web page lays out and paints a beat after the window itself,
-    // and nothing native can follow what it paints (the owner's recording: a picture that
-    // follows the window spills over the panels while the page catches up; one that trails
-    // the page stutters; a hidden one leaves a black box). So for the resize the page shows a
-    // still of the picture in the canvas's own box, part of the page and so always in step
-    // with it, and the live picture comes back where things ended up once it settles.
-    let resizing = 0
     let frozen = 0
-    // On a Mac the app's view of the whole stage follows the window by itself, in the same
-    // step as the window (as OBS's preview, a native widget in its window's layout), and the
-    // app fits the picture in it: no still is shown for a window resize, the live picture
-    // stays. The page's place for it, a beat behind, is sent when the resize settles.
-    // (Studio Mode's two boxes and the vertical picture beside the main one are the page's
-    // own and still take the still.)
-    const follows = /Mac/.test(navigator.userAgent) && !studio && !tall
-    let settle = 0
+    let freezeSeq = 0
+    let hidNative = false
+    let nativeResize = false
+    let lastResizeSeq = -Infinity
+    let dividerResize = false
+    let dockDragging = false
+    let windowFallbackUntil = 0
+    let liveResizeGraceUntil = 0
+    let scale =
+      typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
+        ? window.devicePixelRatio
+        : 1
     let still: [PreviewRect | null, PreviewRect | null, PreviewRect | null] = [null, null, null]
+    const stillCache = new Map<string, { url: string; ts: number; scene: string; width: number }>()
+    const stillInFlight = new Set<string>()
     const boxes = () =>
       [el, studio ? programRef.current : null, tall ? vRef.current : null] as const
+    const slotNames = () =>
+      studio
+        ? [shown.current.preview, shown.current.current, null]
+        : [shown.current.current, null, shown.current.vertical]
+    const targetWidth = (b: HTMLElement) =>
+      Math.min(640, Math.max(64, Math.round(b.clientWidth * scale)))
+    const stillKey = (name: string, w: number) => `${name}:${w}:${Math.round(scale * 100)}`
+    const setCacheEntry = (key: string, scene: string, width: number, url: string) => {
+      stillCache.delete(key)
+      if (stillCache.size >= 8) {
+        const first = stillCache.keys().next().value
+        if (first !== undefined) stillCache.delete(first)
+      }
+      stillCache.set(key, { url, ts: Date.now(), scene, width })
+    }
+    const paintStill = (b: HTMLElement, image: string): boolean => {
+      if (!isSafeStillUrl(image)) return false
+      // Paint cached or fresh still immediately in the box so native/CSS resize stays synchronized.
+      b.style.backgroundColor = '#000'
+      b.style.backgroundImage = `url("${image}")`
+      b.style.backgroundSize = '100% 100%'
+      return true
+    }
+    const decodeImage = async (image: string) => {
+      if (typeof Image === 'undefined') return
+      const img = new Image()
+      img.src = image
+      if (typeof img.decode === 'function') await img.decode().catch(() => undefined)
+    }
+    const warmStill = () => {
+      if (!alive || nativeResize || dividerResize || dockDragging) return
+      const names = slotNames()
+      const now = Date.now()
+      boxes().forEach((b, i) => {
+        const name = names[i]
+        if (!b || !name || typeof apiRef.current.thumbnail !== 'function') return
+        const w = targetWidth(b)
+        const key = stillKey(name, w)
+        const existing = stillCache.get(key)
+        if ((existing && now - existing.ts <= STILL_TTL_MS) || stillInFlight.has(key)) return
+        stillInFlight.add(key)
+        void Promise.resolve(apiRef.current.thumbnail(name, w))
+          .then(async (res) => {
+            if (!res || !isSafeStillUrl(res.image) || !alive) return
+            await decodeImage(res.image)
+            if (!alive) return
+            setCacheEntry(key, name, w, res.image)
+          })
+          .catch(() => undefined)
+          .finally(() => stillInFlight.delete(key))
+      })
+    }
+    warmStillRef.current = warmStill
     const unfreeze = () => {
+      if (thawTimer) {
+        window.clearTimeout(thawTimer)
+        thawTimer = 0
+      }
       frozen = 0
+      hidNative = false
       for (const b of boxes()) {
         if (!b) continue
         b.style.backgroundImage = ''
         b.style.backgroundColor = ''
+        b.style.backgroundSize = ''
         b.style.opacity = ''
       }
     }
-    const freeze = () => {
-      const token = (frozen = performance.now())
-      const names = studio
-        ? [shown.current.preview, shown.current.current, null]
-        : [shown.current.current, null, shown.current.vertical]
-      const hide = () => {
-        // Only while still resizing: once it settled the live picture is placed again, and
-        // a still that came late must not hide it (CodeRabbit).
-        if (frozen !== token || !alive || performance.now() >= resizing) return
+    const freeze = (hideNative: boolean, hints?: PreviewLiveResizePayload['still']) => {
+      if (thawTimer) {
+        window.clearTimeout(thawTimer)
+        thawTimer = 0
+      }
+      const token = (frozen = ++freezeSeq)
+      const names = slotNames()
+      const hintFor = (index: number) =>
+        index === 0 ? hints?.main : index === 1 ? hints?.program : hints?.vertical
+      const now = Date.now()
+
+      const hideNativeNow = () => {
+        if (!alive || frozen !== token || !hideNative || hidNative) return
+        hidNative = true
         const off = (r: PreviewRect | null) => r && { ...r, opacity: 0 }
         last = JSON.stringify(['still', still])
         void put(off(still[0]), off(still[1]), off(still[2])).catch(() => undefined)
       }
-      void Promise.all(
-        boxes().map(async (b, i) => {
-          const name = names[i]
-          if (!b || !name) return
-          const w = Math.min(640, Math.max(64, Math.round(b.clientWidth * devicePixelRatio)))
-          const { image } = await api.thumbnail(name, w)
-          const img = new Image()
-          img.src = image
-          await img.decode()
-          if (frozen !== token) return
-          // A scene's picture is clear where nothing is (the vertical one's bars above and
-          // below a wide source): black under it, as the canvas draws.
-          b.style.backgroundColor = '#000'
-          b.style.backgroundImage = `url("${image}")`
-          b.style.backgroundSize = '100% 100%'
-        }),
-      )
-        .catch(() => undefined)
-        // Hidden once the still is painted (or without one, if it couldn't be made).
-        .then(() => requestAnimationFrame(hide))
+
+      let pendingInitial = 0
+      boxes().forEach((b, i) => {
+        if (!b) return
+        const hint = hintFor(i)
+        if (hint && paintStill(b, hint)) return
+        const name = names[i]
+        if (!name) return
+        const w = targetWidth(b)
+        const exact = stillCache.get(stillKey(name, w))
+        let matched = exact
+        if (!matched) {
+          for (const entry of stillCache.values()) {
+            if (entry.scene === name) matched = entry
+          }
+        }
+        const paintedSync = matched ? paintStill(b, matched.url) : false
+        const staleOrMiss = !paintedSync || !matched || now - matched.ts > STILL_TTL_MS
+        if (!staleOrMiss || typeof apiRef.current.thumbnail !== 'function') return
+        if (!paintedSync) pendingInitial += 1
+        void Promise.resolve(apiRef.current.thumbnail(name, w))
+          .then(async (res) => {
+            if (!alive || frozen !== token || !res || !isSafeStillUrl(res.image)) {
+              if (!paintedSync) {
+                pendingInitial -= 1
+                if (pendingInitial <= 0) hideNativeNow()
+              }
+              return
+            }
+            await decodeImage(res.image)
+            if (!alive || frozen !== token) return
+            setCacheEntry(stillKey(name, w), name, w, res.image)
+            paintStill(b, res.image)
+            if (!paintedSync) {
+              pendingInitial -= 1
+              if (pendingInitial <= 0) hideNativeNow()
+            }
+          })
+          .catch(() => {
+            if (!paintedSync) {
+              pendingInitial -= 1
+              if (pendingInitial <= 0) hideNativeNow()
+            }
+          })
+      })
+
+      if (pendingInitial === 0) hideNativeNow()
     }
     const send = () => {
       raf = 0
       if (!alive) return
       window.clearTimeout(again)
-      // The window is hidden or minimised (plan item 10, lighter): no live picture is drawn
-      // for nobody to see, which saves the graphics card for the game; the stream and the
-      // recording go on as before. It's placed again when the window shows.
+      // The window is hidden or minimised: suppress GPU preview placement while offscreen.
       if (document.hidden) {
         if (last !== 'hidden') {
           last = 'hidden'
@@ -764,15 +895,15 @@ function PreviewBoxes({ running }: { running: boolean }) {
         }
         return
       }
-      if (performance.now() < resizing) {
-        // A panel is being dragged: placed again when it lands.
-        if (resizing === Infinity) return
+      if (nativeResize || dividerResize || dockDragging) return
+      const now = performance.now()
+      if (now < windowFallbackUntil) {
         again = window.setTimeout(
           () => {
             last = ''
             schedule()
           },
-          resizing - performance.now() + 16,
+          Math.max(16, windowFallbackUntil - now + 16),
         )
         return
       }
@@ -786,27 +917,54 @@ function PreviewBoxes({ running }: { running: boolean }) {
         program = program && { ...program, shade: 0.62 }
         tallRect = tallRect && { ...tallRect, shade: 0.62 }
       }
-      // While an overlay menu or floating panel is animating, follow it smoothly; stop at rest
-      // instead of spinning at 60 fps while idle.
+      // While a non-infinite overlay animation (e.g. Dialog/Sheet/Toast entrance) is running,
+      // keep following it until settled; ignore infinite animations like fc-rec-dot.
       if (
         document.querySelector(OVER) &&
-        document.getAnimations().some((a) => a.playState === 'running')
-      )
+        document
+          .getAnimations()
+          .some(
+            (a) =>
+              a.playState === 'running' && a.effect?.getComputedTiming().iterations !== Infinity,
+          )
+      ) {
         schedule()
+      }
+      if (import.meta.env.DEV) {
+        const missing = findUnregisteredPreviewOverlays()
+        for (const node of missing) {
+          if (!warned.has(node)) {
+            warned.add(node)
+            console.warn('[preview] overlay overlaps stage without PreviewOverlayRegistry', node)
+          }
+        }
+      }
       // The window's height is part of it: the native side places the view from the bottom.
-      const key = JSON.stringify([rect, program, tallRect, window.innerHeight])
+      const key = JSON.stringify([rect, program, tallRect, window.innerHeight, scale])
       still = [rect, program, tallRect]
       if (key === last) {
         if (frozen) unfreeze()
+        warmStill()
         return
       }
       last = key
+      const restoringFromHidden = hidNative
+      const withVisibleOpacity = (r: PreviewRect | null) =>
+        r && restoringFromHidden && r.opacity === undefined ? { ...r, opacity: 1 } : r
       const thawing = frozen
-      void put(rect, program, tallRect)
+      void put(withVisibleOpacity(rect), withVisibleOpacity(program), withVisibleOpacity(tallRect))
         .then((placed) => {
-          // The live picture is back in place: the still goes a moment later, under it. One
-          // replaced before it was sent leaves that to the one that replaced it.
-          if (placed && thawing && frozen === thawing) window.setTimeout(unfreeze, 120)
+          if (!alive) return
+          if (placed) hidNative = false
+          warmStill()
+          // Keep the still briefly underneath until the live frame takes over cleanly.
+          if (placed && thawing && frozen === thawing) {
+            if (thawTimer) window.clearTimeout(thawTimer)
+            thawTimer = window.setTimeout(() => {
+              thawTimer = 0
+              if (frozen === thawing) unfreeze()
+            }, 120)
+          }
         })
         .catch(() => {
           // Not placed: try again shortly, and on the next change.
@@ -817,94 +975,232 @@ function PreviewBoxes({ running }: { running: boolean }) {
         })
     }
     const schedule = () => {
-      if (!raf) raf = requestAnimationFrame(send)
+      if (!raf && alive) raf = requestAnimationFrame(send)
     }
     schedule()
-    // The stage resized (a divider between panels dragged, a panel's edge, a bar above it):
-    // the live picture follows it every frame. Ferrocast's own engine draws each frame at the
-    // view's new size, so the picture keeps playing and the vertical one stays beside it
-    // (owner's recording, 10 Nov: a still stood in during the drag, the timer stopped and the
-    // vertical picture vanished; that still was for libobs, which left black strips).
+
     const ro = new ResizeObserver(schedule)
     ro.observe(el)
     if (stageRef.current) ro.observe(stageRef.current)
     if (programRef.current) ro.observe(programRef.current)
     if (vStageRef.current) ro.observe(vStageRef.current)
     if (vRef.current) ro.observe(vRef.current)
-    const mo = new MutationObserver(schedule)
-    // Dialogs open by an attribute; floating panels say where they are in data-pos.
-    mo.observe(document.body, {
-      childList: true,
-      subtree: true,
+    const ws = el.closest('[data-dock-ws]')
+    if (ws) {
+      ro.observe(ws)
+      if (ws.parentElement) ro.observe(ws.parentElement)
+    }
+    const appHeader =
+      document.querySelector('header[data-app-header]') ?? document.querySelector('header')
+    if (appHeader) ro.observe(appHeader)
+    const appBanners = document.querySelector('[data-banners-wrap]')
+    if (appBanners) ro.observe(appBanners)
+
+    // Watch theme toggles via class/data-theme and explicit events (never html inline styles).
+    const themeMo = new MutationObserver(schedule)
+    themeMo.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['open', 'data-dock-drag', 'data-pos'],
+      attributeFilter: ['class', 'data-theme'],
     })
-    // A theme change repaints the stage round the canvas.
-    mo.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class', 'data-theme', 'style'],
-    })
+    window.addEventListener('fc-theme-change', schedule)
+    window.addEventListener(THEME_APPLIED_EVENT, schedule)
     window.addEventListener('scroll', schedule, { capture: true, passive: true })
     // The edit overlays (marquee, group box, guides) move by style alone.
     window.addEventListener(HOLES_CHANGED, schedule)
+    const unsubOverlays = subscribePreviewOverlays(schedule)
     // Straight away when hidden: a hidden page gets no animation frames.
     const onVisible = () => (document.hidden ? send() : schedule())
     document.addEventListener('visibilitychange', onVisible)
-    // A moved stage that changed no size and fired nothing above (a panel landing elsewhere,
-    // a bar above it growing) would leave the picture where it was, over the panels (owner,
-    // 29 Oct): looked at again now and then. Unchanged, nothing is sent.
-    const watch = window.setInterval(() => !document.hidden && schedule(), 500)
-    // While a panel is dragged the live picture can't stay (the drop zones are drawn over the
-    // stage): a still of it shows in its place, as for a window resize, rather than a grey box
-    // (owner's recording, 29 Oct). The live one comes back where the stage ends up.
-    let dragging = false
+
+    // Watch body attribute only (non-subtree) while dragging a panel out of the workspace.
     const dockWatch = new MutationObserver(() => {
       const on = !!document.body.dataset.dockDrag
-      if (on && !dragging) {
-        dragging = true
-        resizing = Infinity
-        if (!frozen) freeze()
-      } else if (!on && dragging) {
-        dragging = false
-        resizing = 0
-        last = ''
-        schedule()
+      if (on && !dockDragging) {
+        dockDragging = true
+        window.clearTimeout(again)
+        if (!nativeResize) freeze(true)
+        else if (!frozen) freeze(false)
+      } else if (!on && dockDragging) {
+        dockDragging = false
+        if (!nativeResize && !dividerResize) {
+          last = ''
+          schedule()
+        }
       }
     })
     dockWatch.observe(document.body, { attributes: true, attributeFilter: ['data-dock-drag'] })
-    const resize = () => {
-      if (!frozen) freeze()
-      resizing = performance.now() + 180
+
+    const clearWatchdog = () => {
+      if (watchdogTimer) {
+        window.clearTimeout(watchdogTimer)
+        watchdogTimer = 0
+      }
+    }
+    const recoverNativeResize = () => {
+      if (!nativeResize) return
+      clearWatchdog()
+      nativeResize = false
+      windowFallbackUntil = 0
+      liveResizeGraceUntil = performance.now() + LIVE_RESIZE_GRACE_MS
+      window.clearTimeout(again)
+      last = ''
       schedule()
     }
-    const onResize = () => {
-      if (!follows) return resize()
-      window.clearTimeout(settle)
-      // Placed exactly once the window stops (the app leaves the page's boxes out meanwhile).
-      settle = window.setTimeout(() => {
+
+    const onLiveResize = (e: Event) => {
+      const detail = (e as CustomEvent<unknown>).detail
+      if (!isValidPreviewLiveResizePayload(detail)) return
+      if (typeof detail.seq === 'number' && Number.isFinite(detail.seq)) {
+        if (detail.seq < lastResizeSeq) return
+        if (detail.seq === lastResizeSeq && (detail.active || !nativeResize)) return
+        lastResizeSeq = detail.seq
+      }
+      if (typeof detail.scale === 'number' && Number.isFinite(detail.scale) && detail.scale > 0) {
+        if (detail.scale !== scale) {
+          scale = detail.scale
+          stillCache.clear()
+        }
+      }
+      if (detail.active) {
+        nativeResize = true
+        windowFallbackUntil = 0
+        liveResizeGraceUntil = 0
+        clearWatchdog()
+        watchdogTimer = window.setTimeout(recoverNativeResize, LIVE_RESIZE_WATCHDOG_MS)
+        window.clearTimeout(again)
+        if (raf) {
+          cancelAnimationFrame(raf)
+          raf = 0
+        }
+        freeze(false, detail.still)
+        return
+      }
+      clearWatchdog()
+      nativeResize = false
+      windowFallbackUntil = 0
+      liveResizeGraceUntil = performance.now() + LIVE_RESIZE_GRACE_MS
+      window.clearTimeout(again)
+      last = ''
+      schedule()
+    }
+
+    const onScaleChanged = (e: Event) => {
+      const detail = (e as CustomEvent<unknown>).detail
+      if (!isValidScaleChangedPayload(detail)) return
+      scale = detail.scale
+      stillCache.clear()
+      if (!nativeResize && !dividerResize && !dockDragging) {
         last = ''
         schedule()
-      }, 320)
+      }
+    }
+
+    const onDividerDrag = (e: Event) => {
+      const detail = (e as CustomEvent<DividerDragPayload | undefined>).detail
+      if (!detail) return
+      if (detail.active) {
+        dividerResize = true
+        window.clearTimeout(again)
+        if (!nativeResize) freeze(true)
+        else if (!frozen) freeze(false)
+        return
+      }
+      dividerResize = false
+      if (!nativeResize && !dockDragging) {
+        last = ''
+        schedule()
+      }
+    }
+
+    const onResize = () => {
+      if (nativeResize || dividerResize || dockDragging) return
+      if (performance.now() < liveResizeGraceUntil) {
+        schedule()
+        return
+      }
+      if (!frozen || thawTimer !== 0) freeze(true)
+      windowFallbackUntil = performance.now() + 180
       schedule()
     }
+
+    const stageTargets = [
+      ...new Set(
+        [stageRef.current, vStageRef.current, el, vRef.current, programRef.current].filter(
+          (n): n is HTMLDivElement => Boolean(n),
+        ),
+      ),
+    ]
+    for (const node of stageTargets) {
+      node.addEventListener('pointerdown', recoverNativeResize, { capture: true })
+    }
+
+    let cleanupDpr: (() => void) | undefined
+    const bindDprWatcher = () => {
+      cleanupDpr?.()
+      cleanupDpr = undefined
+      if (!alive || typeof window.matchMedia !== 'function') return
+      const curDpr =
+        typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
+          ? window.devicePixelRatio
+          : 1
+      const mql = window.matchMedia(`(resolution: ${curDpr}dppx)`)
+      const onDprChange = () => {
+        if (!alive) return
+        const nextDpr =
+          typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
+            ? window.devicePixelRatio
+            : 1
+        if (nextDpr !== scale) {
+          scale = nextDpr
+          stillCache.clear()
+          if (!nativeResize && !dividerResize && !dockDragging) {
+            last = ''
+            schedule()
+          }
+        }
+        bindDprWatcher()
+      }
+      mql?.addEventListener?.('change', onDprChange)
+      cleanupDpr = () => mql?.removeEventListener?.('change', onDprChange)
+    }
+    bindDprWatcher()
+
+    window.addEventListener(PREVIEW_LIVE_RESIZE_EVENT, onLiveResize)
+    window.addEventListener(SCALE_CHANGED_EVENT, onScaleChanged)
+    window.addEventListener(DIVIDER_DRAG_EVENT, onDividerDrag)
     window.addEventListener('resize', onResize)
     return () => {
       alive = false
+      warmStillRef.current = null
       cancelAnimationFrame(raf)
       window.clearTimeout(again)
-      window.clearTimeout(settle)
-      window.clearInterval(watch)
+      window.clearTimeout(thawTimer)
+      clearWatchdog()
+      for (const node of stageTargets) {
+        node.removeEventListener('pointerdown', recoverNativeResize, { capture: true })
+      }
       dockWatch.disconnect()
       ro.disconnect()
-      mo.disconnect()
+      themeMo.disconnect()
+      cleanupDpr?.()
+      window.removeEventListener('fc-theme-change', schedule)
+      window.removeEventListener(THEME_APPLIED_EVENT, schedule)
       window.removeEventListener('scroll', schedule, { capture: true })
       window.removeEventListener(HOLES_CHANGED, schedule)
+      window.removeEventListener(PREVIEW_LIVE_RESIZE_EVENT, onLiveResize)
+      window.removeEventListener(SCALE_CHANGED_EVENT, onScaleChanged)
+      window.removeEventListener(DIVIDER_DRAG_EVENT, onDividerDrag)
+      unsubOverlays()
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('resize', onResize)
       unfreeze()
       void put(null, null, null).catch(() => undefined)
     }
   }, [api, running, desktop, studio, tall])
+  // Keep edited canvas synced when only one picture is shown even if PictureViewPick is collapsed in OverflowRow.
+  useEffect(() => {
+    if (tall && pv.view !== 'both') setCanvas(pv.view === 'wide' ? 'main' : 'vertical')
+  }, [tall, pv.view, setCanvas])
   // The picture being edited takes the pointer; a press on the other one picks it instead.
   const onTall = tall && canvas === 'vertical'
   // The zoom, and where the zoomed canvas sits against the stage's centre (clamped so Fit stays
@@ -1033,14 +1329,16 @@ function PreviewBoxes({ running }: { running: boolean }) {
   // two, 12 to the label above and to the bar below (owner's recording, 11 Nov: the picture
   // ran over the bar and each other). Widths take off the 24 of padding and the 24 between;
   // heights the padding, the label (18), its gap and the bar (40).
-  const half = 'w-[min(calc((100cqw-48px)/2),calc((100cqh-100px)*16/9))]'
+  const half =
+    'w-[min(calc(100cqw-24px),340px)] sm:w-[calc((100cqw-48px)/2)] min-[900px]:w-[min(calc((100cqw-48px)/2),calc((100cqh-100px)*16/9))]'
   return (
     <div
       data-stage-bg
-      className="flex min-h-16 flex-1 flex-col bg-[var(--fc-stage)] [container-type:size]"
+      data-studio-stage
+      className="flex min-h-16 flex-1 flex-col bg-[var(--fc-stage)] [container-type:inline-size] min-[900px]:[container-type:size]"
     >
-      <div className="flex min-h-0 flex-1 items-center justify-center gap-6 p-3">
-        <figure className="m-0 flex flex-col gap-3">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-3 sm:flex-row sm:gap-6">
+        <figure className="m-0 flex min-w-0 flex-col gap-2 sm:gap-3">
           <figcaption className="flex items-center gap-1.5 text-[12.5px] font-bold text-text-2">
             <span aria-hidden className="size-[7px] rounded-full bg-accent-text" />
             Preview: {scenes.data?.preview}
@@ -1056,7 +1354,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
             <PausedCard compact />
           </div>
         </figure>
-        <figure className="m-0 flex flex-col gap-3">
+        <figure className="m-0 flex min-w-0 flex-col gap-2 sm:gap-3">
           <figcaption className="flex items-center gap-1.5 text-[12.5px] font-bold text-danger">
             <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
             On air: {scenes.data?.current}
@@ -1251,13 +1549,13 @@ function SwitchBar() {
   // side, as the pictures above.
   return (
     <div
-      className="relative flex h-10 flex-none items-center gap-2 px-2.5 before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-[linear-gradient(90deg,var(--fc-arc),var(--fc-danger))] before:content-['']"
+      className="relative flex min-h-10 flex-none flex-wrap items-center gap-x-2 gap-y-1.5 px-2.5 py-1.5 before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:bg-[linear-gradient(90deg,var(--fc-arc),var(--fc-danger))] before:content-['']"
       style={{
         background:
           'linear-gradient(90deg, var(--fc-accent-soft) 0%, transparent 45%, transparent 55%, var(--fc-danger-soft) 100%), var(--fc-surface-1)',
       }}
     >
-      <div className="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] sm:flex-initial">
         {quick.map((q, i) => (
           <Button
             key={`${q.kind}-${q.ms}-${i}`}
@@ -1295,37 +1593,40 @@ function SwitchBar() {
       <div className="w-[min(220px,22%)] min-w-24 flex-none">
         <TBar />
       </div>
-      <span className="flex-1" />
-      <IconButton
-        size="xs"
-        label="Swap the preview and what's on air"
-        onClick={() => void run('swap', () => done(api.swapScenes())).then((ok) => ok && refresh())}
-      >
-        <ArrowsLeftRight size={15} weight="bold" />
-      </IconButton>
-      <IconButton
-        size="xs"
-        label={black ? 'Fade back from black' : 'Fade to black'}
-        aria-pressed={black}
-        className={cx(black && 'bg-danger-fill text-white hover:bg-danger-fill')}
-        onClick={() =>
-          void run('black', () => done(api.fadeToBlack())).then((ok) => ok && refresh())
-        }
-      >
-        <MoonStars size={15} weight={black ? 'fill' : 'bold'} />
-      </IconButton>
-      <IconButton size="xs" label="Studio Mode options" onClick={optionsMenu}>
-        <DotsThree size={16} weight="bold" />
-      </IconButton>
-      <Button
-        variant="primary"
-        size="xs"
-        className="flex-none"
-        busy={busy === 'go'}
-        onClick={() => go()}
-      >
-        <ArrowFatRight size={14} weight="fill" /> Transition
-      </Button>
+      <span className="ml-auto flex flex-none items-center gap-2">
+        <IconButton
+          size="xs"
+          label="Swap the preview and what's on air"
+          onClick={() =>
+            void run('swap', () => done(api.swapScenes())).then((ok) => ok && refresh())
+          }
+        >
+          <ArrowsLeftRight size={15} weight="bold" />
+        </IconButton>
+        <IconButton
+          size="xs"
+          label={black ? 'Fade back from black' : 'Fade to black'}
+          aria-pressed={black}
+          className={cx(black && 'bg-danger-fill text-white hover:bg-danger-fill')}
+          onClick={() =>
+            void run('black', () => done(api.fadeToBlack())).then((ok) => ok && refresh())
+          }
+        >
+          <MoonStars size={15} weight={black ? 'fill' : 'bold'} />
+        </IconButton>
+        <IconButton size="xs" label="Studio Mode options" onClick={optionsMenu}>
+          <DotsThree size={16} weight="bold" />
+        </IconButton>
+        <Button
+          variant="primary"
+          size="xs"
+          className="flex-none"
+          busy={busy === 'go'}
+          onClick={() => go()}
+        >
+          <ArrowFatRight size={14} weight="fill" /> Transition
+        </Button>
+      </span>
       {menu}
     </div>
   )
@@ -3017,7 +3318,14 @@ export function StageBar() {
     const { clientX, clientY } = e
     const list = await api.history().catch(() => null)
     if (!list) return
-    const at = { preventDefault() {}, stopPropagation() {}, currentTarget: el, clientX, clientY }
+    const at = {
+      type: 'click',
+      preventDefault() {},
+      stopPropagation() {},
+      currentTarget: el,
+      clientX,
+      clientY,
+    }
     open(at as unknown as React.MouseEvent, 'History', historyMenu(list, steps))
   }
   const show = (what: 'program' | 'multiview', screen: number | undefined, onTop?: boolean) =>

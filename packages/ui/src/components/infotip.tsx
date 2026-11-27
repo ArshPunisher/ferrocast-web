@@ -1,15 +1,55 @@
 // The small (i) that holds a screen's explanations, so screens stay short (owner, 24 Oct:
 // "very less text"). Opens on hover, focus or tap; Escape, tapping elsewhere or scrolling
 // closes it. The text is always in the page for screen readers (the button describes itself
-// with it), and the bubble is drawn in a portal so a card's edge never cuts it off.
+// with it), and the bubble is drawn via PopoverSurface so edges never cut it off and the
+// preview leaves room for it.
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import {
+  Children,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { Info } from '@phosphor-icons/react'
 import { cx } from '../cx'
+import { PopoverSurface } from './popover-surface'
 
-const GAP = 6
-const EDGE = 8
+function textOf(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(textOf).join('')
+  if (isValidElement<{ children?: ReactNode }>(node)) return textOf(node.props.children)
+  return ''
+}
+
+function hasInteractive(node: ReactNode): boolean {
+  let found = false
+  Children.forEach(node, (child) => {
+    if (found || !isValidElement<{ children?: ReactNode; tabIndex?: number }>(child)) return
+    if (
+      typeof child.type === 'string' &&
+      (child.type === 'a' ||
+        child.type === 'button' ||
+        child.type === 'input' ||
+        child.type === 'select' ||
+        child.type === 'textarea')
+    ) {
+      found = true
+      return
+    }
+    if (typeof child.props.tabIndex === 'number' && child.props.tabIndex >= 0) {
+      found = true
+      return
+    }
+    if (child.props.children !== undefined && hasInteractive(child.props.children)) {
+      found = true
+    }
+  })
+  return found
+}
 
 export function InfoTip({
   children,
@@ -30,17 +70,14 @@ export function InfoTip({
   const auto = useId()
   const textId = id ?? `${auto}-tip`
   const btn = useRef<HTMLButtonElement>(null)
-  const bubble = useRef<HTMLDivElement>(null)
+  const bubble = useRef<HTMLElement>(null)
   const [open, setOpen] = useState(false)
   const [pinned, setPinned] = useState(false)
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
-  // Inside a modal dialog the bubble must be in it (the dialog sits above the page).
-  const [host, setHost] = useState<HTMLElement | null>(null)
   const closing = useRef<number | undefined>(undefined)
+  const interactive = hasInteractive(children)
 
   const show = () => {
     window.clearTimeout(closing.current)
-    setHost(btn.current?.closest('dialog') ?? document.body)
     setOpen(true)
   }
   // A short wait, so the pointer can move onto the bubble (it may hold a link).
@@ -52,64 +89,17 @@ export function InfoTip({
     }, 120)
   }
 
-  useLayoutEffect(() => {
-    if (!open) {
-      setPos(null)
-      return
-    }
-    const b = btn.current?.getBoundingClientRect()
-    const t = bubble.current?.getBoundingClientRect()
-    if (!b || !t) return
-    // A dialog can be transformed: "fixed" is then relative to it.
-    const origin = host && host !== document.body ? host.getBoundingClientRect() : null
-    // Inside a dialog or a panel over the Studio's picture (a side drawer, data-over-preview)
-    // the bubble stays within it: the app draws the live picture over the page, so a bubble
-    // reaching past the drawer's edge is cut off there (owner, 28 Oct).
-    const within = btn.current?.closest('dialog, [data-over-preview]')?.getBoundingClientRect()
-    const lo = (within?.left ?? 0) + EDGE
-    const hi = (within ? within.right : document.documentElement.clientWidth) - t.width - EDGE
-    const vh = window.innerHeight
-    const left = Math.max(lo, Math.min(b.left + b.width / 2 - t.width / 2, hi))
-    const roomBelow = b.bottom + GAP + t.height <= vh - EDGE
-    const roomAbove = b.top - GAP - t.height >= EDGE
-    const below = above ? !roomAbove && roomBelow : roomBelow
-    const top = below ? b.bottom + GAP : Math.max(EDGE, b.top - GAP - t.height)
-    setPos({ left: left - (origin?.left ?? 0), top: top - (origin?.top ?? 0) })
-  }, [open, host, above])
+  const close = useCallback(() => {
+    window.clearTimeout(closing.current)
+    setOpen(false)
+    setPinned(false)
+  }, [])
 
-  useEffect(() => {
-    if (!open) return
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        // Only the tip closes, not the drawer or dialog it's in.
-        e.preventDefault()
-        e.stopPropagation()
-        setOpen(false)
-        setPinned(false)
-      }
-    }
-    const away = (e: PointerEvent) => {
-      const n = e.target as Node
-      if (!btn.current?.contains(n) && !bubble.current?.contains(n)) {
-        setOpen(false)
-        setPinned(false)
-      }
-    }
-    const scroll = () => {
-      setOpen(false)
-      setPinned(false)
-    }
-    document.addEventListener('keydown', key)
-    document.addEventListener('pointerdown', away)
-    window.addEventListener('scroll', scroll, true)
-    window.addEventListener('resize', scroll)
-    return () => {
-      document.removeEventListener('keydown', key)
-      document.removeEventListener('pointerdown', away)
-      window.removeEventListener('scroll', scroll, true)
-      window.removeEventListener('resize', scroll)
-    }
-  }, [open])
+  const onFocusLeave = (related: EventTarget | null) => {
+    const next = related as Node | null
+    if (btn.current?.contains(next) || bubble.current?.contains(next)) return
+    hide()
+  }
 
   useEffect(() => () => window.clearTimeout(closing.current), [])
 
@@ -124,12 +114,9 @@ export function InfoTip({
         onPointerEnter={(e) => e.pointerType === 'mouse' && show()}
         onPointerLeave={(e) => e.pointerType === 'mouse' && !pinned && hide()}
         onFocus={show}
-        onBlur={(e) => {
-          if (!bubble.current?.contains(e.relatedTarget as Node | null)) hide()
-        }}
+        onBlur={(e) => onFocusLeave(e.relatedTarget)}
         onClick={() => {
           window.clearTimeout(closing.current)
-          setHost(btn.current?.closest('dialog') ?? document.body)
           if (pinned) {
             setPinned(false)
             setOpen(false)
@@ -149,29 +136,30 @@ export function InfoTip({
       >
         <Info size={16} weight="bold" aria-hidden />
       </button>
-      <span id={textId} className="sr-only">
+      {!open && (
+        <span id={textId} className="sr-only">
+          {textOf(children)}
+        </span>
+      )}
+      <PopoverSurface
+        open={open}
+        onClose={close}
+        anchorRef={btn}
+        surfaceRef={bubble}
+        id={textId}
+        role={interactive ? 'region' : 'tooltip'}
+        aria-label={interactive ? label : undefined}
+        placement={above ? 'top' : 'bottom'}
+        align="center"
+        gap={6}
+        edgePadding={8}
+        onBlur={(e) => onFocusLeave(e.relatedTarget)}
+        onPointerEnter={show}
+        onPointerLeave={() => !pinned && hide()}
+        className="z-[1000] max-w-[min(300px,calc(100vw-16px))] rounded-[10px] border border-line bg-surface-1 px-3 py-2 text-[14px] leading-snug font-normal tracking-normal text-pretty text-text-2 shadow-pop"
+      >
         {children}
-      </span>
-      {open &&
-        createPortal(
-          <div
-            ref={bubble}
-            aria-hidden
-            // The Studio's live picture leaves room for it where it overlaps.
-            data-over-preview
-            onPointerEnter={show}
-            onPointerLeave={() => !pinned && hide()}
-            style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: 0 }}
-            className={cx(
-              'fixed z-[1000] max-w-[min(300px,calc(100vw-16px))] rounded-[10px] border border-line bg-surface-1 px-3 py-2',
-              'text-[14px] leading-snug font-normal tracking-normal text-pretty text-text-2 shadow-pop',
-              'motion-safe:animate-[fc-tip_120ms_ease-out]',
-            )}
-          >
-            {children}
-          </div>,
-          host ?? document.body,
-        )}
+      </PopoverSurface>
     </>
   )
 }

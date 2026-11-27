@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { getPreviewOverlays, resetPreviewOverlayRegistry } from '@ferrocast/ui'
 import type { ConnectorState, Connectors, GoLiveFrame } from '@ferrocast/api'
 import {
   buildStatusChips,
@@ -263,6 +264,7 @@ describe('StatusStrip component states', () => {
     host?.remove()
     root = null
     host = null
+    resetPreviewOverlayRegistry()
   })
 
   it('renders loading skeletons when loading and connectors are not yet ready', () => {
@@ -273,5 +275,119 @@ describe('StatusStrip component states', () => {
     act(() => root?.render(createElement(StatusStrip, { loading: true })))
     expect(host.querySelector('[aria-busy="true"]')).not.toBeNull()
     expect(host.querySelectorAll('.fc-skeleton')).toHaveLength(3)
+  })
+
+  it('portals summary overflow popover via PopoverSurface and registers in PreviewOverlayRegistry', async () => {
+    resetPreviewOverlayRegistry()
+    useLive.setState({
+      conn: null,
+      connectors: makeConnectors(),
+      socket: 'open',
+      viewers: { twitch: 12, youtube: 8, kick: 3 },
+    })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    await act(async () => root?.render(createElement(StatusStrip, { summary: true })))
+
+    const btn = host.querySelector('[data-testid="connections-overflow"]') as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    btn.getBoundingClientRect = () =>
+      ({ left: 20, top: 8, right: 140, bottom: 40, width: 120, height: 32 }) as DOMRect
+
+    await act(async () => btn.click())
+
+    const pop = document.body.querySelector(
+      '[data-testid="connections-overflow-popover"]',
+    ) as HTMLElement
+    expect(pop).toBeTruthy()
+    expect(getPreviewOverlays().some((e) => e.target === pop)).toBe(true)
+  })
+
+  it('coalesces ResizeObserver via rAF and jumps cleanly to overflow without multi-pass cascade', async () => {
+    useLive.setState({
+      conn: null,
+      connectors: makeConnectors(),
+      socket: 'retrying',
+      viewers: { twitch: 120, youtube: 45, kick: 18 },
+    })
+
+    const roCallbacks: Array<() => void> = []
+    ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+      constructor(cb: () => void) {
+        roCallbacks.push(cb)
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+
+    const rafQueue: Array<FrameRequestCallback> = []
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      rafQueue.push(cb)
+      return rafQueue.length
+    })
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
+
+    let currentWrapWidth = 420
+    const clientWidthSpy = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.firstElementChild?.getAttribute('aria-label') === 'Connections') {
+          return currentWrapWidth
+        }
+        return 0
+      })
+    // Simulate real font rendering ~1.4x wider than heuristic estimate so full-unit, full-short,
+    // and icons would all exceed 420px if measured sequentially.
+    const seenModes: string[] = []
+    const scrollWidthSpy = vi
+      .spyOn(HTMLElement.prototype, 'scrollWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.getAttribute('aria-label') === 'Connections') {
+          const mode = this.getAttribute('data-strip-mode') ?? 'full'
+          seenModes.push(mode)
+          if (mode === 'full') return this.textContent?.includes('viewer') ? 1080 : 920
+          if (mode === 'icons') return 470
+          return 210
+        }
+        return 0
+      })
+
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root!.render(createElement(StatusStrip))
+      })
+
+      const ul = host.querySelector('ul[aria-label="Connections"]')!
+      expect(ul.getAttribute('data-strip-mode')).toBe('overflow')
+      // Should NOT step through 'icons' sequentially when full -> overflow fits in one jump.
+      expect(seenModes).not.toContain('icons')
+
+      // Multiple ResizeObserver firings coalesce to one rAF.
+      const beforeRafCount = rafSpy.mock.calls.length
+      act(() => {
+        currentWrapWidth = 390
+        roCallbacks.forEach((cb) => cb())
+        currentWrapWidth = 380
+        roCallbacks.forEach((cb) => cb())
+        currentWrapWidth = 360
+        roCallbacks.forEach((cb) => cb())
+      })
+      expect(rafSpy.mock.calls.length - beforeRafCount).toBe(1)
+      await act(async () => {
+        while (rafQueue.length) rafQueue.shift()?.(0)
+      })
+      expect(ul.getAttribute('data-strip-mode')).toBe('overflow')
+    } finally {
+      rafSpy.mockRestore()
+      cancelSpy.mockRestore()
+      clientWidthSpy.mockRestore()
+      scrollWidthSpy.mockRestore()
+    }
   })
 })

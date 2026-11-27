@@ -9,6 +9,7 @@ import { useEffect, useRef } from 'react'
 import { useReducedMotion } from 'motion/react'
 import { SPARK } from '../brand'
 import { cx } from '../cx'
+import { SCALE_CHANGED_EVENT } from './preview-events'
 
 interface Pt {
   // mark position (unit box), chaos start, field position (unit box)
@@ -88,28 +89,39 @@ export function SparkField({
     let W = 1,
       H = 1,
       dpr = 1,
-      pts: Pt[] = []
-    const resize = () => {
+      pts: Pt[] = [],
+      needsResize = true
+    const applyResize = () => {
+      needsResize = false
       const r = canvas.getBoundingClientRect()
       W = Math.max(1, r.width)
       H = Math.max(1, r.height)
       dpr = Math.min(window.devicePixelRatio || 1, 2)
-      canvas.width = Math.round(W * dpr)
-      canvas.height = Math.round(H * dpr)
+      const targetW = Math.round(W * dpr)
+      const targetH = Math.round(H * dpr)
+      if (canvas.width !== targetW) canvas.width = targetW
+      if (canvas.height !== targetH) canvas.height = targetH
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      if (!pts.length) pts = sample(Math.round(Math.min(2600, (W * H) / 140)))
+      const desired = Math.max(0, Math.round(Math.min(2600, (W * H) / 140)))
+      if (
+        desired > 0 &&
+        (pts.length === 0 || Math.abs(desired - pts.length) > Math.max(32, pts.length * 0.45))
+      ) {
+        pts = sample(desired)
+      }
     }
-    resize()
 
     const tilt = { x: 0, y: 0, tx: 0, ty: 0 }
     const onMove = (e: PointerEvent) => {
       const r = canvas.getBoundingClientRect()
+      if (r.width <= 0 || r.height <= 0) return
       tilt.tx = ((e.clientX - r.left) / r.width - 0.5) * 2
       tilt.ty = ((e.clientY - r.top) / r.height - 0.5) * 2
     }
     if (!reduce) window.addEventListener('pointermove', onMove, { passive: true })
 
     const draw = (time: number) => {
+      if (needsResize) applyResize()
       // 0-1.8 s: pull together; 1.8-2.4 s: hold; 2.4-4.4 s: most drift out into the field
       const assemble = reduce ? 1 : ease(clamp(time / 1.8))
       const scatter = reduce ? 1 : ease(clamp((time - 2.4) / 2))
@@ -156,16 +168,32 @@ export function SparkField({
     const kick = () => {
       if (!raf) raf = requestAnimationFrame(loop)
     }
-    const ro = new ResizeObserver(() => {
-      resize()
+    const scheduleResize = () => {
+      needsResize = true
       kick()
-    })
+    }
+    const ro = new ResizeObserver(scheduleResize)
     ro.observe(canvas)
+    let dprMq: MediaQueryList | null = null
+    const onDprChange = () => {
+      watchDpr()
+      scheduleResize()
+    }
+    const watchDpr = () => {
+      dprMq?.removeEventListener('change', onDprChange)
+      if (typeof window.matchMedia !== 'function') return
+      dprMq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+      dprMq.addEventListener('change', onDprChange)
+    }
+    watchDpr()
+    window.addEventListener(SCALE_CHANGED_EVENT, scheduleResize)
     document.addEventListener('visibilitychange', kick)
     kick()
     return () => {
       cancelAnimationFrame(raf)
       ro.disconnect()
+      dprMq?.removeEventListener('change', onDprChange)
+      window.removeEventListener(SCALE_CHANGED_EVENT, scheduleResize)
       document.removeEventListener('visibilitychange', kick)
       window.removeEventListener('pointermove', onMove)
     }

@@ -3,10 +3,10 @@
 // The app window takes the drop (that's how the file's path is known) and passes it on as a
 // `ferrocast:drop` event.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FileArrowDown } from '@phosphor-icons/react'
 import { describeError } from '@ferrocast/api'
-import { toast } from '@ferrocast/ui'
+import { toast, usePreviewHole } from '@ferrocast/ui'
 import { useDesk } from './common'
 
 const IMAGES = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tga', 'psd', 'jxr']
@@ -55,6 +55,8 @@ interface DropDetail {
 export function FileDrop() {
   const { api, scene, refresh } = useDesk()
   const [over, setOver] = useState<number | null>(null)
+  const dropRef = useRef<HTMLDivElement>(null)
+  usePreviewHole(dropRef, { active: over !== null, deps: [over] })
   useEffect(() => {
     // The hint goes when the drag events stop: a drag that leaves without saying so (macOS
     // doesn't always) mustn't leave it on screen.
@@ -129,12 +131,15 @@ export function FileDrop() {
     window.addEventListener('ferrocast:drop', on)
     return () => {
       window.clearTimeout(quiet)
+      dragging = null
+      setOver(null)
       window.removeEventListener('ferrocast:drop', on)
     }
   }, [api, scene, refresh])
   if (over === null) return null
   return (
     <div
+      ref={dropRef}
       aria-hidden
       // A hint at the bottom, clear of the picture; marked so the preview cuts round it if a
       // small window puts them together.

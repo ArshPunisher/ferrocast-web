@@ -5,6 +5,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
@@ -24,7 +25,7 @@ import { EventRow } from '../components/EventRow'
 import { NeedsPc } from '../components/remote'
 import { isLimited, useLive } from '../lib/store'
 import { isCloud } from '../lib/boot'
-import { useAction, useClient, useMediaQuery, useNow } from '../lib/hooks'
+import { useAction, useClient, useNow } from '../lib/hooks'
 import { useHeldItems, useHeldSync } from '../lib/held'
 import { useFlushPage, useWidePage } from '../lib/wide'
 import { FEED_FILTERS, filterEvents, type FeedFilter } from '../lib/mini-feed'
@@ -63,7 +64,6 @@ export function Chat() {
   const [reply, setReply] = useState<ReplyTarget | null>(null)
   const [card, setCard] = useState<Actor | null>(null)
   const { actions, dialogs } = useChatActions(setReply, setCard)
-  const wide = useMediaQuery('(min-width: 1024px)')
   // A mod's phone through Ferrocast's servers reads and moderates chat: no composer, no events.
   const remote = useLive((s) => s.remote)
   const mod = remote?.role === 'mod'
@@ -74,6 +74,7 @@ export function Chat() {
 
   const splitRef = useRef<HTMLDivElement>(null)
   const eventsPaneRef = useRef<HTMLDivElement>(null)
+  const dragRafRef = useRef(0)
   const [containerWidth, setContainerWidth] = useState(0)
   const [savedWidth, setSavedWidth] = useState<number | null>(() => loadSavedEventsWidth())
   const [dragging, setDragging] = useState(false)
@@ -87,10 +88,25 @@ export function Chat() {
     }
     measure()
     if (typeof ResizeObserver !== 'function') return
-    const ro = new ResizeObserver(measure)
+    let raf = 0
+    const schedule = () => {
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        measure()
+        return
+      }
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        measure()
+      })
+    }
+    const ro = new ResizeObserver(schedule)
     ro.observe(el)
-    return () => ro.disconnect()
-  }, [wide, mod, limited])
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
+  }, [mod, limited])
 
   const bounds = useMemo(() => eventsWidthBounds(containerWidth), [containerWidth])
   const eventsWidth = useMemo(
@@ -112,6 +128,7 @@ export function Chat() {
 
   useEffect(() => {
     return () => {
+      if (dragRafRef.current) cancelAnimationFrame(dragRafRef.current)
       delete document.body.dataset.dockDrag
     }
   }, [])
@@ -130,9 +147,25 @@ export function Chat() {
 
     const onMove = (m: PointerEvent) => {
       latest = clampEventsWidth(startW - (m.clientX - x0), containerW)
-      setSavedWidth(latest)
+      if (typeof requestAnimationFrame !== 'function') {
+        setSavedWidth(latest)
+        return
+      }
+      if (dragRafRef.current) return
+      dragRafRef.current = requestAnimationFrame(() => {
+        dragRafRef.current = 0
+        setSavedWidth(latest)
+      })
     }
-    const finish = () => {
+    const finish = (endEvent?: PointerEvent) => {
+      if (dragRafRef.current) {
+        cancelAnimationFrame(dragRafRef.current)
+        dragRafRef.current = 0
+      }
+      if (endEvent && endEvent.type === 'pointerup') {
+        latest = clampEventsWidth(startW - (endEvent.clientX - x0), containerW)
+      }
+      setSavedWidth(latest)
       setDragging(false)
       delete document.body.dataset.dockDrag
       el.removeEventListener('pointermove', onMove)
@@ -406,17 +439,36 @@ export function Chat() {
     </section>
   )
 
+  const showFeed = !mod && !limited
+
   return (
     <div
       ref={splitRef}
-      // `--fc-top`: the sticky header's measured height (Shell), matching main's edge-to-edge padding.
-      className="flex h-[calc(100dvh-var(--fc-top,56px)-86px-env(safe-area-inset-bottom))] min-h-[360px] flex-col gap-2.5 sm:h-[calc(100dvh-var(--fc-top,56px)-88px-env(safe-area-inset-bottom))] lg:h-[calc(100dvh-var(--fc-top,56px)-24px-var(--fc-statusbar,0px))] lg:flex-row lg:gap-0"
+      // `--fc-top`: sticky header height (Shell); `--fc-banners`: notice strip above main.
+      className="flex h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-86px-env(safe-area-inset-bottom))] min-h-[360px] flex-col gap-2.5 sm:h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-88px-env(safe-area-inset-bottom))] lg:h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-24px-var(--fc-statusbar,0px))] lg:flex-row lg:gap-0"
     >
-      {mod || limited ? (
-        chatPane
-      ) : wide ? (
+      {showFeed && (
+        <Segmented
+          label="View"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'chat', label: 'Chat' },
+            { value: 'events', label: 'Events' },
+          ]}
+          className="self-start lg:hidden"
+        />
+      )}
+      <div
+        className={cx(
+          'flex min-h-0 min-w-0 flex-1 flex-col',
+          showFeed && tab !== 'chat' && 'max-lg:hidden',
+        )}
+      >
+        {chatPane}
+      </div>
+      {showFeed && (
         <>
-          {chatPane}
           <div
             role="separator"
             tabIndex={0}
@@ -430,7 +482,7 @@ export function Chat() {
             onPointerDown={onSplitterPointerDown}
             onDoubleClick={() => commitWidth(defaultEventsWidth(containerWidth))}
             onKeyDown={onSplitterKeyDown}
-            className="group relative flex w-3 shrink-0 cursor-col-resize touch-none items-center justify-center outline-none select-none focus-visible:outline-none"
+            className="group relative hidden w-3 shrink-0 cursor-col-resize touch-none items-center justify-center outline-none select-none focus-visible:outline-none lg:flex"
           >
             <span
               aria-hidden="true"
@@ -445,28 +497,12 @@ export function Chat() {
           <div
             ref={eventsPaneRef}
             data-testid="chat-events-pane"
-            style={{ width: eventsWidth }}
-            className="flex h-full min-h-0 shrink-0 flex-col"
+            style={{ '--events-w': `${eventsWidth}px` } as CSSProperties}
+            className={cx(
+              'flex min-h-0 min-w-0 flex-1 flex-col lg:h-full lg:w-[var(--events-w)] lg:flex-none lg:shrink-0',
+              tab !== 'events' && 'max-lg:hidden',
+            )}
           >
-            {feedPane}
-          </div>
-        </>
-      ) : (
-        <>
-          <Segmented
-            label="View"
-            value={tab}
-            onChange={setTab}
-            options={[
-              { value: 'chat', label: 'Chat' },
-              { value: 'events', label: 'Events' },
-            ]}
-            className="self-start"
-          />
-          <div className={cx('flex min-h-0 min-w-0 flex-1 flex-col', tab !== 'chat' && 'hidden')}>
-            {chatPane}
-          </div>
-          <div className={cx('flex min-h-0 min-w-0 flex-1 flex-col', tab !== 'events' && 'hidden')}>
             {feedPane}
           </div>
         </>

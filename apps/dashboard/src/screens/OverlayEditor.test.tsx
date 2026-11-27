@@ -548,4 +548,76 @@ describe('OverlayEditor save preserves undo stack (Extra bug #9)', () => {
     const shadow = host.querySelector('[data-overlay-preview] > div')?.shadowRoot
     expect(shadow?.textContent).toContain('twitch.tv/freshmount')
   })
+
+  it('reacts to fc:statusbar-change via rAF without observing html.style mutations', async () => {
+    engine = new DemoEngine({ autoplay: false, latencyMs: 0 })
+    const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+    const list = await client.overlays()
+    const base = list[0]!
+
+    const htmlStyleObserved: Array<MutationObserverInit | undefined> = []
+    const origObserve = MutationObserver.prototype.observe
+    const observeSpy = vi.spyOn(MutationObserver.prototype, 'observe').mockImplementation(function (
+      this: MutationObserver,
+      target: Node,
+      options?: MutationObserverInit,
+    ) {
+      if (target === document.documentElement && options?.attributeFilter?.includes('style')) {
+        htmlStyleObserved.push(options)
+      }
+      return origObserve.call(this, target, options)
+    })
+
+    const origInnerW = window.innerWidth
+    const origInnerH = window.innerHeight
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 })
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 })
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.dataset.testid === 'overlay-status-bar') {
+          return {
+            x: 80,
+            y: 740,
+            width: 800,
+            height: 48,
+            top: 740,
+            right: 880,
+            bottom: 788,
+            left: 80,
+            toJSON: () => ({}),
+          } as DOMRect
+        }
+        return {
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          toJSON: () => ({}),
+        } as DOMRect
+      })
+
+    try {
+      await mountEditor(base.id, client)
+      expect(htmlStyleObserved).toEqual([])
+      expect(document.documentElement.style.getPropertyValue('--fc-toast-offset')).toBe('52px')
+
+      await act(async () => {
+        document.documentElement.style.setProperty('--fc-statusbar', '28px')
+        window.dispatchEvent(new CustomEvent('fc:statusbar-change'))
+        await new Promise<void>((r) => requestAnimationFrame(() => r()))
+      })
+      expect(document.documentElement.style.getPropertyValue('--fc-toast-offset')).toBe('24px')
+    } finally {
+      observeSpy.mockRestore()
+      rectSpy.mockRestore()
+      document.documentElement.style.removeProperty('--fc-statusbar')
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: origInnerW })
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: origInnerH })
+    }
+  })
 })

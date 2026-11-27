@@ -266,6 +266,30 @@ function sumRowWidth(widths: number[]): number {
   return positive.reduce((a, b) => a + b, 0) + (positive.length - 1) * ITEM_GAP_PX
 }
 
+/** Estimates widths of the three non-overflow status strip tiers for one-pass overflow detection. */
+export function estimateStatusStripCandidates({
+  items,
+  socket,
+}: {
+  items: readonly StatusChipItem[]
+  socket: ConnectionState
+}): Record<'full-unit' | 'full-short' | 'icons', number> {
+  return {
+    'full-unit': sumRowWidth([
+      ...items.map((it) => estimateChipWidth(it, 'full', true)),
+      estimateSocketWidth(socket, 'full'),
+    ]),
+    'full-short': sumRowWidth([
+      ...items.map((it) => estimateChipWidth(it, 'full', false)),
+      estimateSocketWidth(socket, 'full'),
+    ]),
+    icons: sumRowWidth([
+      ...items.map((it) => estimateChipWidth(it, 'icons', false)),
+      estimateSocketWidth(socket, 'icons'),
+    ]),
+  }
+}
+
 /** Computes which tier (`full` -> `icons` -> `overflow`) fits inside `availableWidth`. */
 export function computeStatusStripLayout({
   items,
@@ -296,11 +320,9 @@ export function computeStatusStripLayout({
     return Math.max(estimated, measuredMin) <= availableWidth
   }
 
-  const fullUnitEstimate = sumRowWidth([
-    ...allItems.map((it) => estimateChipWidth(it, 'full', true)),
-    estimateSocketWidth(socket, 'full'),
-  ])
-  if (fits('full-unit', fullUnitEstimate)) {
+  const candidates = estimateStatusStripCandidates({ items: allItems, socket })
+
+  if (fits('full-unit', candidates['full-unit'])) {
     return {
       mode: 'full',
       showViewerUnit: true,
@@ -312,11 +334,7 @@ export function computeStatusStripLayout({
     }
   }
 
-  const fullShortEstimate = sumRowWidth([
-    ...allItems.map((it) => estimateChipWidth(it, 'full', false)),
-    estimateSocketWidth(socket, 'full'),
-  ])
-  if (fits('full-short', fullShortEstimate)) {
+  if (fits('full-short', candidates['full-short'])) {
     return {
       mode: 'full',
       showViewerUnit: false,
@@ -328,11 +346,7 @@ export function computeStatusStripLayout({
     }
   }
 
-  const iconsEstimate = sumRowWidth([
-    ...allItems.map((it) => estimateChipWidth(it, 'icons', false)),
-    estimateSocketWidth(socket, 'icons'),
-  ])
-  if (fits('icons', iconsEstimate)) {
+  if (fits('icons', candidates.icons)) {
     return {
       mode: 'icons',
       showViewerUnit: false,

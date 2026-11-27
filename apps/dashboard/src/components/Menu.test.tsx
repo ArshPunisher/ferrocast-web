@@ -1,13 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { Dialog, getPreviewOverlays, resetPreviewOverlayRegistry } from '@ferrocast/ui'
 import { Menu } from './Menu'
 
 let root: Root | null = null
 
 describe('Menu viewport containment (Problem 4)', () => {
   beforeEach(() => {
+    resetPreviewOverlayRegistry()
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.setAttribute('open', '')
+    }
+    HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+      this.removeAttribute('open')
+    }
     window.matchMedia = ((q: string) => ({
       matches: true,
       media: q,
@@ -24,6 +32,7 @@ describe('Menu viewport containment (Problem 4)', () => {
     await act(async () => root?.unmount())
     root = null
     document.body.innerHTML = ''
+    resetPreviewOverlayRegistry()
     vi.restoreAllMocks()
   })
 
@@ -101,5 +110,52 @@ describe('Menu viewport containment (Problem 4)', () => {
     const maxHeight2 = parseFloat(menu2.style.maxHeight)
     expect(top2).toBe(338)
     expect(top2 + maxHeight2).toBeLessThanOrEqual(764)
+  })
+
+  it('portals into enclosing dialog to escape overflow-hidden, skips visibility:hidden, and registers in PreviewOverlayRegistry (M5)', async () => {
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(800)
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(1280)
+
+    const items = [
+      { key: 'edit', label: 'Edit', onSelect: vi.fn() },
+      { key: 'delete', label: 'Delete', danger: true, onSelect: vi.fn() },
+    ]
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <Dialog open onClose={() => undefined} title="Auto replies">
+          <div data-testid="clipped" className="overflow-hidden">
+            <Menu
+              label="Reply actions"
+              items={items}
+              trigger={(p) => (
+                <button type="button" {...p}>
+                  Actions
+                </button>
+              )}
+            />
+          </div>
+        </Dialog>,
+      ),
+    )
+
+    const dlg = document.querySelector('dialog[open]')!
+    const clipped = dlg.querySelector('[data-testid="clipped"]')!
+    const triggerWrap = clipped.firstElementChild as HTMLElement
+    triggerWrap.getBoundingClientRect = () =>
+      ({ top: 300, bottom: 332, left: 400, right: 480, width: 80, height: 32 }) as DOMRect
+
+    const triggerBtn = clipped.querySelector('button[aria-haspopup="menu"]') as HTMLButtonElement
+    await act(async () => triggerBtn.click())
+
+    const menu = dlg.querySelector('[role="menu"][aria-label="Reply actions"]') as HTMLElement
+    expect(menu).toBeTruthy()
+    // Portalled to the <dialog> top layer directly, never trapped inside the clipped container.
+    expect(menu.parentElement).toBe(dlg)
+    expect(clipped.contains(menu)).toBe(false)
+    expect(menu.style.visibility).toBe('')
+    expect(menu.style.transform).toBe('')
+    expect(getPreviewOverlays().some((entry) => entry.target === menu)).toBe(true)
   })
 })

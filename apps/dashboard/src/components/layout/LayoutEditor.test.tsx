@@ -887,4 +887,121 @@ describe('LayoutEditor same-millisecond layer ID uniqueness (Extra bug #5)', () 
     })
     expect(hUpdates.at(-1)).toHaveLength(3)
   })
+
+  it('keeps a single stable ResizeObserver when fitViewport resizes and clears header/banners in inspector', async () => {
+    const origMatchMedia = window.matchMedia
+    window.matchMedia = ((q: string) => ({
+      matches: q.includes('min-width: 1024px') && q.includes('min-height: 640px'),
+      media: q,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+      onchange: null,
+    })) as typeof window.matchMedia
+
+    const observers: Array<{ cb: () => void; targets: Element[]; disconnected: boolean }> = []
+    ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+      entry: { cb: () => void; targets: Element[]; disconnected: boolean }
+      constructor(cb: () => void) {
+        this.entry = { cb, targets: [], disconnected: false }
+        observers.push(this.entry)
+      }
+      observe(el: Element) {
+        this.entry.targets.push(el)
+      }
+      unobserve() {}
+      disconnect() {
+        this.entry.disconnected = true
+      }
+    }
+
+    let stageW = 800
+    let stageH = 450
+    vi.spyOn(HTMLDivElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: HTMLDivElement,
+    ) {
+      if (this.className.includes('fc-overlay-stage-inner')) return stageW
+      return 400
+    })
+    vi.spyOn(HTMLDivElement.prototype, 'clientHeight', 'get').mockImplementation(function (
+      this: HTMLDivElement,
+    ) {
+      if (this.className.includes('fc-overlay-stage-inner')) return stageH
+      return 225
+    })
+
+    useLive.setState({ conn: { client: { request: vi.fn(async () => undefined) } } as never })
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+
+    try {
+      await act(async () =>
+        root!.render(
+          <LayoutEditor
+            layout={{ name: 'Main', width: 1920, height: 1080, widgets: [] }}
+            onWidgets={vi.fn()}
+            state={EMPTY_STATE}
+            themes={[]}
+            goals={[]}
+            onGoalCreated={vi.fn()}
+            preview={false}
+            media={[]}
+            onUploaded={vi.fn()}
+            fitViewport
+          />,
+        ),
+      )
+
+      const initialObserverCount = observers.length
+      expect(initialObserverCount).toBe(1)
+
+      for (const [w, h] of [
+        [760, 420],
+        [720, 400],
+        [680, 380],
+        [640, 360],
+      ]) {
+        stageW = w!
+        stageH = h!
+        await act(async () => {
+          for (const o of observers) {
+            if (!o.disconnected) o.cb()
+          }
+          await new Promise((r) => setTimeout(r, 20))
+        })
+      }
+
+      // Resizing the stage must NOT disconnect and recreate ResizeObservers on every step.
+      expect(observers.length).toBe(initialObserverCount)
+      expect(observers.every((o) => !o.disconnected)).toBe(true)
+
+      await act(async () =>
+        root!.render(
+          <LayoutEditor
+            layout={{ name: 'Main', width: 1920, height: 1080, widgets: [] }}
+            onWidgets={vi.fn()}
+            state={EMPTY_STATE}
+            themes={[]}
+            goals={[]}
+            onGoalCreated={vi.fn()}
+            preview={false}
+            media={[]}
+            onUploaded={vi.fn()}
+            fitViewport={false}
+          />,
+        ),
+      )
+
+      const inspector = host.querySelector<HTMLElement>('aside[aria-label="Inspector"]')!
+      expect(inspector.className).not.toContain('xl:top-4')
+      expect(inspector.className).toContain('var(--fc-top,56px)')
+      expect(inspector.className).toContain('var(--fc-banners,0px)')
+      expect(inspector.className).toContain('var(--fc-statusbar,0px)')
+    } finally {
+      vi.restoreAllMocks()
+      window.matchMedia = origMatchMedia
+    }
+  })
 })

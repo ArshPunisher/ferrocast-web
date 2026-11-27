@@ -43,6 +43,7 @@ import {
   Switch,
   cx,
   toast,
+  usePreviewHole,
 } from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { done, useAction, useResource, type Resource } from '../../../lib/hooks'
@@ -204,6 +205,7 @@ function Panel({
   const fapi = useFilterApi(name)
   const filters = useResource(() => fapi.filters(name), [fapi, name, undone])
   const panel = useRef<HTMLElement>(null)
+  usePreviewHole(panel, { active: true, deps: [name] })
   // A click anywhere outside closes it (owner, 28 Oct): what's in it is applied as it's
   // changed, so nothing is lost. Not for what it opened over the page (a list, a menu, a
   // dialog, a toast or an info bubble), nor a pick in the Sources list, which opens another.
@@ -212,11 +214,30 @@ function Panel({
     const el = panel.current
     const root = document.documentElement
     if (!el) return
-    const put = () => root.style.setProperty('--fc-drawer', `${el.offsetWidth}px`)
+    let last = ''
+    let raf = 0
+    const put = () => {
+      const next = `${el.offsetWidth}px`
+      if (next === last) return
+      last = next
+      root.style.setProperty('--fc-drawer', next)
+    }
     put()
-    const o = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(put)
+    const schedule = () => {
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        put()
+        return
+      }
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        put()
+      })
+    }
+    const o = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
     o?.observe(el)
     return () => {
+      if (raf) cancelAnimationFrame(raf)
       o?.disconnect()
       root.style.removeProperty('--fc-drawer')
     }

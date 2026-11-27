@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Check } from '@phosphor-icons/react'
 import { studioEngineApi } from '@ferrocast/api'
 import { Button, SparkField, Wordmark, cx } from '@ferrocast/ui'
 import { THEME_EVENT } from '../components/Shell'
+import { THEME_APPLIED_EVENT } from '../lib/themes'
 import { AccountRow, useConnect } from '../components/accounts'
 import { ChoiceCard } from '../components/onboarding/ChoiceCard'
 import {
@@ -101,15 +102,17 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
     const sync = () => setLightTheme(isThemeLight())
     sync()
     window.addEventListener(THEME_EVENT, sync)
+    window.addEventListener(THEME_APPLIED_EVENT, sync)
     const mq = window.matchMedia?.('(prefers-color-scheme: light)')
     mq?.addEventListener?.('change', sync)
     const mo = new MutationObserver(sync)
     mo.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-theme', 'class', 'style'],
+      attributeFilter: ['data-theme', 'class'],
     })
     return () => {
       window.removeEventListener(THEME_EVENT, sync)
+      window.removeEventListener(THEME_APPLIED_EVENT, sync)
       mq?.removeEventListener?.('change', sync)
       mo.disconnect()
     }

@@ -47,7 +47,17 @@ import {
   type StudioSettings,
   type StudioStartOptions,
 } from '@ferrocast/api'
-import { Button, Dialog, IconButton, InfoLine, InfoTip, Skeleton, cx, toast } from '@ferrocast/ui'
+import {
+  Button,
+  Dialog,
+  IconButton,
+  InfoLine,
+  InfoTip,
+  PopoverSurface,
+  Skeleton,
+  cx,
+  toast,
+} from '@ferrocast/ui'
 import { LoadError } from '../../Panel'
 import { inDesktopApp } from '../../../lib/external'
 import { os } from '../../../lib/os'
@@ -1391,26 +1401,10 @@ export function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => 
   const turningOff = useRef(false)
   const [addingWeb, setAddingWeb] = useState(false)
   const btn = useRef<HTMLButtonElement>(null)
-  const menu = useRef<HTMLDivElement>(null)
+  const menu = useRef<HTMLElement>(null)
   useEffect(() => {
     if (!open) return
-    const away = (e: PointerEvent) => {
-      if (!menu.current?.contains(e.target as Node) && !btn.current?.contains(e.target as Node))
-        setOpen(false)
-    }
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setOpen(false)
-        btn.current?.focus()
-      }
-    }
-    document.addEventListener('pointerdown', away)
-    document.addEventListener('keydown', key)
-    menu.current?.querySelector<HTMLElement>('button')?.focus()
-    return () => {
-      document.removeEventListener('pointerdown', away)
-      document.removeEventListener('keydown', key)
-    }
+    menu.current?.querySelector<HTMLElement>('[role^="menuitem"]')?.focus({ preventScroll: true })
   }, [open])
   // Not turning it off after all: back to the button that asked (the menu item is gone).
   const keep = () => {
@@ -1451,118 +1445,134 @@ export function LayoutMenu({ onStatus }: { onStatus: (s: StudioEngineStatus) => 
       >
         <LayoutIcon size={16} />
       </button>
-      {open && (
-        <div
-          ref={menu}
-          role="menu"
-          aria-label="Layout"
-          className="absolute right-0 z-50 mt-1.5 flex w-[264px] flex-col gap-px rounded-control border border-line-strong bg-surface-2 p-1.5 shadow-pop"
-          onKeyDown={(e) => {
-            const items = [
-              ...(menu.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? []),
-            ]
-            const i = items.indexOf(document.activeElement as HTMLElement)
-            if (e.key === 'ArrowDown') {
-              e.preventDefault()
-              items[(i + 1) % items.length]?.focus()
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault()
-              items[(i - 1 + items.length) % items.length]?.focus()
-            }
+      <PopoverSurface
+        open={open}
+        onClose={(reason) => {
+          setOpen(false)
+          if (reason === 'escape' || reason === 'tab') btn.current?.focus()
+        }}
+        anchorRef={btn}
+        surfaceRef={menu}
+        placement="bottom"
+        align="end"
+        gap={6}
+        edgePadding={8}
+        closeOnTab
+        role="menu"
+        aria-label="Layout"
+        className="z-[70] flex w-[min(264px,calc(100vw-16px))] flex-col gap-px rounded-control border border-line-strong bg-surface-2 p-1.5 shadow-pop [&>*]:shrink-0"
+        onKeyDown={(e) => {
+          const items = [
+            ...(menu.current?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? []),
+          ]
+          if (items.length === 0) return
+          const i = items.indexOf(document.activeElement as HTMLElement)
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            items[(i + 1) % items.length]?.focus()
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            items[(i - 1 + items.length) % items.length]?.focus()
+          } else if (e.key === 'Home') {
+            e.preventDefault()
+            items[0]?.focus()
+          } else if (e.key === 'End') {
+            e.preventDefault()
+            items[items.length - 1]?.focus()
+          }
+        }}
+      >
+        <span className="px-2.5 pt-1.5 pb-1 text-[12.5px] font-bold text-text-3">Layout</span>
+        <div className="grid grid-cols-3 gap-1.5 p-1">
+          {(Object.keys(PRESET_NAMES) as Preset[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              role="menuitemradio"
+              aria-checked={layout.preset === p}
+              onClick={() => setLayout((l) => fromPreset(l, p))}
+              className={cx(
+                'flex flex-col items-center gap-1.5 rounded-[8px] border border-line px-1 pt-2 pb-1.5 text-[13px] hover:bg-surface-3',
+                layout.preset === p && 'fc-picked border-transparent',
+              )}
+            >
+              <Mini p={p} />
+              {PRESET_NAMES[p]}
+            </button>
+          ))}
+        </div>
+        <hr className="mx-1 my-1 border-line" />
+        <span className="px-2.5 pt-1 pb-1 text-[12.5px] font-bold text-text-3">Panels</span>
+        {[...BUILT_INS, ...layout.webs.map((d) => d.id)].map((id: DockId) => {
+          const shown = placed(layout, id) && !layout.hidden.includes(id)
+          return (
+            <button
+              key={id}
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={shown}
+              className={item}
+              onClick={() => setLayout((l) => toggleDock(l, id))}
+            >
+              {shown ? (
+                <CheckSquare size={17} weight="fill" className="text-accent-text" aria-hidden />
+              ) : (
+                <Square size={17} className="text-text-3" aria-hidden />
+              )}
+              <span className="truncate">{dockName(layout, id)}</span>
+            </button>
+          )
+        })}
+        <button
+          type="button"
+          role="menuitem"
+          className={item}
+          onClick={() => {
+            setOpen(false)
+            setAddingWeb(true)
           }}
         >
-          <span className="px-2.5 pt-1.5 pb-1 text-[12.5px] font-bold text-text-3">Layout</span>
-          <div className="grid grid-cols-3 gap-1.5 p-1">
-            {(Object.keys(PRESET_NAMES) as Preset[]).map((p) => (
-              <button
-                key={p}
-                type="button"
-                role="menuitemradio"
-                aria-checked={layout.preset === p}
-                onClick={() => setLayout((l) => fromPreset(l, p))}
-                className={cx(
-                  'flex flex-col items-center gap-1.5 rounded-[8px] border border-line px-1 pt-2 pb-1.5 text-[13px] hover:bg-surface-3',
-                  layout.preset === p && 'fc-picked border-transparent',
-                )}
-              >
-                <Mini p={p} />
-                {PRESET_NAMES[p]}
-              </button>
-            ))}
-          </div>
-          <hr className="mx-1 my-1 border-line" />
-          <span className="px-2.5 pt-1 pb-1 text-[12.5px] font-bold text-text-3">Panels</span>
-          {[...BUILT_INS, ...layout.webs.map((d) => d.id)].map((id: DockId) => {
-            const shown = placed(layout, id) && !layout.hidden.includes(id)
-            return (
-              <button
-                key={id}
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={shown}
-                className={item}
-                onClick={() => setLayout((l) => toggleDock(l, id))}
-              >
-                {shown ? (
-                  <CheckSquare size={17} weight="fill" className="text-accent-text" aria-hidden />
-                ) : (
-                  <Square size={17} className="text-text-3" aria-hidden />
-                )}
-                <span className="truncate">{dockName(layout, id)}</span>
-              </button>
-            )
-          })}
-          <button
-            type="button"
-            role="menuitem"
-            className={item}
-            onClick={() => {
+          <Plus size={17} aria-hidden /> Add a web panel…
+        </button>
+        <hr className="mx-1 my-1 border-line" />
+        <button
+          type="button"
+          role="menuitemcheckbox"
+          aria-checked={layout.locked}
+          className={item}
+          onClick={() => setLayout((l) => ({ ...l, locked: !l.locked }))}
+        >
+          {layout.locked ? (
+            <LockSimple size={17} aria-hidden />
+          ) : (
+            <LockSimpleOpen size={17} aria-hidden />
+          )}
+          {layout.locked ? 'Unlock layout' : 'Lock layout'}
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          className={item}
+          onClick={() => setLayout((l) => ({ ...fromPreset(l, 'side'), locked: false }))}
+        >
+          <ArrowCounterClockwise size={17} aria-hidden /> Reset layout
+        </button>
+        <hr className="mx-1 my-1 border-line" />
+        <button
+          type="button"
+          role="menuitem"
+          className={cx(item, 'text-danger')}
+          aria-haspopup={asked ? 'dialog' : undefined}
+          onClick={() => {
+            if (asked) {
               setOpen(false)
-              setAddingWeb(true)
-            }}
-          >
-            <Plus size={17} aria-hidden /> Add a web panel…
-          </button>
-          <hr className="mx-1 my-1 border-line" />
-          <button
-            type="button"
-            role="menuitemcheckbox"
-            aria-checked={layout.locked}
-            className={item}
-            onClick={() => setLayout((l) => ({ ...l, locked: !l.locked }))}
-          >
-            {layout.locked ? (
-              <LockSimple size={17} aria-hidden />
-            ) : (
-              <LockSimpleOpen size={17} aria-hidden />
-            )}
-            {layout.locked ? 'Unlock layout' : 'Lock layout'}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className={item}
-            onClick={() => setLayout((l) => ({ ...fromPreset(l, 'side'), locked: false }))}
-          >
-            <ArrowCounterClockwise size={17} aria-hidden /> Reset layout
-          </button>
-          <hr className="mx-1 my-1 border-line" />
-          <button
-            type="button"
-            role="menuitem"
-            className={cx(item, 'text-danger')}
-            aria-haspopup={asked ? 'dialog' : undefined}
-            onClick={() => {
-              if (asked) {
-                setOpen(false)
-                setAsking(true)
-              } else void stop()
-            }}
-          >
-            <Power size={17} aria-hidden /> Turn the Studio off
-          </button>
-        </div>
-      )}
+              setAsking(true)
+            } else void stop()
+          }}
+        >
+          <Power size={17} aria-hidden /> Turn the Studio off
+        </button>
+      </PopoverSurface>
       <WebDockDialog open={addingWeb} onClose={() => setAddingWeb(false)} />
       <Dialog
         compact

@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
-import { act, useRef } from 'react'
+import { Profiler, act, useRef } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  DIVIDER_DRAG_EVENT,
+  PREVIEW_LIVE_RESIZE_EVENT,
+  SCALE_CHANGED_EVENT,
+  findUnregisteredPreviewOverlays,
+} from '@ferrocast/ui'
 import { DeskProvider } from './common'
 import { useLive } from '../../../lib/store'
 import { HOLES_CHANGED } from './snap-overlay'
@@ -1879,7 +1885,18 @@ describe('H11: native preview hole sync and vertical-only zoom guard', () => {
     const previewReq = vi.fn(async () => undefined)
     useLive.setState({ conn: { client: { request: previewReq } } as never })
     // `size: null` avoids accidental side-effects from EditHints/GroupBox, proving PreviewBoxes syncs directly.
-    const { desk } = fakeDesk({ size: null })
+    const { desk } = fakeDesk({
+      size: null,
+      scenes: {
+        data: {
+          current: 'Main',
+          transition: { kind: 'cut_transition', ms: 0 },
+          vertical: null,
+          preview: null,
+        },
+        reload() {},
+      },
+    })
 
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
       this: HTMLElement,
@@ -1957,6 +1974,769 @@ describe('H11: native preview hole sync and vertical-only zoom guard', () => {
       )
     } finally {
       window.removeEventListener(HOLES_CHANGED, onHoles)
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+})
+
+describe('Studio preview live-resize and scale sync', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    delete (window as { __FERROCAST__?: unknown }).__FERROCAST__
+    useLive.setState({ conn: null })
+  })
+
+  function setupPreviewTest(ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)') {
+    vi.useFakeTimers()
+    Object.defineProperty(window.navigator, 'userAgent', {
+      configurable: true,
+      value: ua,
+    })
+    const roCallbacks: Array<() => void> = []
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        cb: () => void
+        constructor(cb: () => void) {
+          this.cb = cb
+          roCallbacks.push(cb)
+        }
+        observe() {}
+        disconnect() {}
+      },
+    )
+    ;(window as { __FERROCAST__?: unknown }).__FERROCAST__ = { desktop: true }
+
+    let thumbCount = 0
+    const req = vi.fn<(method: string, path: string, body?: unknown) => Promise<unknown>>(
+      async (method, path) => {
+        if (method === 'GET' && path.includes('/thumbnail')) {
+          thumbCount += 1
+          return { image: `data:image/png;base64,STILL_${thumbCount}` }
+        }
+        return undefined
+      },
+    )
+    useLive.setState({ conn: { client: { request: req } } as never })
+    const { desk } = fakeDesk({
+      size: null,
+      scenes: {
+        data: {
+          current: 'Main',
+          transition: { kind: 'cut_transition', ms: 0 },
+          vertical: null,
+          preview: null,
+        },
+        reload() {},
+      },
+    })
+
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (this.hasAttribute('data-canvas-box')) {
+        return {
+          left: 100,
+          top: 50,
+          width: 800,
+          height: 450,
+          right: 900,
+          bottom: 500,
+          x: 100,
+          y: 50,
+          toJSON: () => {},
+        } as DOMRect
+      }
+      return {
+        left: 0,
+        top: 0,
+        width: 1200,
+        height: 700,
+        right: 1200,
+        bottom: 700,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
+      } as DOMRect
+    })
+
+    const putCalls = () =>
+      req.mock.calls.filter(([m, p]) => m === 'PUT' && p === '/api/v1/studio/engine/preview')
+    const thumbCalls = () =>
+      req.mock.calls.filter(([m, p]) => m === 'GET' && p.includes('/thumbnail'))
+
+    return { req, desk, roCallbacks, putCalls, thumbCalls }
+  }
+
+  it('shows cached still on fc://preview-live-resize even on Mac with 0 PUTs until active:false', async () => {
+    const { desk, roCallbacks, putCalls, thumbCalls } = setupPreviewTest()
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+
+      expect(putCalls().length).toBeGreaterThanOrEqual(1)
+      expect(thumbCalls().length).toBeGreaterThanOrEqual(1)
+      const beforeCount = putCalls().length
+
+      const canvasBox = host.querySelector<HTMLElement>('[data-canvas-box]')!
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, {
+            detail: { active: true, reason: 'window', seq: 2, scale: 1 },
+          }),
+        )
+      })
+      // Instant synchronous still painted from pre-warmed cache with 0 live PUTs.
+      expect(canvasBox.style.backgroundImage).toContain('STILL_1')
+      expect(putCalls().length).toBe(beforeCount)
+
+      // Mid-resize window/observer noise emits 0 PUTs; stale seq=1 is ignored.
+      await act(async () => {
+        window.dispatchEvent(new Event('resize'))
+        for (const cb of roCallbacks) cb()
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, {
+            detail: { active: false, reason: 'window', seq: 1 },
+          }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(putCalls().length).toBe(beforeCount)
+
+      // Ending live resize restores in 1 rAF with 1 atomic PUT.
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, {
+            detail: { active: false, reason: 'window', seq: 3 },
+          }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(putCalls().length).toBe(beforeCount + 1)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(150)
+      })
+      expect(canvasBox.style.backgroundImage).toBe('')
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('invalidates still cache on fc://scale-changed and defers PUT while live-resize is active', async () => {
+    const { desk, putCalls, thumbCalls } = setupPreviewTest()
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+
+      const basePuts = putCalls().length
+      const baseThumbs = thumbCalls().length
+
+      // Invalid scale is ignored cleanly.
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent(SCALE_CHANGED_EVENT, { detail: { scale: 0 } }))
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(putCalls().length).toBe(basePuts)
+
+      // Valid scale triggers 1 atomic PUT and refreshes pre-warmed still at new scale.
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(SCALE_CHANGED_EVENT, { detail: { scale: 2, previousScale: 1 } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(putCalls().length).toBe(basePuts + 1)
+      expect(thumbCalls().length).toBeGreaterThan(baseThumbs)
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('sends 1 hide PUT on fc:divider-drag start, 0 during drag RO churn, and 1 restore PUT on end', async () => {
+    const { desk, roCallbacks, putCalls } = setupPreviewTest()
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+
+      const beforePuts = putCalls().length
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: true, axis: 'x' } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const afterStart = putCalls().length
+      expect(afterStart - beforePuts).toBeLessThanOrEqual(1)
+
+      await act(async () => {
+        for (const cb of roCallbacks) cb()
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(putCalls().length).toBe(afterStart)
+
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: false, axis: 'x' } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(putCalls().length).toBe(afterStart + 1)
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('does not attach document.body subtree MutationObserver, html style observer, or 500ms setInterval poll', async () => {
+    const observations: Array<{ target: Node; options?: MutationObserverInit }> = []
+    const OrigMO = window.MutationObserver
+    vi.stubGlobal(
+      'MutationObserver',
+      class extends OrigMO {
+        override observe(target: Node, options?: MutationObserverInit) {
+          observations.push({ target, ...(options === undefined ? {} : { options }) })
+          super.observe(target, options)
+        }
+      },
+    )
+    const setIntervalSpy = vi.spyOn(window, 'setInterval')
+    const { desk } = setupPreviewTest()
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+
+      expect(
+        observations.some(
+          (o) => o.target === document.body && Boolean(o.options?.subtree || o.options?.childList),
+        ),
+      ).toBe(false)
+      expect(
+        observations.some(
+          (o) =>
+            o.target === document.documentElement &&
+            Boolean(o.options?.attributeFilter?.includes('style')),
+        ),
+      ).toBe(false)
+      expect(setIntervalSpy).not.toHaveBeenCalled()
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('ends live resize on equal seq, absorbs trailing window resize grace, and recovers on watchdog/pointerdown (F2)', async () => {
+    const { desk, putCalls } = setupPreviewTest()
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const basePuts = putCalls().length
+      const canvasBox = host.querySelector<HTMLElement>('[data-canvas-box]')!
+
+      // Equal seq active:false must still end nativeResize.
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, { detail: { active: true, seq: 5 } }),
+        )
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, { detail: { active: false, seq: 5 } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(putCalls().length).toBe(basePuts + 1)
+
+      // Wait out thaw, then verify trailing window.resize inside grace period updates geometry without re-freezing.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(150)
+      })
+      expect(canvasBox.style.backgroundImage).toBe('')
+      const putsBeforeGraceResize = putCalls().length
+      vi.stubGlobal('innerHeight', 740)
+      await act(async () => {
+        window.dispatchEvent(new Event('resize'))
+      })
+      expect(canvasBox.style.backgroundImage).toBe('')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(putCalls().length).toBe(putsBeforeGraceResize + 1)
+      expect(
+        (putCalls()[putCalls().length - 1]![2] as { rect?: { opacity?: number } }).rect?.opacity,
+      ).not.toBe(0)
+
+      // After grace expires, dropped active:false recovers via stage pointerdown.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400)
+      })
+      const putsBeforeDropped = putCalls().length
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, { detail: { active: true, seq: 6 } }),
+        )
+      })
+      expect(canvasBox.style.backgroundImage).toContain('STILL_1')
+      const stage = host.querySelector<HTMLElement>('[data-stage-bg]')!
+      await act(async () => {
+        stage.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(putCalls().length).toBe(putsBeforeDropped + 1)
+
+      // Dropped active:false also recovers via 3s watchdog.
+      const putsBeforeWatchdog = putCalls().length
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, { detail: { active: true, seq: 7 } }),
+        )
+        await vi.advanceTimersByTimeAsync(3100)
+      })
+      expect(putCalls().length).toBeGreaterThan(putsBeforeWatchdog)
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('avoids prefix cache collisions, refreshes expired/switched scene stills, and rejects unsafe hint URLs (CR-12, CR-13, F5)', async () => {
+    const { desk, thumbCalls } = setupPreviewTest()
+    const scenesData = desk.scenes as {
+      data: {
+        current: string
+        transition: { kind: string; ms: number }
+        vertical: null
+        preview: null
+      }
+      reload(): void
+    }
+    scenesData.data.current = 'Camera:Close'
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const canvasBox = host.querySelector<HTMLElement>('[data-canvas-box]')!
+
+      // Unsafe detail.still must be ignored instead of painting unvalidated CSS url().
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, {
+            detail: {
+              active: true,
+              seq: 1,
+              still: { main: 'javascript:alert(1)' },
+            },
+          }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(canvasBox.style.backgroundImage).not.toContain('javascript:')
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, { detail: { active: false, seq: 2 } }),
+        )
+        await vi.advanceTimersByTimeAsync(150)
+      })
+
+      // Switching from 'Camera:Close' to 'Camera' pre-warms 'Camera' cleanly and never hits 'Camera:Close' cache on fallback.
+      const thumbsBeforeSwitch = thumbCalls().length
+      scenesData.data = { ...scenesData.data, current: 'Camera' }
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(
+        thumbCalls()
+          .slice(thumbsBeforeSwitch)
+          .some(([, p]) => p.includes('/Camera/thumbnail')),
+      ).toBe(true)
+
+      // After TTL (>10_000ms) expires, live resize still paints fallback and triggers a fresh thumbnail fetch.
+      const thumbsBeforeExpire = thumbCalls().length
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11_000)
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, { detail: { active: true, seq: 3 } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(thumbCalls().length).toBeGreaterThan(thumbsBeforeExpire)
+      expect(canvasBox.style.backgroundImage).toContain('STILL_')
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('mints fresh freeze token during thaw window, clears hidNative after restore PUT, and sets explicit opacity:1 (CR-14, F12.4)', async () => {
+    const { desk, putCalls } = setupPreviewTest()
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const canvasBox = host.querySelector<HTMLElement>('[data-canvas-box]')!
+
+      // Divider drag hides native view (opacity: 0), then ends -> restore PUT carries opacity: 1.
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: true, axis: 'x' } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const hidePut = putCalls()[putCalls().length - 1]![2] as { rect?: { opacity?: number } }
+      expect(hidePut.rect?.opacity).toBe(0)
+
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: false, axis: 'x' } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const restorePut = putCalls()[putCalls().length - 1]![2] as { rect?: { opacity?: number } }
+      expect(restorePut.rect?.opacity).toBe(1)
+
+      // Within the 120ms thaw delay, trigger a new window.resize: new freeze token prevents old timer clearing still,
+      // and cleared hidNative allows hiding native view again.
+      const putsBeforeSecondDrag = putCalls().length
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(40)
+        window.dispatchEvent(new Event('resize'))
+      })
+      expect(putCalls().length).toBeGreaterThan(putsBeforeSecondDrag)
+      const secondHidePut = putCalls()[putCalls().length - 1]![2] as {
+        rect?: { opacity?: number }
+      }
+      expect(secondHidePut.rect?.opacity).toBe(0)
+
+      // Advancing past original 120ms thaw deadline (<180ms fallback) must keep still painted!
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100)
+      })
+      expect(canvasBox.style.backgroundImage).toContain('STILL_1')
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('defers hiding native view on uncached divider drag until thumbnail paints and still hides on error (CR-15)', async () => {
+    const { req, desk, putCalls } = setupPreviewTest()
+    let resolveThumb!: (v: { image: string }) => void
+    let rejectNext = false
+    req.mockImplementation((method: string, path: string) => {
+      if (method === 'GET' && path.includes('/thumbnail')) {
+        if (rejectNext) return Promise.reject(new Error('thumb failed'))
+        return new Promise((r) => {
+          resolveThumb = r
+        })
+      }
+      return Promise.resolve(undefined)
+    })
+
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+
+      const basePuts = putCalls().length
+      // Scene is uncached: starting divider drag must NOT immediately send opacity: 0 before thumbnail settles.
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: true, axis: 'x' } }),
+        )
+        await Promise.resolve()
+      })
+      expect(putCalls().length).toBe(basePuts)
+
+      // Resolving thumbnail paints the still AND then hides native view (opacity: 0).
+      await act(async () => {
+        resolveThumb({ image: 'data:image/png;base64,UNCACHED_OK' })
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(putCalls().length).toBe(basePuts + 1)
+      expect(
+        (putCalls()[putCalls().length - 1]![2] as { rect?: { opacity?: number } }).rect?.opacity,
+      ).toBe(0)
+
+      // Reset drag and clear stage with a new uncached scene whose thumbnail fails: fallback still hides native view.
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: false, axis: 'x' } }),
+        )
+        await vi.advanceTimersByTimeAsync(150)
+      })
+      rejectNext = true
+      ;(desk.scenes as { data: { current: string } }).data = {
+        ...(desk.scenes as { data: { current: string } }).data,
+        current: 'BrokenScene',
+      } as never
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const putsBeforeFailDrag = putCalls().length
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: true, axis: 'x' } }),
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(putCalls().length).toBe(putsBeforeFailDrag + 1)
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('coalesces stageRef ResizeObserver updates in rAF and pauses them while dragging dividers (F10)', async () => {
+    const { desk, roCallbacks } = setupPreviewTest()
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    let renders = 0
+    try {
+      await act(async () => {
+        root.render(
+          <Profiler
+            id="pv-stage"
+            onRender={() => {
+              renders += 1
+            }}
+          >
+            <DeskProvider value={desk as never}>
+              <PreviewBox running />
+            </DeskProvider>
+          </Profiler>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const stage = host.querySelector<HTMLElement>('[data-stage-bg]')!
+      let w = 800
+      Object.defineProperty(stage, 'clientWidth', { configurable: true, get: () => w })
+      Object.defineProperty(stage, 'clientHeight', { configurable: true, get: () => 500 })
+
+      // Start divider drag -> stageRef ResizeObserver churn must NOT re-render PreviewBox until drag ends.
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: true, axis: 'x' } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const rendersDuringDragStart = renders
+      await act(async () => {
+        w = 640
+        for (const cb of roCallbacks) cb()
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(renders).toBe(rendersDuringDragStart)
+
+      // Ending divider drag flushes the paused measurement cleanly.
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: false, axis: 'x' } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(renders).toBeGreaterThan(rendersDuringDragStart)
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('checks all stages in findUnregisteredPreviewOverlays, prefers header[data-app-header], and wraps Studio SwitchBar cleanly (F12.5, F15, F16)', async () => {
+    const { desk, putCalls } = setupPreviewTest()
+    const decoyHeader = document.createElement('header')
+    decoyHeader.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 1200, height: 180, right: 1200, bottom: 180 }) as DOMRect
+    const appHeader = document.createElement('header')
+    appHeader.dataset.appHeader = ''
+    appHeader.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 1200, height: 48, right: 1200, bottom: 48 }) as DOMRect
+    document.body.append(decoyHeader, appHeader)
+
+    const scenesObj = desk.scenes as {
+      data: {
+        current: string
+        preview: string | null
+        transition: { kind: string; ms: number }
+        vertical: { current: string; preview: null; scenes: unknown[] } | null
+      }
+      reload(): void
+    }
+    scenesObj.data = {
+      current: 'Main',
+      preview: 'Next',
+      transition: { kind: 'cut_transition', ms: 0 },
+      vertical: null,
+    }
+
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+
+      // SwitchBar wraps instead of overflowing in narrow widths; Studio stage has data-studio-stage (F16).
+      expect(host.querySelector('[data-studio-stage]')).not.toBeNull()
+      const switchBar = host
+        .querySelector('button[aria-label="Swap the preview and what\'s on air"]')
+        ?.closest('div')
+      expect(switchBar?.className).toContain('flex-wrap')
+      expect(switchBar?.className).toContain('min-h-10')
+      expect(switchBar?.className).not.toMatch(/(?:^|\s)h-10(?:\s|$)/)
+
+      // Preview viewBand ignores decoyHeader (bottom=180) and clips cleanly using appHeader (bottom=48) (F15).
+      const latestBody = putCalls()[putCalls().length - 1]![2] as {
+        rect?: { holes?: Array<{ x: number; y: number; w: number; h: number; r: number }> }
+      }
+      expect(latestBody.rect?.holes).toEqual([{ x: -10, y: -10, w: 1220, h: 58, r: 0 }])
+
+      // Dual wide + vertical stages: unregistered overlay over vertical stage is detected without passing single stageEl (F12.5).
+      await act(async () => root.unmount())
+      scenesObj.data = {
+        current: 'Main',
+        preview: null,
+        transition: { kind: 'cut_transition', ms: 0 },
+        vertical: { current: 'Vert', preview: null, scenes: [] },
+      }
+      const root2 = createRoot(host)
+      const stray = document.createElement('div')
+      stray.setAttribute('role', 'dialog')
+      stray.getBoundingClientRect = () =>
+        ({ left: 950, top: 100, width: 120, height: 80, right: 1070, bottom: 180 }) as DOMRect
+      document.body.appendChild(stray)
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        await act(async () => {
+          root2.render(
+            <DeskProvider value={desk as never}>
+              <PreviewBox running />
+            </DeskProvider>,
+          )
+        })
+        const mountedStages = [...host.querySelectorAll<HTMLElement>('[data-stage-bg]')]
+        expect(mountedStages.length).toBe(2)
+        mountedStages[0]!.getBoundingClientRect = () =>
+          ({ left: 0, top: 60, width: 800, height: 450, right: 800, bottom: 510 }) as DOMRect
+        mountedStages[1]!.getBoundingClientRect = () =>
+          ({ left: 820, top: 60, width: 320, height: 450, right: 1140, bottom: 510 }) as DOMRect
+        await act(async () => {
+          window.dispatchEvent(new Event('resize'))
+          await vi.advanceTimersByTimeAsync(250)
+        })
+        expect(findUnregisteredPreviewOverlays()).toContain(stray)
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[preview] overlay overlaps stage without PreviewOverlayRegistry',
+          stray,
+        )
+      } finally {
+        stray.remove()
+        await act(async () => root2.unmount())
+      }
+    } finally {
+      decoyHeader.remove()
+      appHeader.remove()
       await act(async () => root.unmount())
       host.remove()
     }

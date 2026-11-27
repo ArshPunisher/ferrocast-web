@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   activeOf,
+  clampFloat,
   dockName,
   groupOf,
   hostOf,
@@ -14,6 +15,7 @@ import {
   revive,
   showing,
   toggle,
+  type DockId,
   type Layout,
 } from './layout'
 import { nameFrom, newWebId, webUrlProblem, wholeUrl } from './web-dock'
@@ -169,5 +171,34 @@ describe('panel sizes saved before the divider fix', () => {
     // sources is placed on its own already, and nope and ghost don't exist.
     expect(l.tabs).toEqual({ scenes: ['audio'] })
     expect(activeOf(l, 'scenes')).toBe('audio')
+  })
+
+  it('clamps out-of-bounds floating rects to viewport dimensions on revive and resize', () => {
+    expect(clampFloat({ x: 2400, y: 1500, w: 400, h: 300 }, 1280, 800)).toEqual({
+      x: 872,
+      y: 492,
+      w: 400,
+      h: 300,
+    })
+    expect(clampFloat({ x: -80, y: -40, w: 9999, h: 9999 }, 800, 600)).toEqual({
+      x: 8,
+      y: 8,
+      w: 784,
+      h: 584,
+    })
+    expect(clampFloat({ x: 12, y: 14, w: 90, h: 80 }, 800, 600)).toEqual({
+      x: 12,
+      y: 14,
+      w: 224,
+      h: 160,
+    })
+
+    const saved: Partial<Layout> = {
+      ...fresh('side'),
+      left: ['scenes'] as DockId[],
+      float: { sources: { x: 2200, y: 1400, w: 500, h: 420 } },
+    }
+    const revived = revive(saved, { vw: 1024, vh: 700 })
+    expect(revived.float.sources).toEqual({ x: 516, y: 272, w: 500, h: 420 })
   })
 })

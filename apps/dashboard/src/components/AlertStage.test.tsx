@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { FerroEvent, Overlay, OverlayState } from '@ferrocast/api'
@@ -303,5 +303,63 @@ describe('OverlayPreview incremental state updates (Finding #6)', () => {
     })
     expect(shadow!.querySelector('.fc-lt')?.textContent).toBe('twitch.tv/novaplays')
     expect(shadow!.querySelector('.fc-events > li')).toBe(firstEventLi)
+  })
+
+  it('coalesces AlertStage ResizeObserver via rAF and skips updates below 0.005 scale delta', async () => {
+    let roCb: ((entries: Array<{ contentRect: { width: number } }>) => void) | null = null
+    ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+      constructor(cb: (entries: Array<{ contentRect: { width: number } }>) => void) {
+        roCb = cb
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+
+    const rafQueue: Array<FrameRequestCallback> = []
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+      rafQueue.push(cb)
+      return rafQueue.length
+    })
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
+
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+
+    try {
+      await act(async () => {
+        root!.render(<AlertStage alert={null} theme="dark" />)
+      })
+
+      const stageEl = () => host.querySelector<HTMLElement>('figure .origin-top-left')!
+      // Initial scale 1 -> transform undefined
+      expect(stageEl().style.transform).toBe('')
+
+      // Burst RO widths before rAF fires -> only ONE rAF scheduled, no sync transform update
+      act(() => {
+        roCb?.([{ contentRect: { width: 480 } }])
+        roCb?.([{ contentRect: { width: 400 } }])
+        roCb?.([{ contentRect: { width: 320 } }])
+      })
+      expect(rafQueue).toHaveLength(1)
+      expect(stageEl().style.transform).toBe('')
+
+      await act(async () => {
+        while (rafQueue.length) rafQueue.shift()?.(0)
+      })
+      expect(stageEl().style.transform).toBe('scale(0.5)')
+
+      // Sub-threshold change (321px -> 0.50156, diff < 0.005) keeps scale(0.5) untouched.
+      act(() => {
+        roCb?.([{ contentRect: { width: 321 } }])
+      })
+      await act(async () => {
+        while (rafQueue.length) rafQueue.shift()?.(0)
+      })
+      expect(stageEl().style.transform).toBe('scale(0.5)')
+    } finally {
+      rafSpy.mockRestore()
+      cancelSpy.mockRestore()
+    }
   })
 })

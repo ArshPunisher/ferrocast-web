@@ -561,6 +561,8 @@ export function ChatScroller({
   label: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const roRef = useRef<ResizeObserver | null>(null)
+  const observedChildRef = useRef<Element | null>(null)
   const [stuck, setStuck] = useState(true)
   const stuckRef = useRef(true)
   stuckRef.current = stuck
@@ -578,9 +580,28 @@ export function ChatScroller({
     const ro = new ResizeObserver(() => {
       if (stuckRef.current) el.scrollTop = el.scrollHeight
     })
-    if (el.firstElementChild) ro.observe(el.firstElementChild)
-    return () => ro.disconnect()
+    roRef.current = ro
+    const first = el.firstElementChild
+    if (first) {
+      ro.observe(first)
+      observedChildRef.current = first
+    }
+    return () => {
+      ro.disconnect()
+      roRef.current = null
+      observedChildRef.current = null
+    }
   }, [])
+  useLayoutEffect(() => {
+    const el = ref.current
+    const ro = roRef.current
+    if (!el || !ro) return
+    const first = el.firstElementChild
+    if (first === observedChildRef.current) return
+    if (observedChildRef.current) ro.unobserve(observedChildRef.current)
+    observedChildRef.current = first
+    if (first) ro.observe(first)
+  })
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return

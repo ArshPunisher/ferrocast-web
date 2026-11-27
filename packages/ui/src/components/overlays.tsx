@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import {
+  forwardRef,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { X, CheckCircle, WarningCircle, Info } from '@phosphor-icons/react'
 import { cx } from '../cx'
 import { InfoLine } from './infotip'
+import { notifyPreviewOverlays, usePreviewHole } from './preview-overlay-registry'
 
 export interface DialogProps {
   open: boolean
@@ -25,25 +33,22 @@ export interface DialogProps {
 
 /** Open dialogs; the page under them doesn't scroll while any is open. */
 let scrollLocks = 0
-let savedScroll: { overflow: string; gutter: string } | null = null
 
 /** Stops the page behind a dialog scrolling (wheel and touch scroll chain to it otherwise). */
 function lockPageScroll(): () => void {
   const root = document.documentElement
   if (scrollLocks++ === 0) {
-    savedScroll = { overflow: root.style.overflow, gutter: root.style.scrollbarGutter }
     // Keeps the scrollbar's space, so the page doesn't shift sideways.
-    if (root.scrollHeight > root.clientHeight) root.style.scrollbarGutter = 'stable'
-    root.style.overflow = 'hidden'
+    if (root.scrollHeight > root.clientHeight) root.dataset.scrollGutter = 'stable'
+    root.dataset.scrollLock = 'true'
   }
   let released = false
   return () => {
     if (released) return
     released = true
-    if (--scrollLocks === 0 && savedScroll) {
-      root.style.overflow = savedScroll.overflow
-      root.style.scrollbarGutter = savedScroll.gutter
-      savedScroll = null
+    if (--scrollLocks === 0) {
+      delete root.dataset.scrollLock
+      delete root.dataset.scrollGutter
     }
   }
 }
@@ -67,6 +72,7 @@ export function Dialog({
   const ref = useRef<HTMLDialogElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
+  usePreviewHole(panel, { active: open, deps: [size, compact] })
   useEffect(() => {
     const d = ref.current
     if (!d) return
@@ -128,9 +134,10 @@ export function Dialog({
             tabIndex={-1}
             // The Studio's live picture leaves itself out under this panel.
             data-over-preview
-            initial={reduce ? false : { opacity: 0, scale: 0.96, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            onAnimationComplete={() => notifyPreviewOverlays()}
             className={cx(
               'pointer-events-auto flex max-h-[92dvh] w-full flex-col overflow-hidden border border-line-strong bg-surface-1 shadow-pop outline-none',
               compact
@@ -250,7 +257,9 @@ export function ConfirmDialog({
   closeOnConfirm = true,
 }: ConfirmProps) {
   const ref = useRef<HTMLDialogElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
+  usePreviewHole(panel, open)
   useEffect(() => {
     const d = ref.current
     if (!d) return
@@ -284,14 +293,16 @@ export function ConfirmDialog({
       {open && (
         <div className="pointer-events-none flex h-full w-full items-center justify-center p-4">
           <motion.div
+            ref={panel}
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="fc-confirm-title"
             // The Studio's live picture leaves itself out under this card.
             data-over-preview
-            initial={reduce ? false : { opacity: 0, scale: 0.96, y: 6 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
+            onAnimationComplete={() => notifyPreviewOverlays()}
             className="pointer-events-auto w-full max-w-[300px] rounded-[12px] border border-line-strong bg-surface-1 p-4 shadow-pop"
           >
             <h2 id="fc-confirm-title" className="text-[15px] font-bold text-balance text-text">
@@ -352,6 +363,7 @@ export function Sheet({ open, onClose, title, tools, children, footer }: SheetPr
   const ref = useRef<HTMLDialogElement>(null)
   const panel = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
+  usePreviewHole(panel, open)
   useEffect(() => {
     const d = ref.current
     if (!d) return
@@ -390,9 +402,10 @@ export function Sheet({ open, onClose, title, tools, children, footer }: SheetPr
             tabIndex={-1}
             // The Studio's live picture leaves itself out under this panel.
             data-over-preview
-            initial={reduce ? false : { x: 32, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ duration: 0.24, ease: [0.32, 0.72, 0, 1] }}
+            initial={reduce ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
+            onAnimationComplete={() => notifyPreviewOverlays()}
             className="pointer-events-auto flex h-full w-full max-w-[480px] flex-col border-l border-line-strong bg-surface-1 shadow-pop outline-none"
           >
             <div className="flex items-center gap-3 border-b border-line px-5 py-4 sm:px-6">
@@ -517,6 +530,83 @@ const icons: Record<ToastTone, ReactNode> = {
   error: <WarningCircle size={18} weight="fill" className="text-danger" />,
 }
 
+const ToastCard = forwardRef<
+  HTMLDivElement,
+  { t: Toast; reduce: boolean | null; index: number; total: number }
+>(function ToastCard({ t, reduce, index, total }, forwardedRef) {
+  const cardRef = useRef<HTMLDivElement>(null)
+  usePreviewHole(cardRef, {
+    active: true,
+    deps: [index, total, t.message, t.hint],
+  })
+
+  const setRef = (el: HTMLDivElement | null) => {
+    cardRef.current = el
+    if (typeof forwardedRef === 'function') forwardedRef(el)
+    else if (forwardedRef) forwardedRef.current = el
+  }
+
+  return (
+    <motion.div
+      ref={setRef}
+      // The Studio's live picture leaves itself out under this panel.
+      data-over-preview
+      layout={!reduce}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.14 } }}
+      transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+      onAnimationComplete={() => notifyPreviewOverlays()}
+      role={t.tone === 'error' ? 'alert' : 'status'}
+      className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-panel border border-line-strong bg-surface-1 p-3.5 pr-2 shadow-pop"
+    >
+      <span className="mt-px">{icons[t.tone]}</span>
+      <div className="min-w-0 flex-1">
+        <InfoLine detail={t.detail} label="More about this message">
+          <p className="text-sm font-medium break-words text-text">
+            {t.message}
+            {!!t.more && <span className="ml-1.5 font-normal text-text-3">+{t.more} more</span>}
+          </p>
+        </InfoLine>
+        {t.hint && (
+          <p className="mt-0.5 text-[14px] leading-snug break-words text-text-3">{t.hint}</p>
+        )}
+        {(t.action || t.action2) && (
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+            {[t.action, t.action2].map(
+              (a) =>
+                a && (
+                  <button
+                    key={a.label}
+                    type="button"
+                    className="text-[14px] font-semibold text-accent-text hover:underline focus-visible:underline focus-visible:outline-none"
+                    onClick={() => {
+                      a.run()
+                      dismissToast(t.id)
+                    }}
+                  >
+                    {a.label}
+                  </button>
+                ),
+            )}
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        aria-label="Close notification"
+        onClick={() => {
+          t.onDismiss?.()
+          dismissToast(t.id)
+        }}
+        className="inline-flex size-7 shrink-0 items-center justify-center rounded-[8px] text-text-3 hover:bg-surface-3 hover:text-text"
+      >
+        <X size={14} />
+      </button>
+    </motion.div>
+  )
+})
+
 /** Bottom-right on desktop, top on phones (thumbs live at the bottom). Errors are assertive. */
 export function Toaster() {
   const list = useSyncExternalStore(subscribe, snapshot, snapshot)
@@ -544,67 +634,8 @@ export function Toaster() {
       className="pointer-events-none fixed inset-x-0 top-[max(8px,env(safe-area-inset-top))] bottom-auto z-[70] m-0 flex h-fit w-full flex-col items-center gap-2 overflow-visible border-0 bg-transparent px-3 py-0 text-inherit sm:top-auto sm:right-0 sm:bottom-[calc(1rem+var(--fc-statusbar,0px)+var(--fc-toast-offset,0px))] sm:left-0 sm:w-full sm:items-center sm:pr-[min(var(--fc-drawer,0px),max(0px,100vw-25rem))]"
     >
       <AnimatePresence initial={false}>
-        {list.map((t) => (
-          <motion.div
-            // The Studio's live picture leaves itself out under this panel.
-            data-over-preview
-            key={t.key ?? t.id}
-            layout={!reduce}
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={
-              reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97, transition: { duration: 0.14 } }
-            }
-            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-            role={t.tone === 'error' ? 'alert' : 'status'}
-            className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-panel border border-line-strong bg-surface-1 p-3.5 pr-2 shadow-pop"
-          >
-            <span className="mt-px">{icons[t.tone]}</span>
-            <div className="min-w-0 flex-1">
-              <InfoLine detail={t.detail} label="More about this message">
-                <p className="text-sm font-medium break-words text-text">
-                  {t.message}
-                  {!!t.more && (
-                    <span className="ml-1.5 font-normal text-text-3">+{t.more} more</span>
-                  )}
-                </p>
-              </InfoLine>
-              {t.hint && (
-                <p className="mt-0.5 text-[14px] leading-snug break-words text-text-3">{t.hint}</p>
-              )}
-              {(t.action || t.action2) && (
-                <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-                  {[t.action, t.action2].map(
-                    (a) =>
-                      a && (
-                        <button
-                          key={a.label}
-                          type="button"
-                          className="text-[14px] font-semibold text-accent-text hover:underline focus-visible:underline focus-visible:outline-none"
-                          onClick={() => {
-                            a.run()
-                            dismissToast(t.id)
-                          }}
-                        >
-                          {a.label}
-                        </button>
-                      ),
-                  )}
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              aria-label="Close notification"
-              onClick={() => {
-                t.onDismiss?.()
-                dismissToast(t.id)
-              }}
-              className="inline-flex size-7 shrink-0 items-center justify-center rounded-[8px] text-text-3 hover:bg-surface-3 hover:text-text"
-            >
-              <X size={14} />
-            </button>
-          </motion.div>
+        {list.map((t, index) => (
+          <ToastCard key={t.key ?? t.id} t={t} reduce={reduce} index={index} total={list.length} />
         ))}
       </AnimatePresence>
     </section>

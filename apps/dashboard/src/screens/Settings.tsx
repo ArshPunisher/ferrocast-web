@@ -1168,7 +1168,7 @@ export function Settings({ section }: { section?: string | undefined }) {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[176px_minmax(0,1fr)] xl:grid-cols-[210px_minmax(0,1fr)]">
         <nav
           aria-label="Settings sections"
-          className="-mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-20 lg:mx-0 lg:max-h-[calc(100dvh-5.5rem-var(--fc-statusbar,0px))] lg:flex-col lg:gap-0.5 lg:self-start lg:overflow-y-auto lg:px-0 lg:pb-2"
+          className="-mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-[calc(var(--fc-top,56px)+16px)] lg:mx-0 lg:max-h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-7.5rem-var(--fc-statusbar,0px))] lg:flex-col lg:gap-0.5 lg:self-start lg:overflow-y-auto lg:px-0 lg:pb-2"
         >
           {GROUPS.map((g, gi) => {
             const items = g.items.filter(([id]) => visible(id))

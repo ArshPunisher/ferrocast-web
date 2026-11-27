@@ -4,6 +4,7 @@ import {
   MIN_STAGE,
   RIGHT_DOCK,
   clampDock,
+  clampDockPair,
   dockKeyTarget,
   readDock,
   saveDock,
@@ -45,5 +46,17 @@ describe('dock widths', () => {
     expect(dockKeyTarget(RIGHT_DOCK, 'Home', false, 332, -1)).toBe(300)
     expect(dockKeyTarget(RIGHT_DOCK, 'End', false, 332, -1)).toBe(520)
     expect(dockKeyTarget(RIGHT_DOCK, 'a', false, 332, -1)).toBeNull()
+  })
+
+  it('clampDockPair trims both docks proportionally when room shrinks', () => {
+    const [l, r] = clampDockPair(LEFT_DOCK, RIGHT_DOCK, 360, 520, 960)
+    expect(960 - l - r).toBeGreaterThanOrEqual(MIN_STAGE)
+    expect(l).toBeGreaterThan(LEFT_DOCK.min)
+    expect(r).toBeGreaterThan(RIGHT_DOCK.min)
+    expect(clampDockPair(LEFT_DOCK, RIGHT_DOCK, 232, 332, 1400)).toEqual([232, 332])
+    expect(clampDockPair(LEFT_DOCK, RIGHT_DOCK, 360, 520, 600)).toEqual([
+      LEFT_DOCK.min,
+      RIGHT_DOCK.min,
+    ])
   })
 })

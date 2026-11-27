@@ -141,29 +141,32 @@ export function OverlayEditor({ id }: { id: string }) {
       setOffset(offset > 0 ? `${offset}px` : '')
     }
     sync()
-    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(sync) : null
+    let raf = 0
+    const schedule = () => {
+      if (raf) return
+      if (typeof requestAnimationFrame !== 'function') {
+        sync()
+        return
+      }
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        sync()
+      })
+    }
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(schedule) : null
     if (ro) {
       if (workspaceRef.current) ro.observe(workspaceRef.current)
       if (footerRef.current) ro.observe(footerRef.current)
     }
-    let lastStatusbar = root.style.getPropertyValue('--fc-statusbar')
-    const mo =
-      typeof MutationObserver === 'function'
-        ? new MutationObserver(() => {
-            const nextStatus = root.style.getPropertyValue('--fc-statusbar')
-            if (nextStatus === lastStatusbar) return
-            lastStatusbar = nextStatus
-            sync()
-          })
-        : null
-    mo?.observe(root, { attributes: true, attributeFilter: ['style'] })
-    window.addEventListener('resize', sync)
-    window.addEventListener('scroll', sync, { passive: true })
+    window.addEventListener('fc:statusbar-change', schedule)
+    window.addEventListener('resize', schedule)
+    window.addEventListener('scroll', schedule, { passive: true })
     return () => {
+      if (raf) cancelAnimationFrame(raf)
       ro?.disconnect()
-      mo?.disconnect()
-      window.removeEventListener('resize', sync)
-      window.removeEventListener('scroll', sync)
+      window.removeEventListener('fc:statusbar-change', schedule)
+      window.removeEventListener('resize', schedule)
+      window.removeEventListener('scroll', schedule)
       root.style.removeProperty('--fc-toast-offset')
     }
   }, [dirty, currentDraft?.id])

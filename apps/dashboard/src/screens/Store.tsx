@@ -775,7 +775,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
             <aside
               aria-label="Store filters"
-              className="flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-3 lg:w-[190px] min-[1400px]:w-[214px]"
+              className="flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-[calc(var(--fc-top,56px)+16px)] lg:w-[190px] min-[1400px]:w-[214px]"
             >
               <div role="group" aria-label="Store categories" className="flex flex-col gap-0.5">
                 <span className="px-2.5 pb-1 text-[13px] font-semibold tracking-wide text-text-3 uppercase">

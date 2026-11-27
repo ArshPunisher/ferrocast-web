@@ -71,8 +71,12 @@ summary {
 }
 
 /* While a dialog is open the page under it stays put (scrolling only moves the dialog). */
+html[data-scroll-lock='true'],
 html:has(.fc-dialog[open]) {
   overflow: hidden;
+}
+html[data-scroll-gutter='stable'] {
+  scrollbar-gutter: stable;
 }
 .fc-dialog {
   overscroll-behavior: contain;
@@ -89,7 +93,6 @@ html:has(.fc-dialog[open]) {
 @keyframes fc-tip {
   from {
     opacity: 0;
-    transform: translateY(-2px);
   }
 }
 

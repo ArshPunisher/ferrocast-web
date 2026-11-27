@@ -97,12 +97,34 @@ export function AlertStage({
   const [scale, setScale] = useState(1)
   useEffect(() => {
     const el = box.current
-    if (!el || typeof ResizeObserver !== 'function') return
+    if (!el) return
+    const applyWidth = (w: number) => {
+      if (w <= 0) return
+      const next = stageScale(w)
+      setScale((prev) => (Math.abs(next - prev) >= 0.005 ? next : prev))
+    }
+    applyWidth(el.getBoundingClientRect().width)
+    if (typeof ResizeObserver !== 'function') return
+    let raf = 0
+    let latestW = 0
     const ro = new ResizeObserver(([entry]) => {
-      if (entry) setScale(stageScale(entry.contentRect.width))
+      if (!entry) return
+      latestW = entry.contentRect.width
+      if (typeof requestAnimationFrame !== 'function') {
+        applyWidth(latestW)
+        return
+      }
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        applyWidth(latestW)
+      })
     })
     ro.observe(el)
-    return () => ro.disconnect()
+    return () => {
+      if (raf) cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
   }, [])
   useEffect(() => {
     if (!root || !alert) return
