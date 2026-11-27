@@ -1,0 +1,328 @@
+---
+// One template for the use-case pages: Gaming, Just chatting and IRL.
+import Base from '../../layouts/Base.astro'
+import Breadcrumbs from '../../components/Breadcrumbs.astro'
+import Icon from '../../components/Icon.astro'
+import CtaBand from '../../components/CtaBand.astro'
+import { PAGES } from '../../data/pages'
+import { SITE } from '../../data/company'
+import { webPage } from '../../data/schema'
+import { USE_CASES, type UseCase } from '../../data/usecases'
+
+export function getStaticPaths() {
+  return USE_CASES.map((u) => ({ params: { slug: u.slug }, props: { u } }))
+}
+interface Props {
+  u: UseCase
+}
+const { u } = Astro.props
+const page = PAGES[u.page]
+const [first, ...rest] = u.picks
+const goSteps = [
+  { icon: 'download-simple', t: 'Download', d: 'Mac, Windows or Linux. Free.' },
+  { icon: 'link', t: 'Connect', d: 'Sign in to your platform once.' },
+  { icon: 'broadcast', t: 'Go live', d: 'One click.' },
+]
+---
+
+<Base
+  page={page}
+  schema={[webPage(page.title, new URL(page.path, SITE.url).href, page.description)]}
+>
+  <div class="container top">
+    <nav class="seg" aria-label="Use cases">
+      {USE_CASES.map((x) => (
+        <a href={PAGES[x.page].path} aria-current={x.slug === u.slug ? 'page' : undefined}>
+          {x.tab}
+        </a>
+      ))}
+    </nav>
+  </div>
+
+  <section class="container hero">
+    <div class="copy">
+      <Breadcrumbs page={page} />
+      <h1 class="display-1 rise" style="--d: 0">
+        {u.h1}
+      </h1>
+      <p class="lede rise" style="--d: 1">
+        {u.lede}
+      </p>
+      <div class="cta-row rise" style="--d: 2">
+        <a class="btn btn-primary" href="/download/">
+          Download
+          <Icon name="arrow-right" weight="bold" size={18} class="ic-go" />
+        </a>
+        <a class="btn btn-secondary" href="/features/multistream/">
+          Multistream
+        </a>
+      </div>
+      {u.note && (
+        <p class="honest">
+          <Icon name="info" weight="light" size={22} />
+          <span>{u.note}</span>
+        </p>
+      )}
+    </div>
+    <figure class="shot rise" style="--d: 2">
+      <div class="frame">
+        <div class="frame-in">
+          <img src={`/media/features/${u.shot}`} width="1440" height="900" alt={u.alt} />
+        </div>
+      </div>
+    </figure>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <h2 class="display-2 sec-title">What you get.</h2>
+      <div class="picks" style={`--rest: ${rest.length}`}>
+        {first && (
+          <a class="pick first" href={first.href}>
+            <Icon name={first.icon} weight="light" size={56} />
+            <h3>{first.title}</h3>
+            <p>{first.body}</p>
+          </a>
+        )}
+        {rest.map((p) => (
+          <a class="pick" href={p.href}>
+            <Icon name={p.icon} weight="light" size={40} />
+            <h3>{p.title}</h3>
+            <p>{p.body}</p>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section tight">
+    <div class="container">
+      <h2 class="display-3 sec-title">Set up in minutes.</h2>
+      <div class="go3">
+        {goSteps.map((s) => (
+          <div class="g3">
+            <span class="tile">
+              <Icon name={s.icon} weight="light" size={24} />
+            </span>
+            <span>
+              <b>{s.t}</b>
+              <span class="d">{s.d}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <CtaBand
+    title="Start with the free app."
+    text="No account, no trial."
+    secondary={{ href: '/pricing/', label: 'See what is free' }}
+  />
+</Base>
+
+<style>
+  .top {
+    padding-top: 24px;
+  }
+  .seg {
+    display: inline-flex;
+    gap: 2px;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: 4px;
+    border-radius: 12px;
+    background: var(--fc-surface-3);
+  }
+  .seg a {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    height: 42px;
+    padding: 0 18px;
+    border-radius: 9px;
+    color: var(--fc-text-2);
+    font-size: 0.9375rem;
+    font-weight: 650;
+    text-decoration: none;
+    transition:
+      background-color 220ms var(--fc-ease-out),
+      color 220ms var(--fc-ease-out),
+      box-shadow 220ms var(--fc-ease-out);
+  }
+  .seg a[aria-current='page'] {
+    background: var(--fc-surface-1);
+    color: var(--fc-text);
+    box-shadow: var(--fc-shadow-1);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .seg a:hover {
+      color: var(--fc-text);
+    }
+  }
+  .hero {
+    display: grid;
+    gap: 40px;
+    align-items: center;
+    padding-block: 28px 40px;
+  }
+  @media (min-width: 960px) {
+    .hero {
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      gap: 56px;
+      padding-block: 48px 56px;
+    }
+  }
+  .copy {
+    display: grid;
+    gap: 22px;
+    justify-items: start;
+  }
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .rise {
+    animation: rise 800ms var(--fc-ease-out) both;
+    animation-delay: calc(var(--d, 0) * 90ms);
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+  }
+  .honest {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 18px;
+    border: 1px dashed var(--fc-line-strong);
+    border-radius: 12px;
+    color: var(--fc-text-2);
+  }
+  .honest :global(svg) {
+    flex: none;
+  }
+  .shot {
+    margin: 0;
+  }
+  .frame {
+    padding: 8px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-3);
+    box-shadow: var(--fc-shadow-2);
+  }
+  .frame-in {
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--fc-canvas);
+  }
+  .frame-in img {
+    width: 100%;
+    height: auto;
+  }
+  .sec-title {
+    margin-bottom: 32px;
+  }
+  .tight {
+    padding-top: 0;
+  }
+  .picks {
+    display: grid;
+    gap: 14px;
+  }
+  @media (min-width: 900px) {
+    .picks {
+      grid-template-columns: 1.25fr 1fr;
+    }
+    .pick.first {
+      grid-row: span 2;
+    }
+    .pick:nth-child(4):last-child {
+      grid-column: 1 / -1;
+    }
+  }
+  .pick {
+    display: grid;
+    gap: 10px;
+    align-content: start;
+    padding: 26px;
+    border-radius: var(--fc-radius-panel);
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+    color: inherit;
+    text-decoration: none;
+    transition:
+      transform 320ms var(--fc-ease-out),
+      box-shadow 320ms var(--fc-ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .pick:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--fc-shadow-2);
+    }
+  }
+  .pick :global(.icon) {
+    color: var(--fc-btn-primary);
+  }
+  .pick h3 {
+    font-size: 1.375rem;
+  }
+  .pick p {
+    max-width: 36ch;
+    color: var(--fc-text-2);
+  }
+  .pick.first {
+    padding: 34px;
+    border-color: transparent;
+    background: var(--fc-btn-soft);
+  }
+  .pick.first h3 {
+    font-size: 2rem;
+  }
+  .go3 {
+    display: grid;
+    border-top: 1px solid var(--fc-line);
+  }
+  .g3 {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 16px;
+    align-items: start;
+    padding-block: 28px;
+  }
+  @media (min-width: 760px) {
+    .go3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .g3 {
+      padding-right: 28px;
+    }
+    .g3 + .g3 {
+      padding-left: 28px;
+      border-left: 1px solid var(--fc-line);
+    }
+  }
+  .tile {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-2);
+    color: var(--fc-text-2);
+  }
+  .g3 b {
+    display: block;
+    font-family: var(--fc-font-display);
+    font-size: 1.25rem;
+    letter-spacing: -0.02em;
+  }
+  .d {
+    color: var(--fc-text-2);
+  }
+</style>

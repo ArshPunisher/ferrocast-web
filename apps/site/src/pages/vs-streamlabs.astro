@@ -1,0 +1,337 @@
+---
+// Ferrocast against Streamlabs: a grouped feature table, and what Streamlabs has that
+// Ferrocast does not. Features only, no prices.
+import Base from '../layouts/Base.astro'
+import Breadcrumbs from '../components/Breadcrumbs.astro'
+import Icon from '../components/Icon.astro'
+import CtaBand from '../components/CtaBand.astro'
+import { PAGES } from '../data/pages'
+import { SITE } from '../data/company'
+import { webPage } from '../data/schema'
+import { VS_CHECKED, VS_GROUPS, VS_WINS } from '../data/vs-streamlabs'
+
+const page = PAGES.vs
+---
+
+<Base
+  page={page}
+  schema={[webPage(page.title, new URL(page.path, SITE.url).href, page.description)]}
+>
+  <section class="container hero">
+    <div class="copy">
+      <Breadcrumbs page={page} />
+      <h1 class="display-1 rise" style="--d: 0">
+        Ferrocast vs Streamlabs.
+      </h1>
+      <p class="lede rise" style="--d: 1">
+        Features, side by side. Checked on {VS_CHECKED}.
+      </p>
+      <div class="cta-row rise" style="--d: 2">
+        <a class="btn btn-primary" href="/download/">
+          Download
+          <Icon name="arrow-right" weight="bold" size={18} class="ic-go" />
+        </a>
+        <a class="btn btn-secondary" href="#table">
+          See the table
+        </a>
+      </div>
+    </div>
+    <div class="glance rise" style="--d: 2" role="group" aria-label="At a glance">
+      <div class="g fc">
+        <b>Ferrocast</b>
+        <p>
+          Free and open source. Multistream, quality per platform, polls and text-to-speech, from
+          your PC.
+        </p>
+      </div>
+      <div class="g">
+        <b>Streamlabs</b>
+        <p>
+          A mobile app, console streaming, a browser studio, a merch store and a big theme library.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section tight" id="table">
+    <div class="container">
+      <div class="tbl">
+        <div class="tbl-head" aria-hidden="true">
+          <span></span>
+          <span>Streamlabs</span>
+          <span class="fcol">Ferrocast</span>
+        </div>
+        {VS_GROUPS.map((g) => (
+          <>
+            <h2 class="grp">{g.title}</h2>
+            {g.rows.map((r) => (
+              <div class="tr">
+                <div class="f">{r.feature}</div>
+                <div class="cell" data-l="Streamlabs">
+                  <Icon
+                    name={r.streamlabs.mark === 'yes' ? 'check-circle' : 'minus-circle'}
+                    weight={r.streamlabs.mark === 'yes' ? 'fill' : 'light'}
+                    size={20}
+                    class={r.streamlabs.mark === 'yes' ? 'mk-y' : 'mk-n'}
+                  />
+                  <span>
+                    <span class="sr-only">{r.streamlabs.mark === 'yes' ? 'Yes: ' : 'No: '}</span>
+                    {r.streamlabs.text}
+                  </span>
+                </div>
+                <div class="cell fc2" data-l="Ferrocast">
+                  <Icon
+                    name={r.ferrocast.mark === 'yes' ? 'check-circle' : 'minus-circle'}
+                    weight={r.ferrocast.mark === 'yes' ? 'fill' : 'light'}
+                    size={20}
+                    class={r.ferrocast.mark === 'yes' ? 'mk-y' : 'mk-n'}
+                  />
+                  <span>
+                    <span class="sr-only">{r.ferrocast.mark === 'yes' ? 'Yes: ' : 'No: '}</span>
+                    {r.ferrocast.text}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section tight">
+    <div class="container">
+      <div class="win-panel">
+        <h2 class="display-3">What Streamlabs has that we do not.</h2>
+        <ul class="wins">
+          {VS_WINS.map((w) => (
+            <li>
+              <Icon name={w.icon} weight="light" size={28} />
+              <span>
+                <b>{w.title}</b>
+                <span>{w.body}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section tight">
+    <div class="container">
+      <p class="src">
+        Streamlabs facts come from streamlabs.com on {VS_CHECKED} and may change. Ferrocast
+        multistream is sent from your own PC, so it uses your upload. Want the three-way view with
+        StreamElements? See the{' '}
+        <a class="text-link" href="/compare/">
+          full comparison
+        </a>
+        .
+      </p>
+    </div>
+  </section>
+
+  <CtaBand
+    title="Try the free one."
+    text="No account, no trial. If something is missing, tell us."
+    secondary={{ href: '/contact/', label: 'Tell us' }}
+  />
+</Base>
+
+<style>
+  .hero {
+    display: grid;
+    gap: 40px;
+    align-items: end;
+    padding-block: 32px 40px;
+  }
+  @media (min-width: 960px) {
+    .hero {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 0.9fr);
+      gap: 56px;
+      padding-block: 56px 56px;
+    }
+  }
+  .copy {
+    display: grid;
+    gap: 20px;
+    justify-items: start;
+  }
+  .cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .rise {
+    animation: rise 800ms var(--fc-ease-out) both;
+    animation-delay: calc(var(--d, 0) * 90ms);
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+  }
+  .glance {
+    overflow: hidden;
+    border-radius: 20px;
+    border: 1px solid var(--fc-line);
+    background: var(--fc-surface-1);
+    box-shadow: var(--fc-shadow-2);
+  }
+  .g {
+    display: grid;
+    gap: 6px;
+    padding: 24px 26px;
+  }
+  .g + .g {
+    border-top: 1px solid var(--fc-line);
+  }
+  .g b {
+    font-family: var(--fc-font-display);
+    font-size: 1.375rem;
+    letter-spacing: -0.03em;
+  }
+  .g p {
+    color: var(--fc-text-2);
+    max-width: 44ch;
+  }
+  .g.fc {
+    background: var(--fc-btn-soft);
+  }
+  .g.fc b {
+    color: var(--fc-molten-text);
+  }
+  .tight {
+    padding-top: 0;
+  }
+  .tbl {
+    border-top: 2px solid var(--fc-text);
+  }
+  .tbl-head {
+    display: none;
+  }
+  .tr {
+    display: grid;
+    gap: 8px;
+    padding-block: 16px;
+    border-bottom: 1px solid var(--fc-line);
+  }
+  .tr:last-child {
+    border-bottom: 0;
+  }
+  .grp {
+    padding-block: 36px 8px;
+    font-size: 1.5rem;
+    letter-spacing: -0.03em;
+  }
+  .f {
+    font-weight: 700;
+  }
+  @media (min-width: 900px) {
+    .tbl-head,
+    .tr {
+      grid-template-columns: 0.8fr 1fr 1fr;
+      gap: 28px;
+    }
+    .tbl-head {
+      position: sticky;
+      top: 64px;
+      z-index: 5;
+      display: grid;
+      padding-block: 14px;
+      border-bottom: 1px solid var(--fc-line);
+      background: var(--fc-bg);
+      font-family: var(--fc-font-display);
+      font-weight: 700;
+    }
+  }
+  .fcol {
+    color: var(--fc-molten-text);
+  }
+  .cell {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    gap: 10px;
+    color: var(--fc-text-2);
+  }
+  .cell::before {
+    content: attr(data-l);
+    grid-column: 1 / -1;
+    color: var(--fc-text-3);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  @media (min-width: 900px) {
+    .cell::before {
+      display: none;
+    }
+  }
+  .cell :global(.icon) {
+    margin-top: 2px;
+  }
+  .fc2 {
+    color: var(--fc-text);
+  }
+  :global(.mk-y) {
+    color: var(--fc-ok);
+  }
+  :global(.mk-n) {
+    color: var(--fc-text-3);
+  }
+  .win-panel {
+    display: grid;
+    gap: 30px;
+    padding: clamp(24px, 4vw, 56px);
+    border-radius: 20px;
+    border: 1px solid color-mix(in srgb, var(--fc-warn) 28%, transparent);
+    background: var(--fc-warn-soft);
+  }
+  .win-panel h2 {
+    max-width: 20ch;
+  }
+  .wins {
+    display: grid;
+    gap: 22px 40px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  @media (min-width: 760px) {
+    .wins {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (min-width: 1100px) {
+    .wins {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+  .wins li {
+    display: grid;
+    grid-template-columns: 32px 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  .wins li :global(.icon) {
+    margin-top: 2px;
+    color: var(--fc-text-2);
+  }
+  .wins b {
+    display: block;
+    font-family: var(--fc-font-display);
+    font-size: 1.125rem;
+    letter-spacing: -0.02em;
+  }
+  .wins li span span {
+    color: var(--fc-text-2);
+  }
+  .src {
+    max-width: 70ch;
+    color: var(--fc-text-3);
+    font-size: 0.9375rem;
+  }
+</style>
