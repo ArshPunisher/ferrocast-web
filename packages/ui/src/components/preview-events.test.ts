@@ -75,22 +75,25 @@ describe('preview window events', () => {
     ])
   })
 
-  it('validates still image URLs against injection and unsafe schemes', () => {
+  it('validates still image URLs against injection, SVG data URLs, and external HTTP(S) schemes', () => {
     expect(isSafeStillUrl('data:image/png;base64,abc123+/=')).toBe(true)
     expect(isSafeStillUrl('data:image/jpeg;base64,STILL_1')).toBe(true)
-    expect(
-      isSafeStillUrl(
-        'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2F%22%3E%3C%2Fsvg%3E',
-      ) || isSafeStillUrl('data:image/svg+xml;charset=utf-8,%3Csvg%3E%3C%2Fsvg%3E'),
-    ).toBe(true)
     expect(isSafeStillUrl('blob:https://127.0.0.1:47820/1234-5678')).toBe(true)
-    expect(isSafeStillUrl('https://cdn.example.com/thumb.png')).toBe(true)
     expect(isSafeStillUrl('/api/v1/thumb.png')).toBe(true)
 
     expect(isSafeStillUrl('')).toBe(false)
     expect(isSafeStillUrl('javascript:alert(1)')).toBe(false)
     expect(isSafeStillUrl('data:text/html;base64,PHNjcmlwdD4=')).toBe(false)
     expect(isSafeStillUrl('data:image/svg+xml,<script>alert(1)</script>')).toBe(false)
+    expect(
+      isSafeStillUrl(
+        'data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2F%22%3E%3C%2Fsvg%3E',
+      ),
+    ).toBe(false)
+    expect(isSafeStillUrl('data:image/svg+xml;charset=utf-8,%3Csvg%3E%3C%2Fsvg%3E')).toBe(false)
+    expect(isSafeStillUrl('data:image/svg+xml;base64,PHN2Zy8+')).toBe(false)
+    expect(isSafeStillUrl('https://cdn.example.com/thumb.png')).toBe(false)
+    expect(isSafeStillUrl('http://cdn.example.com/thumb.png')).toBe(false)
     expect(isSafeStillUrl('https://evil.test/x");background:url(y')).toBe(false)
     expect(isSafeStillUrl('https://evil.test/x\\n')).toBe(false)
     expect(isSafeStillUrl('//evil.test/protocol-relative')).toBe(false)
