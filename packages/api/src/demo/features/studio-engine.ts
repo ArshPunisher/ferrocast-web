@@ -41,7 +41,8 @@ import {
   type RollbackTrigger,
   type StillResult,
 } from '../../studio-engine'
-import type { Service, UploadCheck } from '../../golive'
+import type { Service, UploadCheck, VideoCodec } from '../../golive'
+import type { DemoEncodeBudgetConfig, StudioStreamProfile } from './golive-plan'
 import type { LiveAlert } from '../../studio'
 import { HttpError } from '../http-error'
 import { clone, requireObj, type DemoHost } from './host'
@@ -1218,6 +1219,62 @@ export class DemoStudioEngine {
 
   currentVideoKbps(): number {
     return Number(this.studioSettingsData.video_kbps ?? 6000) || 6000
+  }
+
+  currentStreamContext(): {
+    hasStudio: boolean
+    main: StudioStreamProfile
+    vertical: StudioStreamProfile | null
+    budget: DemoEncodeBudgetConfig
+    hostCodecs: VideoCodec[]
+  } {
+    const s = this.studioSettingsData
+    const scale = Array.isArray(s.scale) && s.scale.length === 2 ? s.scale : null
+    const width = Number(scale ? scale[0] : (s.width ?? 1920)) || 1920
+    const height = Number(scale ? scale[1] : (s.height ?? 1080)) || 1080
+    const fps = Number(s.fps ?? 60) || 60
+    const kbps = this.currentVideoKbps()
+    const audio_kbps = Number(s.audio_kbps ?? 160) || 160
+    const enc = String(s.video_encoder ?? '').toLowerCase()
+    const codec: VideoCodec = enc.includes('av1')
+      ? 'av1'
+      : enc.includes('hevc') || enc.includes('h265')
+        ? 'hevc'
+        : 'h264'
+    const vbr = s.vbr !== false
+    const keyframe_s = Number(s.keyframe_s ?? 2) || 2
+    const bfRaw = (s.encoder_settings as Record<string, unknown> | undefined)?.bf
+    const b_frames = typeof bfRaw === 'number' && Number.isFinite(bfRaw) ? bfRaw : 2
+    const main: StudioStreamProfile = {
+      width,
+      height,
+      fps,
+      kbps,
+      codec,
+      audio_kbps,
+      vbr,
+      keyframe_s,
+      b_frames,
+    }
+    const vertical: StudioStreamProfile | null = this.verticalOn
+      ? { ...main, width: 1080, height: 1920, kbps: Math.min(kbps, 6000) }
+      : null
+    const prof = this.opts.benchProfile
+    const budget: DemoEncodeBudgetConfig =
+      prof === 'nvidia_nvenc'
+        ? { source: 'nvenc_default', limit_mpx_s: 500, max_sessions: 5 }
+        : prof === 'qsv_stepdown'
+          ? { source: 'hw_default', limit_mpx_s: 280, max_sessions: 2 }
+          : prof === 'weak_cpu'
+            ? { source: 'cpu_default', limit_mpx_s: 140, max_sessions: 1 }
+            : { source: 'apple_silicon', limit_mpx_s: 995, max_sessions: 8 }
+    const hostCodecs: VideoCodec[] =
+      prof === 'nvidia_nvenc'
+        ? ['h264', 'hevc', 'av1']
+        : prof === 'weak_cpu'
+          ? ['h264']
+          : ['h264', 'hevc']
+    return { hasStudio: true, main, vertical, budget, hostCodecs }
   }
 
   setStreaming(on: boolean): EngineStreamStats | null {
@@ -3474,7 +3531,23 @@ export class DemoStudioEngine {
       const patch = requireObj(body)
       const prev = this.studioSettingsData
       this.studioSettingsData = { ...this.studioSettingsData, ...patch }
-      if ('video_kbps' in patch) this.onStreamChange?.(this.streamActive)
+      if (
+        [
+          'video_kbps',
+          'width',
+          'height',
+          'scale',
+          'fps',
+          'audio_kbps',
+          'video_encoder',
+          'encoder',
+          'vbr',
+          'keyframe_s',
+          'encoder_settings',
+        ].some((k) => k in patch)
+      ) {
+        this.onStreamChange?.(this.streamActive)
+      }
       if (this.autoConfigState.state === 'applied' && this.autoConfigState.applied) {
         const keys = ['encoder', 'video_encoder', 'encoder_settings', 'scale', 'fps', 'video_kbps']
         const outputChanged = keys.some(

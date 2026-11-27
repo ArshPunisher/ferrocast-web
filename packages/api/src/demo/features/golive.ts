@@ -26,8 +26,21 @@ import type {
   VerticalObs,
   VideoCodec,
 } from '../../golive'
+import type {
+  GoLiveQualityOptionsResponse,
+  QualitySource,
+} from '../../golive'
 import type { Account } from '../../types'
 import { HttpError } from '../http-error'
+import {
+  buildQualityOptionsResponse,
+  legacyLightCustomQuality,
+  planEncodes,
+  validateQualityInput,
+  type DemoEncodeBudgetConfig,
+  type DestPlanMeta,
+  type StudioStreamProfile,
+} from './golive-plan'
 import { NOT_MINE, clone, requireObj, type DemoHost, type Routed } from './host'
 
 /** Steers the demo for tests: upload speed, OBS already set up, what the stream breaks. */
@@ -48,6 +61,14 @@ export interface DemoGoLiveSetup {
     string,
     { attempts: number; reason: string; detail?: string; refused?: boolean } | null
   >
+  /** Override PC concurrent video encode budget for tests. */
+  encode_budget?: DemoEncodeBudgetConfig
+  /** Override hardware/codec support on this host for tests. */
+  host_codecs?: VideoCodec[]
+  /** Delay (ms) before a live quality switch settles; 0 applies synchronously. */
+  switch_delay_ms?: number
+  /** Simulate live quality switch timeout (422 golive_switch_timeout). */
+  live_switch_timeout?: boolean
 }
 
 const INGEST = 'rtmp://127.0.0.1:1935/live'
@@ -142,9 +163,28 @@ export class DemoGoLive {
     private readonly obsConnected: () => boolean,
     private readonly studioStreaming: () => boolean = () => false,
     private readonly studioVideoKbps: () => number | null = () => null,
+    private readonly studioProfile: () => {
+      hasStudio: boolean
+      main: StudioStreamProfile
+      vertical: StudioStreamProfile | null
+      budget: DemoEncodeBudgetConfig
+      hostCodecs: VideoCodec[]
+    } | null = () => null,
   ) {}
 
   private customKbps = false
+  private customBudget: DemoEncodeBudgetConfig | null = null
+  private customHostCodecs: VideoCodec[] | null = null
+  private switchDelayMs = 0
+  private liveSwitchTimeout = false
+  private switchingIds = new Set<string>()
+  private switchTimers = new Set<ReturnType<typeof setTimeout>>()
+
+  dispose(): void {
+    for (const t of this.switchTimers) clearTimeout(t)
+    this.switchTimers.clear()
+    this.switchingIds.clear()
+  }
 
   notifyStreamChange(): void {
     this.tick()
@@ -178,6 +218,10 @@ export class DemoGoLive {
         else this.failed.set(id, { ...info, since: now })
       }
     }
+    if (s.encode_budget !== undefined) this.customBudget = s.encode_budget
+    if (s.host_codecs !== undefined) this.customHostCodecs = [...s.host_codecs]
+    if (s.switch_delay_ms !== undefined) this.switchDelayMs = s.switch_delay_ms
+    if (s.live_switch_timeout !== undefined) this.liveSwitchTimeout = s.live_switch_timeout
     this.tick()
   }
 
@@ -246,6 +290,89 @@ export class DemoGoLive {
     }
   }
 
+  private nameOf(d: DestinationConfig): string {
+    return d.kind === 'custom'
+      ? (d.name ?? 'Custom server')
+      : d.canvas === 'vertical' && d.kind === 'youtube'
+        ? 'YouTube Shorts live'
+        : LABELS[d.kind as Exclude<Service, 'custom'>]
+  }
+
+  private planInputs() {
+    const obsSupplying = this.pointsHere && this.obsStreaming() && !this.studioStreaming()
+    const ctx = this.studioProfile()
+    const hasStudio = Boolean(ctx?.hasStudio)
+    const source: QualitySource = obsSupplying
+      ? 'obs'
+      : hasStudio || this.studioStreaming()
+        ? 'studio'
+        : this.pointsHere || this.obsConnected()
+          ? 'obs'
+          : 'none'
+    const obsMain: StudioStreamProfile = {
+      width: 1920,
+      height: 1080,
+      fps: 60,
+      kbps: this.kbps,
+      codec: this.codec,
+      audio_kbps: 160,
+      vbr: true,
+      keyframe_s: Math.max(1, Math.round(this.keyint / 1000)),
+      b_frames: 2,
+    }
+    const studioMain: StudioStreamProfile =
+      ctx && !obsSupplying
+        ? {
+            ...ctx.main,
+            kbps: this.customKbps ? this.kbps : ctx.main.kbps,
+          }
+        : obsMain
+    const main = obsSupplying ? obsMain : studioMain
+    const hasVertical = Boolean(
+      ctx?.vertical ||
+        this.cutWanted() ||
+        this.verticalInstalled ||
+        this.cfg.some((d) => d.canvas === 'vertical'),
+    )
+    const vertical: StudioStreamProfile | null = ctx?.vertical
+      ? ctx.vertical
+      : hasVertical
+        ? { ...main, width: 1080, height: 1920, kbps: Math.min(main.kbps, 6000) }
+        : null
+    const budgetConfig: DemoEncodeBudgetConfig = this.customBudget ??
+      ctx?.budget ?? { source: 'apple_silicon', limit_mpx_s: 995, max_sessions: 8 }
+    const hostCodecs = this.customHostCodecs ?? ctx?.hostCodecs ?? (['h264', 'hevc'] as VideoCodec[])
+    const destinations: DestPlanMeta[] = this.cfg.map((d) => {
+      const custom = d.kind === 'custom'
+      const direct = custom ? directKind(d.url ?? '') : null
+      const primary = Object.entries(this.advanced.per).find(([, a]) => a.backup === d.id)?.[0]
+      const backs = this.cfg.find((x) => x.id === primary && x.enabled)
+      return {
+        cfg: d,
+        name: this.nameOf(d),
+        direct,
+        blocked: this.blocked(d) !== null,
+        standby: Boolean(backs),
+      }
+    })
+    return {
+      destinations,
+      main,
+      vertical,
+      cutWanted: this.cutWanted(),
+      source,
+      ignoreLimits: Boolean(this.advanced.ignore_service_limits),
+      budgetConfig,
+      hostCodecs,
+      live: this.live(),
+    }
+  }
+
+  private computePlan() {
+    const inputs = this.planInputs()
+    return { inputs, plan: planEncodes(inputs) }
+  }
+
   private mainCapState(): {
     effectiveKbps: number
     targetVideo: number | null
@@ -256,44 +383,11 @@ export class DemoGoLive {
     if (targetVideo === null) {
       return { effectiveKbps: this.kbps, targetVideo: null, limiter: null }
     }
-    const candidates = this.advanced.ignore_service_limits
-      ? []
-      : this.cfg
-          .filter((d) => {
-            if (
-              !d.enabled ||
-              (d.canvas ?? 'main') !== 'main' ||
-              d.light ||
-              (d.kind === 'custom' && directKind(d.url ?? '') !== null) ||
-              this.blocked(d) !== null
-            ) {
-              return false
-            }
-            const primary = Object.entries(this.advanced.per).find(
-              ([, a]) => a.backup === d.id,
-            )?.[0]
-            const backs = primary ? this.cfg.some((x) => x.id === primary && x.enabled) : false
-            return !backs
-          })
-          .map((d) => {
-            const ceiling =
-              d.kind === 'twitch' && !d.enhanced
-                ? 6000
-                : d.kind === 'kick' && !d.enhanced
-                  ? 8000
-                  : null
-            return ceiling !== null
-              ? { id: d.id, name: LABELS[d.kind as 'twitch' | 'kick'], ceiling }
-              : null
-          })
-          .filter((x): x is { id: string; name: string; ceiling: number } => x !== null)
-          .sort((a, b) => a.ceiling - b.ceiling)
-    const lowest = candidates[0] ?? null
-    if (lowest && targetVideo > lowest.ceiling) {
-      return { effectiveKbps: lowest.ceiling + 160, targetVideo, limiter: lowest }
-    }
+    const { inputs, plan } = this.computePlan()
+    const mainGroup = plan.groups.find((g) => g.canvas === 'main')
+    const mainKbps = mainGroup ? mainGroup.kbps : inputs.main.kbps
     return {
-      effectiveKbps: targetVideo === 6000 ? this.kbps : targetVideo + 160,
+      effectiveKbps: mainKbps === 6000 && targetVideo === 6000 ? this.kbps : mainKbps + inputs.main.audio_kbps,
       targetVideo,
       limiter: null,
     }
@@ -309,13 +403,15 @@ export class DemoGoLive {
         height: null,
         fps: null,
       }
+    const { inputs, plan } = this.computePlan()
+    const mainGroup = plan.groups.find((g) => g.canvas === 'main')
     return {
       kbps: this.mainCapState().effectiveKbps,
-      keyframe_interval_ms: this.keyint,
-      video_codec: this.codec,
-      width: 1920,
-      height: 1080,
-      fps: 60,
+      keyframe_interval_ms: inputs.main.keyframe_s * 1000,
+      video_codec: mainGroup?.codec ?? inputs.main.codec,
+      width: mainGroup?.width ?? inputs.main.width,
+      height: mainGroup?.height ?? inputs.main.height,
+      fps: mainGroup?.fps ?? inputs.main.fps,
     }
   }
 
@@ -323,7 +419,11 @@ export class DemoGoLive {
     return this.accounts().find((a) => a.platform === kind)
   }
 
-  private health(d: DestinationConfig, now: number): PushHealth | null {
+  private health(
+    d: DestinationConfig,
+    now: number,
+    resolvedTotalKbps?: number,
+  ): PushHealth | null {
     const f = this.failed.get(d.id)
     if (f && d.enabled)
       return {
@@ -367,7 +467,10 @@ export class DemoGoLive {
       }
     }
     const wobble = Math.round((this.host.random() - 0.5) * 300)
-    const base = d.canvas === 'vertical' ? 4500 : this.mainCapState().effectiveKbps
+    const base =
+      d.canvas === 'vertical'
+        ? (resolvedTotalKbps ?? 4500)
+        : (resolvedTotalKbps ?? this.mainCapState().effectiveKbps)
     const health: PushHealth = { state: 'live', kbps: base + wobble, dropped: 0, since_ms: since }
     // A direct destination measures its network: a weak patch every half minute, resent.
     if (directKind(d.url ?? '')) {
@@ -432,17 +535,13 @@ export class DemoGoLive {
     return out
   }
 
-  private destinations(): DestinationView[] {
+  private destinations(
+    computed?: ReturnType<DemoGoLive['computePlan']>,
+  ): DestinationView[] {
     const now = Date.now()
+    const { inputs, plan } = computed ?? this.computePlan()
     const s = this.stats()
     const vs = this.verticalStats()
-    const { limiter, targetVideo } = this.mainCapState()
-    const nameOf = (d: DestinationConfig) =>
-      d.kind === 'custom'
-        ? (d.name ?? 'Custom server')
-        : d.canvas === 'vertical' && d.kind === 'youtube'
-          ? 'YouTube Shorts live'
-          : LABELS[d.kind as Exclude<Service, 'custom'>]
     return this.cfg.map((d) => {
       const custom = d.kind === 'custom'
       const acct = custom ? null : this.account(d.kind)
@@ -453,52 +552,33 @@ export class DemoGoLive {
       const issues = d.enabled
         ? this.rulesStructured(d.kind, vertical ? vs : s, vertical, !!d.enhanced)
         : []
-      const direct = custom ? directKind(d.url ?? '') : null
-      const isBlocked = this.blocked(d) !== null
-      const capped =
-        direct === 'whip' && d.enabled && !vertical && !backs && !isBlocked && targetVideo !== null
-          ? {
-              kbps: limiter ? Math.min(targetVideo, limiter.ceiling) : targetVideo,
-              separate_encode: false,
-              summary: 'B-frames off for WebRTC',
-              detail:
-                'B-frames are turned off for this stream because WebRTC (WHIP) can’t carry them.',
-            }
-          : limiter &&
-              targetVideo !== null &&
-              d.enabled &&
-              !vertical &&
-              !d.light &&
-              !d.enhanced &&
-              !backs &&
-              !direct &&
-              !isBlocked &&
-              (d.kind === 'twitch' || d.kind === 'kick')
-            ? {
-                kbps: limiter.ceiling,
-                separate_encode: false,
-                summary: `Capped at ${limiter.ceiling.toLocaleString()} kbps for ${limiter.name}`,
-                detail: `Your ${targetVideo.toLocaleString()} kbps stream is capped at ${limiter.ceiling.toLocaleString()} kbps H.264 (2 s keyframes, 1x VBV) so ${limiter.name} viewers don’t stutter.`,
-              }
-            : undefined
+      const planOut = plan.perDest.get(d.id)!
+      const resolvedTotal =
+        inputs.source === 'studio'
+          ? planOut.resolved.kbps + planOut.resolved.audio_kbps
+          : undefined
       return {
         id: d.id,
         kind: d.kind,
         canvas: d.canvas ?? 'main',
-        name: nameOf(d),
+        name: this.nameOf(d),
         account: custom ? hostOf(d.url ?? '') : (acct?.name ?? null),
         enabled: d.enabled,
         connected: custom || !!acct,
-        health: backs ? null : this.health(d, now),
+        health: backs ? null : this.health(d, now, resolvedTotal),
         blocked: d.enabled && this.liveFor(d.canvas) ? this.blocked(d) : null,
         ...(d.brand ? { brand: d.brand } : {}),
-        ...(capped ? { capped } : {}),
+        ...(planOut.capped ? { capped: planOut.capped } : {}),
+        quality: clone(planOut.current),
+        resolved_quality: clone(planOut.resolved),
+        switching_quality: this.switchingIds.has(d.id),
+        quality_note: planOut.qualityNote,
         rules: issues.map((i) => i.detail),
         issues,
         ...(custom && directKind(d.url ?? '') ? { direct: directKind(d.url ?? '')! } : {}),
         ...(d.light ? { light: true } : {}),
         ...(d.enhanced ? { enhanced: true } : {}),
-        ...(backs ? { standby_for: nameOf(backs) } : {}),
+        ...(backs ? { standby_for: this.nameOf(backs) } : {}),
       }
     })
   }
@@ -517,9 +597,95 @@ export class DemoGoLive {
         'invalid',
         'light: SRT, RIST and WebRTC servers get the full stream from the Studio.',
       )
-    if (on) d.light = true
-    else delete d.light
+    if (on) {
+      const { inputs } = this.computePlan()
+      d.light = true
+      d.quality = { mode: 'custom', ...legacyLightCustomQuality(inputs.main) }
+    } else {
+      delete d.light
+      d.quality = { mode: 'same_as_main' }
+    }
     return { destinations: clone(this.cfg) }
+  }
+
+  private qualityOptions(): GoLiveQualityOptionsResponse {
+    const inputs = this.planInputs()
+    return buildQualityOptionsResponse(inputs)
+  }
+
+  private setQuality(id: string, body: unknown): GoLiveView {
+    const d = this.cfg.find((x) => x.id === id)
+    if (!d) throw new HttpError(404, 'not_found', 'There is no such destination.')
+    const inputs = this.planInputs()
+    const meta = inputs.destinations.find((x) => x.cfg.id === id)!
+    const basePlan = planEncodes(inputs)
+    const baseOut = basePlan.perDest.get(id)!
+    const canvasProfile =
+      (d.canvas ?? 'main') === 'vertical' ? (inputs.vertical ?? inputs.main) : inputs.main
+    const nextQuality = validateQualityInput(body, meta, canvasProfile, {
+      lockedReason: baseOut.lockedReason,
+      source: inputs.source,
+      hostCodecs: inputs.hostCodecs,
+      ignoreLimits: inputs.ignoreLimits,
+    })
+
+    if (inputs.source === 'obs' && nextQuality.mode === 'custom') {
+      throw new HttpError(
+        422,
+        'golive_needs_new_encode',
+        'OBS sends one shared stream. Switch to Studio for per-platform quality.',
+      )
+    }
+    if (this.switchingIds.has(id)) {
+      throw new HttpError(409, 'conflict', 'Already switching quality on this destination.')
+    }
+
+    const simDests = inputs.destinations.map((m) =>
+      m.cfg.id === id ? { ...m, cfg: { ...m.cfg, quality: nextQuality, light: false } } : m,
+    )
+    const simPlan = planEncodes({
+      ...inputs,
+      destinations: simDests,
+      preserveCustomOnFallback: true,
+    })
+    if (nextQuality.mode === 'custom' && simPlan.budget.status === 'over') {
+      throw new HttpError(
+        422,
+        'encode_budget_exceeded',
+        'Not enough encode headroom on this computer for that quality.',
+      )
+    }
+
+    const isLiveStudio = this.liveFor(d.canvas) && this.studioStreaming()
+    if (isLiveStudio && this.liveSwitchTimeout) {
+      throw new HttpError(
+        422,
+        'golive_switch_timeout',
+        'Timed out restarting the encoder for that quality change.',
+      )
+    }
+
+    d.quality = nextQuality
+    delete d.light
+
+    if (isLiveStudio && this.switchDelayMs > 0) {
+      this.switchingIds.add(id)
+      this.host.broadcastLive({ v: 1, type: 'golive', data: this.frame() })
+      const t = setTimeout(() => {
+        this.switchTimers.delete(t)
+        this.switchingIds.delete(id)
+        if (this.live() || this.verticalLive()) {
+          this.host.broadcastLive({ v: 1, type: 'golive', data: this.frame() })
+        }
+      }, this.switchDelayMs)
+      this.switchTimers.add(t)
+      return this.view()
+    }
+
+    if (this.live() || this.verticalLive()) {
+      this.host.broadcastLive({ v: 1, type: 'golive', data: this.frame() })
+    }
+    return this.view()
   }
 
   /** As the engine: Twitch's main picture only; off isn't saved. */
@@ -556,6 +722,7 @@ export class DemoGoLive {
   }
 
   private view(): GoLiveView {
+    const computed = this.computePlan()
     return {
       ingest: INGEST,
       obs: this.obs(),
@@ -563,7 +730,9 @@ export class DemoGoLive {
       stats: this.stats(),
       vertical_live: this.verticalLive(),
       vertical_stats: this.verticalStats(),
-      destinations: this.destinations(),
+      destinations: this.destinations(computed),
+      encode_groups: clone(computed.plan.groups),
+      encode_budget: clone(computed.plan.budget),
       upload: clone(this.upload),
       protect: this.protect,
       aitum_ok: this.aitumOk,
@@ -579,12 +748,15 @@ export class DemoGoLive {
   }
 
   private frame(): GoLiveFrame {
+    const computed = this.computePlan()
     return {
       live: this.live(),
       stats: this.stats(),
       vertical_live: this.verticalLive(),
       vertical_stats: this.verticalStats(),
-      destinations: this.destinations(),
+      destinations: this.destinations(computed),
+      encode_groups: clone(computed.plan.groups),
+      encode_budget: clone(computed.plan.budget),
       cut_state: this.cutState(),
       ffmpeg: clone(this.ffmpeg),
     }
@@ -625,6 +797,7 @@ export class DemoGoLive {
     }
     if (method === 'GET' && path === 'ingest')
       return { server: INGEST, key: 'fc_demo0000000000000000000000000000' }
+    if (method === 'GET' && path === 'quality-options') return this.qualityOptions()
     if (method === 'PUT' && path === 'destinations') return this.saveOrder(body)
     if (method === 'POST' && path === 'destinations') return this.addCustom(body)
     if (method === 'DELETE' && seg[1] === 'destinations' && seg.length === 3)
@@ -633,6 +806,8 @@ export class DemoGoLive {
       return this.setLight(seg[2] ?? '', body)
     if (method === 'PUT' && seg[1] === 'destinations' && seg[3] === 'enhanced' && seg.length === 4)
       return this.setEnhanced(seg[2] ?? '', body)
+    if (method === 'PUT' && seg[1] === 'destinations' && seg[3] === 'quality' && seg.length === 4)
+      return this.setQuality(seg[2] ?? '', body)
     if (method === 'POST' && path === 'obs/setup') return this.point()
     if (method === 'POST' && path === 'obs/restore') return this.restore()
     if (method === 'POST' && path === 'vertical/obs/setup') return this.pointVertical()

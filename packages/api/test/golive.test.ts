@@ -860,3 +860,424 @@ describe('DemoGoLive cap alignment with engine studio_limit and WHIP B-frames no
     }
   })
 })
+
+describe('DemoGoLive per-destination quality parity', () => {
+  it('exposes quality-options with Studio 1440p60 hard vs soft limits and locked reasons', async () => {
+    const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+    try {
+      const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+      const api = goliveApi(client)
+      const studioEng = studioEngineApi(client)
+
+      const s = await studioEng.studioSettings()
+      await studioEng.setStudioSettings({
+        ...s,
+        width: 2560,
+        height: 1440,
+        scale: null,
+        fps: 60,
+        video_kbps: 18000,
+      })
+
+      const before = await api.view()
+      await api.saveOrder(
+        before.destinations.map((d) => ({
+          id: d.id,
+          enabled: d.id === 'youtube' || d.id === 'twitch' || d.id === 'kick',
+        })),
+      )
+
+      const opts = await api.qualityOptions()
+      expect(opts.source).toBe('studio')
+      expect(opts.main).toMatchObject({
+        width: 2560,
+        height: 1440,
+        fps: 60,
+        kbps: 18000,
+        codec: 'h264',
+        audio_kbps: 160,
+      })
+      expect(opts.budget.status).toBe('ok')
+
+      // YouTube stays at 1440p60 18 Mbps on main encode.
+      expect(opts.destinations.youtube!.resolved).toMatchObject({
+        width: 2560,
+        height: 1440,
+        fps: 60,
+        kbps: 18000,
+        separate_encode: false,
+      })
+      // Kick 1440p is a HARD cap -> auto-fitted to 1080p60 @ 8000 kbps.
+      expect(opts.destinations.kick!.resolved).toMatchObject({
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        kbps: 8000,
+        auto_fitted: true,
+        separate_encode: true,
+      })
+      expect(opts.destinations.kick!.custom_limits).toMatchObject({
+        max_width: 1920,
+        max_height: 1080,
+        max_kbps: 8000,
+      })
+      // Twitch 1080p is SOFT; 6000 kbps is HARD -> stays 1440p60 @ 6000 kbps with soft note.
+      expect(opts.destinations.twitch!.resolved).toMatchObject({
+        width: 2560,
+        height: 1440,
+        fps: 60,
+        kbps: 6000,
+        auto_fitted: true,
+        separate_encode: true,
+      })
+      const twitchMainOpt = opts.destinations.twitch!.options.find(
+        (o) => o.quality.mode === 'same_as_main',
+      )
+      expect(twitchMainOpt?.note).toContain('recommended 1080p')
+      const twitch1080 = opts.destinations.twitch!.options.find((o) => o.id === '1080p60')
+      expect(twitch1080).toMatchObject({
+        recommended: true,
+        note: null,
+        resolved: { width: 1920, height: 1080, fps: 60, kbps: 6000 },
+      })
+
+      // Direct SRT destination and Twitch Enhanced Broadcasting report locked_reason + no custom_limits.
+      await api.addCustom('Studio SRT', 'srt://127.0.0.1:9001', '')
+      await api.setEnhanced('twitch', true)
+      const lockedOpts = await api.qualityOptions()
+      const srtEntry = Object.values(lockedOpts.destinations).find((d) =>
+        d.id.startsWith('c_'),
+      )!
+      expect(srtEntry.locked_reason).toBeTruthy()
+      expect(srtEntry.custom_limits).toBeNull()
+      expect(lockedOpts.destinations.twitch!.locked_reason).toBeTruthy()
+      expect(lockedOpts.destinations.twitch!.custom_limits).toBeNull()
+
+      // Facebook, X, and Instagram paste-brand limits and Facebook bitrate matrix.
+      const fb = await api.addCustom(
+        'FB Live',
+        'rtmps://live-api-s.facebook.com:443/rtmp/',
+        'k1',
+        'main',
+        'facebook',
+      )
+      const ig = await api.addCustom(
+        'IG Live',
+        'rtmps://live-upload.instagram.com:443/rtmp/',
+        'k2',
+        'vertical',
+        'instagram',
+      )
+      const brandedOpts = await api.qualityOptions()
+      expect(brandedOpts.destinations[fb.id]?.resolved).toMatchObject({
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        kbps: 9000,
+      })
+      expect(brandedOpts.destinations[ig.id]?.resolved).toMatchObject({
+        width: 720,
+        height: 1280,
+        fps: 30,
+        kbps: 4000,
+      })
+      // Facebook 720p30 matrix cap is 4000 kbps: 5000 kbps at 720p30 must be rejected.
+      await expect(
+        refusal(
+          api.setQuality(fb.id, {
+            mode: 'custom',
+            width: 1280,
+            height: 720,
+            fps: 30,
+            kbps: 5000,
+          }),
+        ),
+      ).resolves.toMatchObject({ status: 400, code: 'invalid' })
+    } finally {
+      engine.dispose()
+    }
+  })
+
+  it('validates custom quality limits, codecs, brands, and budget refusals', async () => {
+    const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+    try {
+      const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+      const api = goliveApi(client)
+      const studioEng = studioEngineApi(client)
+
+      const s = await studioEng.studioSettings()
+      await studioEng.setStudioSettings({
+        ...s,
+        width: 1920,
+        height: 1080,
+        scale: null,
+        fps: 60,
+        video_kbps: 12000,
+      })
+
+      const init = await api.view()
+      await api.saveOrder(
+        init.destinations.map((d) => ({
+          id: d.id,
+          enabled: d.id === 'youtube' || d.id === 'twitch' || d.id === 'kick',
+        })),
+      )
+
+      // 404 unknown id
+      await expect(
+        refusal(api.setQuality('unknown', { mode: 'same_as_main' })),
+      ).resolves.toMatchObject({ status: 404, code: 'not_found' })
+
+      // 400 validation errors: unknown field, upscale, non-divisor fps, hard cap breach, bad codec
+      await expect(
+        refusal(
+          client.request('PUT', '/api/v1/golive/destinations/youtube/quality', {
+            mode: 'same_as_main',
+            extra: 1,
+          }),
+        ),
+      ).resolves.toMatchObject({ status: 400, code: 'invalid' })
+
+      await expect(
+        refusal(
+          api.setQuality('youtube', {
+            mode: 'custom',
+            width: 3840,
+            height: 2160,
+            fps: 60,
+            kbps: 12000,
+          }),
+        ),
+      ).resolves.toMatchObject({ status: 400, code: 'invalid' })
+
+      await expect(
+        refusal(
+          api.setQuality('youtube', {
+            mode: 'custom',
+            width: 1280,
+            height: 720,
+            fps: 45,
+            kbps: 6000,
+          }),
+        ),
+      ).resolves.toMatchObject({ status: 400, code: 'invalid' })
+
+      await expect(
+        refusal(
+          api.setQuality('kick', {
+            mode: 'custom',
+            width: 1920,
+            height: 1080,
+            fps: 60,
+            kbps: 9000,
+          }),
+        ),
+      ).resolves.toMatchObject({ status: 400, code: 'invalid' })
+
+      await expect(
+        refusal(
+          api.setQuality('twitch', {
+            mode: 'custom',
+            width: 1280,
+            height: 720,
+            fps: 60,
+            kbps: 4500,
+            codec: 'hevc',
+          }),
+        ),
+      ).resolves.toMatchObject({ status: 400, code: 'invalid' })
+
+      // macOS default accepts HEVC on YouTube, while non-macOS host rejects it.
+      const hevcView = await api.setQuality('youtube', {
+        mode: 'custom',
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        kbps: 10000,
+        codec: 'hevc',
+      })
+      expect(hevcView.destinations.find((d) => d.id === 'youtube')?.resolved_quality?.codec).toBe(
+        'hevc',
+      )
+
+      engine.setGoLive({ host_codecs: ['h264'] })
+      await expect(
+        refusal(
+          api.setQuality('youtube', {
+            mode: 'custom',
+            width: 1920,
+            height: 1080,
+            fps: 60,
+            kbps: 10000,
+            codec: 'hevc',
+          }),
+        ),
+      ).resolves.toMatchObject({ status: 400, code: 'invalid' })
+
+      // 422 encode_budget_exceeded when custom request exceeds PC session budget.
+      engine.setGoLive({
+        host_codecs: ['h264', 'hevc'],
+        encode_budget: { max_sessions: 2, limit_mpx_s: 300 },
+      })
+      await expect(
+        refusal(
+          api.setQuality('kick', {
+            mode: 'custom',
+            width: 1280,
+            height: 720,
+            fps: 60,
+            kbps: 4500,
+          }),
+        ),
+      ).resolves.toMatchObject({ status: 422, code: 'encode_budget_exceeded' })
+    } finally {
+      engine.dispose()
+    }
+  })
+
+  it('coalesces under 2-session budget, falls back to shared cap under 1-session, and switches live without disturbing others', async () => {
+    const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+    try {
+      const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+      const api = goliveApi(client)
+      const studioEng = studioEngineApi(client)
+
+      const s = await studioEng.studioSettings()
+      await studioEng.setStudioSettings({
+        ...s,
+        width: 1920,
+        height: 1080,
+        scale: null,
+        fps: 60,
+        video_kbps: 12000,
+      })
+
+      const init = await api.view()
+      await api.saveOrder(
+        init.destinations.map((d) => ({
+          id: d.id,
+          enabled: d.id === 'youtube' || d.id === 'twitch' || d.id === 'kick',
+        })),
+      )
+
+      // 8 sessions -> 3 independent groups (12M, 6M, 8M).
+      const threeGroups = await api.view()
+      expect(threeGroups.encode_groups?.length).toBe(3)
+      expect(threeGroups.destinations.find((d) => d.id === 'youtube')?.resolved_quality?.kbps).toBe(
+        12000,
+      )
+      expect(threeGroups.destinations.find((d) => d.id === 'kick')?.resolved_quality?.kbps).toBe(
+        8000,
+      )
+      expect(threeGroups.destinations.find((d) => d.id === 'twitch')?.resolved_quality?.kbps).toBe(
+        6000,
+      )
+
+      // 2 sessions -> Pass-1 coalesces Kick (8M) into Twitch's 6M group while keeping YouTube 12M!
+      engine.setGoLive({ encode_budget: { max_sessions: 2, limit_mpx_s: 300 } })
+      const twoGroups = await api.view()
+      expect(twoGroups.encode_groups?.length).toBe(2)
+      expect(twoGroups.destinations.find((d) => d.id === 'youtube')?.resolved_quality?.kbps).toBe(
+        12000,
+      )
+      const kickCoalesced = twoGroups.destinations.find((d) => d.id === 'kick')
+      expect(kickCoalesced?.resolved_quality?.kbps).toBe(6000)
+      expect(kickCoalesced?.resolved_quality?.shared_with).toContain('Twitch')
+
+      // 1 session -> Pass-2 collapses everyone into a shared 6M encode.
+      engine.setGoLive({ encode_budget: { max_sessions: 1, limit_mpx_s: 200 } })
+      const oneGroup = await api.view()
+      expect(oneGroup.encode_groups?.length).toBe(1)
+      expect(oneGroup.destinations.find((d) => d.id === 'youtube')?.resolved_quality?.kbps).toBe(
+        6000,
+      )
+      expect(oneGroup.destinations.find((d) => d.id === 'twitch')?.capped?.separate_encode).toBe(
+        false,
+      )
+
+      // Restore generous budget and test live switch concurrency + light bridge.
+      engine.setGoLive({
+        encode_budget: { max_sessions: 8, limit_mpx_s: 995 },
+        switch_delay_ms: 20,
+      })
+      await studioEng.start()
+      await studioEng.stream(true)
+
+      vi.useFakeTimers()
+      try {
+        const switchingView = await api.setQuality('twitch', {
+          mode: 'custom',
+          width: 1280,
+          height: 720,
+          fps: 30,
+          kbps: 3000,
+        })
+        expect(switchingView.destinations.find((d) => d.id === 'twitch')?.switching_quality).toBe(
+          true,
+        )
+        expect(switchingView.destinations.find((d) => d.id === 'youtube')?.connected).toBe(true)
+
+        await expect(
+          refusal(api.setQuality('twitch', { mode: 'same_as_main' })),
+        ).resolves.toMatchObject({ status: 409, code: 'conflict' })
+
+        await vi.advanceTimersByTimeAsync(25)
+      } finally {
+        vi.useRealTimers()
+      }
+      const afterSwitch = await api.view()
+      expect(afterSwitch.destinations.find((d) => d.id === 'twitch')).toMatchObject({
+        switching_quality: false,
+        resolved_quality: { width: 1280, height: 720, fps: 30, kbps: 3000 },
+      })
+      expect(afterSwitch.destinations.find((d) => d.id === 'youtube')?.connected).toBe(true)
+
+      // Simulated switch timeout refuses without overwriting prior quality.
+      engine.setGoLive({ live_switch_timeout: true })
+      await expect(
+        refusal(api.setQuality('twitch', { mode: 'same_as_main' })),
+      ).resolves.toMatchObject({ status: 422, code: 'golive_switch_timeout' })
+      engine.setGoLive({ live_switch_timeout: false })
+
+      // setLight bridges to 720p30@3000 H.264 custom quality and off clears back to same_as_main.
+      await api.setLight('kick', true)
+      const lightOn = await api.view()
+      expect(lightOn.destinations.find((d) => d.id === 'kick')).toMatchObject({
+        light: true,
+        resolved_quality: { width: 1280, height: 720, fps: 30, kbps: 3000, codec: 'h264' },
+      })
+      await api.setLight('kick', false)
+      const lightOff = await api.view()
+      expect(lightOff.destinations.find((d) => d.id === 'kick')?.light).toBeUndefined()
+      expect(lightOff.destinations.find((d) => d.id === 'kick')?.quality).toEqual({
+        mode: 'same_as_main',
+      })
+    } finally {
+      engine.dispose()
+    }
+  })
+
+  it('returns 422 golive_needs_new_encode in OBS live mode', async () => {
+    const { engine, api } = demo()
+    try {
+      engine.studio.obs.streaming = true
+      engine.setGoLive({ points_here: true, kbps: 12000 })
+      const opts = await api.qualityOptions()
+      expect(opts.source).toBe('obs')
+      expect(opts.destinations.twitch!.locked_reason).toBeTruthy()
+      await expect(
+        refusal(
+          api.setQuality('twitch', {
+            mode: 'custom',
+            width: 1280,
+            height: 720,
+            fps: 30,
+            kbps: 3000,
+          }),
+        ),
+      ).resolves.toMatchObject({ status: 422, code: 'golive_needs_new_encode' })
+    } finally {
+      engine.dispose()
+    }
+  })
+})

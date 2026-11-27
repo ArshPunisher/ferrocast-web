@@ -800,6 +800,7 @@ export class DemoEngine {
       () => this.obs.state === 'connected',
       () => this.studioEngine?.isStreaming() ?? false,
       () => this.studioEngine?.currentVideoKbps() ?? null,
+      () => this.studioEngine?.currentStreamContext() ?? null,
     )
     this.studioEngine?.setAutoConfigDeps({
       runUploadCheck: () => this.golive.runUploadCheck(),
@@ -1126,6 +1127,7 @@ export class DemoEngine {
   /** Stops every timer and closes sockets (tests, page unload). */
   dispose(): void {
     this.autoplayOn = false
+    this.golive.dispose()
     this.music.dispose()
     for (const t of this.timers) clearTimeout(t)
     this.timers.clear()
