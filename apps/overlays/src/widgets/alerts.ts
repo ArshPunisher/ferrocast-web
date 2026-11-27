@@ -212,6 +212,9 @@ interface Playing {
   timers: ReturnType<typeof setTimeout>[]
   audio: HTMLAudioElement[]
   activeAudio: number
+  /** Active TTS audio element stop callback, invoked on global `tts_stop`. */
+  ttsStop: (() => void) | null
+  ttsSpoken: boolean
   leaving: boolean
   /** The hold timer, frozen while OBS hides the source. */
   hold: ReturnType<typeof setTimeout> | null
@@ -470,6 +473,19 @@ export class AlertsWidget implements WidgetView {
     else this.queue = this.queue.filter((q) => q.alert.alert_id !== alertId)
   }
 
+  onTtsStop(): void {
+    const p = this.playing
+    p?.ttsStop?.()
+    if (p?.ttsSpoken) {
+      p.ttsSpoken = false
+      try {
+        globalThis.speechSynthesis?.cancel()
+      } catch {
+        /* nothing to stop */
+      }
+    }
+  }
+
   /**
    * OBS hid the source: freeze the alert (animation, sound, remaining time) and stop
    * dequeuing, so nobody "sees" an alert that played off screen. Shown again: carry on.
@@ -582,6 +598,8 @@ export class AlertsWidget implements WidgetView {
       timers: [],
       audio: [],
       activeAudio: 0,
+      ttsStop: null,
+      ttsSpoken: false,
       leaving: false,
       hold: null,
       holdEndsAt: 0,
@@ -614,13 +632,27 @@ export class AlertsWidget implements WidgetView {
     const vol = Number.isFinite(p.alert.volume)
       ? Math.min(Math.max(p.alert.volume, 0), 100) / 100
       : 0.7
-    const play = (url: string, next?: () => void, volume = vol) => {
+    const play = (url: string, next?: () => void, volume = vol, isTts = false) => {
       // 'ended', 'error' and a rejected play() can all fire: run the follow-up once.
       let done = false
+      let el: HTMLAudioElement | null = null
       const after = () => {
         if (done) return
         done = true
+        if (isTts && p.ttsStop === stopTts) p.ttsStop = null
         if (next) next()
+        p.activeAudio = Math.max(0, p.activeAudio - 1)
+        if (p.activeAudio === 0) this.onAudioIdle?.()
+      }
+      const stopTts = () => {
+        if (done) return
+        done = true
+        if (p.ttsStop === stopTts) p.ttsStop = null
+        try {
+          el?.pause()
+        } catch {
+          /* nothing to stop */
+        }
         p.activeAudio = Math.max(0, p.activeAudio - 1)
         if (p.activeAudio === 0) this.onAudioIdle?.()
       }
@@ -631,6 +663,8 @@ export class AlertsWidget implements WidgetView {
         next?.()
         return
       }
+      el = a
+      if (isTts) p.ttsStop = stopTts
       p.activeAudio += 1
       a.volume = volume
       p.audio.push(a)
@@ -640,8 +674,11 @@ export class AlertsWidget implements WidgetView {
     }
     const playTts = () => {
       if (this.playing !== p || p.leaving) return
-      if (tts) play(tts)
-      else if (ttsText) speakText(ttsText)
+      if (tts) play(tts, undefined, vol, true)
+      else if (ttsText) {
+        p.ttsSpoken = true
+        speakText(ttsText)
+      }
     }
     const look = p.alert.design?.look
     if (sound) play(sound, tts || ttsText ? playTts : undefined)
@@ -664,6 +701,7 @@ export class AlertsWidget implements WidgetView {
     // Skipped or replaced: the sound and the browser's voice stop now, even if the alert's own
     // end had already begun (its voice would otherwise talk over the next alert).
     if (stop) {
+      p.ttsStop = null
       for (const a of p.audio) a.pause()
       p.activeAudio = 0
       this.onAudioIdle?.()

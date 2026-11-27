@@ -675,6 +675,56 @@ describe('tts and revoked frames', () => {
     g.speechSynthesis = prevSynth
   })
 
+  it('stops paid-alert TTS audio on tts_stop and supports targeted tts_stop ids without cancelling unrelated queued lines', () => {
+    const started: string[] = []
+    const paused: string[] = []
+    const endedByUrl = new Map<string, () => void>()
+    const g = globalThis as unknown as { speechSynthesis?: unknown }
+    const prevSynth = g.speechSynthesis
+    const cancel = vi.fn()
+    g.speechSynthesis = { cancel }
+    const OrigAudio = globalThis.Audio
+    globalThis.Audio = vi.fn(function (
+      this: { addEventListener: unknown; play: unknown; pause: unknown; volume: number },
+      url: string,
+    ) {
+      started.push(url)
+      this.volume = 1
+      this.addEventListener = (evt: string, fn: () => void) => {
+        if (evt === 'ended') endedByUrl.set(url, fn)
+      }
+      this.play = () => Promise.resolve()
+      this.pause = () => {
+        paused.push(url)
+      }
+    }) as unknown as typeof Audio
+
+    const box = createOverlay(document.createElement('div'), { audio: true })
+    box.apply(snapshot())
+
+    // 1. Targeted tts_stop { ids: ['c-bad'] } stops c-bad while preserving unrelated queued c-good.
+    box.apply(frame('tts', { id: 'c-bad', text: 'bad line', audio: 'wav-bad' }))
+    box.apply(frame('tts', { id: 'c-good', text: 'good line', audio: 'wav-good' }))
+    expect(started).toEqual(['media/wav-bad'])
+    box.apply(frame('tts_stop', { ids: ['c-bad'] }))
+    expect(paused).toContain('media/wav-bad')
+    expect(started).toEqual(['media/wav-bad', 'media/wav-good'])
+    endedByUrl.get('media/wav-good')?.()
+
+    // 2. Global tts_stop (Panic Mode) also stops an active paid-alert WAV TTS audio element.
+    box.apply(
+      frame('alert', alert('a-paid', { sound: null, tts_audio: 'paid-wav', tts_text: null })),
+    )
+    expect(started).toContain('media/paid-wav')
+    box.apply(frame('tts_stop', {}))
+    expect(paused).toContain('media/paid-wav')
+    expect(cancel).toHaveBeenCalled()
+
+    box.destroy()
+    globalThis.Audio = OrigAudio
+    g.speechSynthesis = prevSynth
+  })
+
   it('defers standalone TTS audio until an active alert sound finishes', () => {
     const started: string[] = []
     const endedByUrl = new Map<string, () => void>()

@@ -237,6 +237,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
   const TTS_SAFETY_MS = 25_000
   let ttsQueue: { id: string; text: string; audio: unknown }[] = []
   let ttsActive = false
+  let ttsActiveId: string | null = null
   let ttsPlaying: HTMLAudioElement | null = null
   let ttsTimer: ReturnType<typeof setTimeout> | null = null
   let ttsGen = 0
@@ -255,10 +256,10 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
     }
   }
 
-  function stopTts(): void {
+  function stopActiveStandaloneTts(): void {
     ttsGen += 1
-    ttsQueue = []
     ttsActive = false
+    ttsActiveId = null
     clearTtsTimer()
     if (ttsPlaying) {
       try {
@@ -275,11 +276,26 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
     }
   }
 
+  function stopTts(ids?: string[]): void {
+    if (Array.isArray(ids) && ids.length > 0) {
+      const drop = new Set(ids)
+      ttsQueue = ttsQueue.filter((item) => !drop.has(item.id))
+      if (!ttsActive || !ttsActiveId || !drop.has(ttsActiveId)) return
+      stopActiveStandaloneTts()
+      pumpTts()
+      return
+    }
+    ttsQueue = []
+    stopActiveStandaloneTts()
+    each((v) => v.onTtsStop?.())
+  }
+
   function pumpTts(): void {
     if (revoked || !visible || opts.audio === false || ttsActive || isAlertAudioBusy()) return
     const next = ttsQueue.shift()
     if (!next) return
     ttsActive = true
+    ttsActiveId = next.id
     const gen = ++ttsGen
     let finished = false
     const done = () => {
@@ -287,6 +303,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
       finished = true
       if (ttsGen !== gen) return
       ttsActive = false
+      ttsActiveId = null
       ttsPlaying = null
       clearTtsTimer()
       pumpTts()
@@ -457,7 +474,7 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
           speak(frame.data.id, frame.data.text, (frame.data as { audio?: unknown }).audio)
         break
       case 'tts_stop':
-        stopTts()
+        stopTts(Array.isArray(frame.data?.ids) ? frame.data.ids : undefined)
         break
       default:
         warnOnce(`ignored frame type ${String((frame as { type: unknown }).type)}`)

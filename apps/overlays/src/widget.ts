@@ -29,6 +29,8 @@ export interface WidgetView {
   /** `primary` = this widget sends the acks for this alert. Returns whether it took it. */
   onAlert?(a: RenderedAlert, primary: boolean): boolean
   onAlertHide?(alertId: string): void
+  /** Stops any active TTS audio owned by the widget (global panic/mute/disable). */
+  onTtsStop?(): void
   onDeleteMessage?(platform: Platform, messageId: string): void
   onDeleteUser?(platform: Platform, userId: string): void
   onClearChat?(platform: Platform | null): void
