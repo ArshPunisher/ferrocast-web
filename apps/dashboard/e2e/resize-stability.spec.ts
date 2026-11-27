@@ -203,6 +203,36 @@ test.describe('Studio CSS layout and resize stability', () => {
     })
     expect(afterResize).toBe(1)
 
+    // Test fc://preview-live-resize equal seq active:false + trailing grace absorption (F2).
+    await page.evaluate(() => {
+      const w = window as unknown as { __previewPuts?: PreviewReqLog[] }
+      if (w.__previewPuts) w.__previewPuts.length = 0
+      window.dispatchEvent(
+        new CustomEvent('fc://preview-live-resize', {
+          detail: { active: true, reason: 'window', seq: 9, scale: 1 },
+        }),
+      )
+      window.dispatchEvent(
+        new CustomEvent('fc://preview-live-resize', {
+          detail: { active: false, reason: 'window', seq: 9, scale: 1 },
+        }),
+      )
+    })
+    await page.waitForTimeout(180)
+    await page.setViewportSize({ width: 1100, height: 690 })
+    await page.waitForTimeout(50)
+    const graceCheck = await page.evaluate(() => {
+      const w = window as unknown as { __previewPuts?: PreviewReqLog[] }
+      const canvas = document.querySelector<HTMLElement>('[data-canvas-box]')
+      const hiddenPuts = (w.__previewPuts ?? []).filter((p) => p.rect?.opacity === 0).length
+      return {
+        hiddenPuts,
+        hasStill: Boolean(canvas?.style.backgroundImage),
+      }
+    })
+    expect(graceCheck.hiddenPuts).toBe(0)
+    expect(graceCheck.hasStill).toBe(false)
+
     // Test fc://scale-changed triggers 1 atomic resync.
     await page.evaluate(() => {
       const w = window as unknown as { __previewPuts?: PreviewReqLog[] }
@@ -219,6 +249,67 @@ test.describe('Studio CSS layout and resize stability', () => {
       return w.__previewPuts?.length ?? 0
     })
     expect(afterScale).toBe(1)
+  })
+
+  test('restores divider drag on 900px unmount and avoids overflow in 375px Studio Mode (F7, F16)', async ({
+    page,
+  }) => {
+    await openDesktopStudio(page, 1024, 700)
+    await settled(page)
+
+    const ws = page.locator('[data-dock-ws]')
+    const initialLw = await ws.evaluate((el) => getComputedStyle(el).getPropertyValue('--fc-lw').trim())
+    const sep = page.getByRole('separator', { name: 'Resize the left panels' })
+    const box = (await sep.boundingBox())!
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + 80, box.y + box.height / 2, { steps: 6 })
+    await page.waitForTimeout(30)
+
+    // Crossing below 900px mid-drag unmounts the Divider cleanly: restores committed CSS var, userSelect, and live preview.
+    await page.setViewportSize({ width: 820, height: 680 })
+    await page.waitForTimeout(160)
+    await page.mouse.up()
+    const afterAbort = await ws.evaluate((el) => ({
+      lw: el.style.getPropertyValue('--fc-lw').trim(),
+      userSelect: document.body.style.userSelect,
+    }))
+    expect(afterAbort.lw).toBe(initialLw)
+    expect(afterAbort.userSelect).toBe('')
+
+    // F16: Studio Mode wraps SwitchBar cleanly at 375px without horizontal overflow.
+    await page.setViewportSize({ width: 1280, height: 800 })
+    const studioBtn = page.getByRole('button', { name: /Studio Mode/i })
+    await expect(studioBtn).toBeVisible()
+    await studioBtn.click()
+    await expect(page.locator('[data-studio-stage]')).toBeVisible()
+
+    await page.setViewportSize({ width: 375, height: 812 })
+    await page.waitForTimeout(60)
+    const studio375 = await page.evaluate(() => {
+      const st = document.querySelector<HTMLElement>('[data-studio-stage]')!
+      const swapBtn = document.querySelector<HTMLElement>(
+        'button[aria-label="Swap the preview and what\'s on air"]',
+      )
+      const fig = st.querySelector('figure')!
+      const sb = swapBtn?.closest('div')
+      const stR = st.getBoundingClientRect()
+      const figR = fig.getBoundingClientRect()
+      const sbR = sb?.getBoundingClientRect()
+      return {
+        scrollW: document.documentElement.scrollWidth,
+        innerW: window.innerWidth,
+        hasSwap: Boolean(swapBtn),
+        stageH: stR.height,
+        figInsideStage: figR.top >= stR.top - 1 && figR.bottom <= (sbR?.top ?? stR.bottom) + 1,
+        barInsideStage: sbR ? sbR.bottom <= stR.bottom + 1 : false,
+      }
+    })
+    expect(studio375.hasSwap).toBe(true)
+    expect(studio375.scrollW).toBeLessThanOrEqual(studio375.innerW + 1)
+    expect(studio375.stageH).toBeGreaterThanOrEqual(240)
+    expect(studio375.figInsideStage).toBe(true)
+    expect(studio375.barInsideStage).toBe(true)
   })
 })
 
