@@ -2251,5 +2251,74 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
         engine.dispose()
       }
     })
+
+    it('treats active source-only recordings as busy in isBusyLive across shelf mutations, restart, and benchmark', async () => {
+      const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+      try {
+        const api = studioEngineApi(
+          new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+        )
+        await api.start()
+        const colB = await api.newShelf('collections', 'Backup Set', false)
+        await api.switchShelf('collections', 'untitled')
+        const profB = await api.newShelf('profiles', 'Second Profile', false)
+        await api.switchShelf('profiles', 'default')
+
+        // Source-only recording makes isBusyLive() true even when main recording is idle.
+        await api.recordSource('Webcam', true)
+        await expect(api.switchShelf('collections', colB.id)).rejects.toMatchObject({
+          status: 409,
+          code: 'studio_busy',
+        })
+        await expect(api.newShelf('collections', 'Blocked New', false)).rejects.toMatchObject({
+          status: 409,
+          code: 'studio_busy',
+        })
+        await expect(
+          api.renameShelf('collections', colB.id, 'Blocked Rename'),
+        ).rejects.toMatchObject({
+          status: 409,
+          code: 'studio_busy',
+        })
+        await expect(api.removeShelf('collections', colB.id)).rejects.toMatchObject({
+          status: 409,
+          code: 'studio_busy',
+        })
+        await expect(
+          api.importCollection('Blocked Import', {
+            name: 'Blocked Import',
+            sources: [{ id: 'scene', name: 'Main' }],
+          }),
+        ).rejects.toMatchObject({
+          status: 409,
+          code: 'studio_busy',
+        })
+        await expect(api.switchShelf('profiles', profB.id)).rejects.toMatchObject({
+          status: 409,
+          code: 'studio_busy',
+        })
+        await expect(api.restart()).rejects.toMatchObject({
+          status: 409,
+          code: 'studio_busy',
+        })
+        await expect(
+          api.startAutoConfigBenchmark({ mode: 'record', fps_preference: 60 }),
+        ).rejects.toMatchObject({
+          status: 409,
+          code: 'studio_busy',
+        })
+
+        // Once the source recording stops, mutations are allowed again.
+        await api.recordSource('Webcam', false)
+        await expect(api.switchShelf('collections', colB.id)).resolves.toMatchObject({
+          id: colB.id,
+        })
+        await expect(
+          api.renameShelf('profiles', profB.id, 'Allowed Rename'),
+        ).resolves.toBeUndefined()
+      } finally {
+        engine.dispose()
+      }
+    })
   })
 })

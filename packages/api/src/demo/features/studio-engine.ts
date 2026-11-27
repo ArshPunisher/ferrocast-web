@@ -4885,6 +4885,7 @@ export class DemoStudioEngine {
       this.streamActive ||
       this.recordActive ||
       this.recording ||
+      this.sourceRecords.size > 0 ||
       this.replayActive ||
       this.virtualCamActive ||
       this.virtualcam.active ||
