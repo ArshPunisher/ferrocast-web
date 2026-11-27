@@ -6,13 +6,11 @@ import {
   useCallback,
   useEffect,
   useId,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { createPortal } from 'react-dom'
 import {
   ArrowsClockwise,
   CaretDown,
@@ -36,9 +34,8 @@ import {
   type QualityOption,
   type VideoCodec,
 } from '@ferrocast/api'
-import { Button, InfoTip, Select, Skeleton, cx } from '@ferrocast/ui'
+import { Button, InfoTip, PopoverSurface, Select, Skeleton, cx } from '@ferrocast/ui'
 import { useLive } from '../../lib/store'
-import { HOLES_CHANGED } from './desk/snap-overlay'
 
 type DestKind = DestinationView['kind']
 
@@ -547,32 +544,6 @@ function initialDraftFor(
   return { width, height, fps, kbps: closestBitrate, codec }
 }
 
-function computePopoverRect(trigger: HTMLElement, popEl: HTMLElement) {
-  const rect = trigger.getBoundingClientRect()
-  const vw = window.innerWidth || 1024
-  const vh = window.innerHeight || 768
-  const width = Math.min(312, Math.max(240, vw - 16))
-  const measuredHeight = popEl.offsetHeight || 260
-  const topSafe = Math.max(
-    8,
-    Math.round(document.querySelector('header')?.getBoundingClientRect().bottom ?? 8),
-  )
-  const bottomSafe = vh - 12
-
-  const spaceBelow = bottomSafe - (rect.bottom + 6)
-  const spaceAbove = rect.top - 6 - topSafe
-  const openAbove = spaceBelow < Math.min(measuredHeight, 260) && spaceAbove > spaceBelow
-
-  const availHeight = Math.max(160, openAbove ? spaceAbove : spaceBelow)
-  const usedHeight = Math.min(measuredHeight, availHeight)
-  const top = openAbove
-    ? Math.max(topSafe, rect.top - 6 - usedHeight)
-    : Math.max(topSafe, Math.min(rect.bottom + 6, bottomSafe - usedHeight))
-  const left = Math.max(8, Math.min(rect.left, vw - width - 8))
-
-  return { top, left, width, maxHeight: availHeight }
-}
-
 export interface DestinationQualityPickerProps {
   dest: DestinationView
   qualityResponse: GoLiveQualityOptionsResponse | null
@@ -605,20 +576,13 @@ export function DestinationQualityPicker({
   const client = useLive((s) => s.conn?.client ?? null)
   const headingId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const popoverRef = useRef<HTMLDivElement>(null)
+  const popoverRef = useRef<HTMLElement>(null)
   const listboxRef = useRef<HTMLDivElement>(null)
 
   const [open, setOpen] = useState(false)
   const [customOpen, setCustomOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null)
-  const [pos, setPos] = useState<{
-    top: number
-    left: number
-    width: number
-    maxHeight: number
-  } | null>(null)
 
   const destOpts = qualityResponse?.destinations?.[dest.id] ?? null
   const chip = useMemo(
@@ -690,43 +654,9 @@ export function DestinationQualityPicker({
     setCustomOpen(false)
     setSaveError(null)
     if (restoreFocus) {
-      triggerRef.current?.focus()
+      triggerRef.current?.focus({ preventScroll: true })
     }
   }, [])
-
-  useLayoutEffect(() => {
-    if (!open) {
-      window.dispatchEvent(new Event(HOLES_CHANGED))
-      return
-    }
-    const trigger = triggerRef.current
-    if (!trigger) return
-    const host = (trigger.closest('dialog') as HTMLElement | null) ?? document.body
-    setPortalHost(host)
-
-    const update = () => {
-      if (!triggerRef.current || !popoverRef.current) return
-      setPos(computePopoverRect(triggerRef.current, popoverRef.current))
-      window.dispatchEvent(new Event(HOLES_CHANGED))
-    }
-
-    const frame = window.requestAnimationFrame(update)
-    const onScroll = (e: Event) => {
-      if (popoverRef.current && e.target instanceof Node && popoverRef.current.contains(e.target)) {
-        return
-      }
-      if (e.target === document || e.target === window) update()
-      else close(false)
-    }
-    window.addEventListener('resize', update)
-    window.addEventListener('scroll', onScroll, true)
-    return () => {
-      window.cancelAnimationFrame(frame)
-      window.removeEventListener('resize', update)
-      window.removeEventListener('scroll', onScroll, true)
-      window.dispatchEvent(new Event(HOLES_CHANGED))
-    }
-  }, [open, customOpen, destOpts, saveError, close])
 
   useEffect(() => {
     if (!open || !destOpts || optionsLoading) return
@@ -735,32 +665,10 @@ export function DestinationQualityPicker({
       if (!box || popoverRef.current?.contains(document.activeElement)) return
       const selected = box.querySelector<HTMLButtonElement>('[role="option"][aria-selected="true"]')
       const first = box.querySelector<HTMLButtonElement>('[role="option"]')
-      ;(selected ?? first)?.focus()
+      ;(selected ?? first)?.focus({ preventScroll: true })
     })
     return () => window.cancelAnimationFrame(frame)
   }, [open, destOpts, optionsLoading])
-
-  useEffect(() => {
-    if (!open) return
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      e.preventDefault()
-      e.stopPropagation()
-      close(true)
-    }
-    const onPointerDown = (e: PointerEvent) => {
-      const target = e.target as Node | null
-      if (!target) return
-      if (triggerRef.current?.contains(target) || popoverRef.current?.contains(target)) return
-      close(false)
-    }
-    document.addEventListener('keydown', onKeyDown, true)
-    document.addEventListener('pointerdown', onPointerDown, true)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown, true)
-      document.removeEventListener('pointerdown', onPointerDown, true)
-    }
-  }, [open, close])
 
   const submitQuality = async (next: DestinationQuality) => {
     if (saving || !client) return
@@ -876,305 +784,315 @@ export function DestinationQualityPicker({
         <span className="text-[11px] font-medium text-text-3">shared with {sharedNames}</span>
       )}
 
-      {open &&
-        portalHost &&
-        createPortal(
-          <div
-            ref={popoverRef}
-            data-over-preview=""
-            data-quality-popover={dest.id}
-            role="dialog"
-            aria-modal="false"
-            aria-labelledby={headingId}
-            style={{
-              position: 'fixed',
-              zIndex: 500,
-              top: pos ? `${pos.top}px` : '12px',
-              left: pos ? `${pos.left}px` : '12px',
-              width: pos ? `${pos.width}px` : 'min(312px, calc(100vw - 16px))',
-              maxHeight: pos ? `${pos.maxHeight}px` : 'calc(100vh - 24px)',
-            }}
-            className="overflow-y-auto rounded-[12px] border border-line-strong bg-surface-1 p-2.5 text-text shadow-pop"
-          >
-            <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
-              <p id={headingId} className="m-0 truncate text-[12.5px] font-semibold text-text">
-                {dest.name} quality
-              </p>
-              {atEncodeLimit && (
-                <span className="shrink-0 rounded-full bg-warn-soft px-2 py-0.5 text-[10.5px] font-semibold text-warn">
-                  Encode limit
-                </span>
-              )}
+      <PopoverSurface
+        open={open}
+        onClose={(reason) => {
+          if (
+            reason === 'escape' ||
+            reason === 'tab' ||
+            ((reason === 'scroll' || reason === 'resize') &&
+              popoverRef.current?.contains(document.activeElement))
+          ) {
+            close(true)
+          } else {
+            close(false)
+          }
+        }}
+        anchorRef={triggerRef}
+        surfaceRef={popoverRef}
+        placement="bottom"
+        align="start"
+        gap={6}
+        edgePadding={8}
+        data-quality-popover={dest.id}
+        role="dialog"
+        aria-modal="false"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            e.stopPropagation()
+            close(true)
+          }
+        }}
+        className="w-[min(312px,calc(100vw-16px))] max-w-[312px] rounded-[12px] border border-line-strong bg-surface-1 p-2.5 text-text shadow-pop outline-none"
+      >
+        <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
+          <p id={headingId} className="m-0 truncate text-[12.5px] font-semibold text-text">
+            {dest.name} quality
+          </p>
+          {atEncodeLimit && (
+            <span className="shrink-0 rounded-full bg-warn-soft px-2 py-0.5 text-[10.5px] font-semibold text-warn">
+              Encode limit
+            </span>
+          )}
+        </div>
+
+        {optionsLoading && !destOpts ? (
+          <div role="status" aria-label="Loading quality options" className="py-1">
+            <Skeleton className="h-28 w-full rounded-[8px]" />
+          </div>
+        ) : optionsError && !destOpts ? (
+          <div className="flex flex-col gap-2 py-1 text-[12px]">
+            <p className="m-0 text-text-2">{describeError(optionsError).message}</p>
+            {onReloadOptions && (
+              <div>
+                <Button size="sm" variant="outline" onClick={onReloadOptions}>
+                  Try again
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : !destOpts ? (
+          <p className="m-0 py-1.5 text-[12px] text-text-3">No quality presets available.</p>
+        ) : (
+          <>
+            <div
+              ref={listboxRef}
+              role="listbox"
+              aria-label={`${dest.name} quality options`}
+              onKeyDown={onListboxKeyDown}
+              className="flex flex-col gap-1"
+            >
+              {curated.map((opt) => {
+                const selected = matchesQualitySelection(opt.quality, destOpts.current)
+                const optShared = formatSharedWith(opt.shares_encoder_with, destinationsById)
+                const primary =
+                  opt.quality.mode === 'same_as_main'
+                    ? 'Same as main'
+                    : /\b(?:Mbps|kbps)\b/i.test(opt.label)
+                      ? opt.label
+                      : `${opt.label} · ${formatRate(opt.resolved.kbps)}`
+                const subLine = !opt.allowed
+                  ? opt.disabled_reason || 'PC limit'
+                  : optShared
+                    ? `shared with ${optShared}`
+                    : opt.note
+                      ? opt.note
+                      : opt.quality.mode === 'same_as_main'
+                        ? `${formatResFps(opt.resolved.width, opt.resolved.height, opt.resolved.fps)} · ${formatRate(opt.resolved.kbps)}`
+                        : opt.auto_fitted
+                          ? 'Adjusted to fit'
+                          : null
+
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    aria-disabled={!opt.allowed || saving || undefined}
+                    onClick={() => {
+                      if (!opt.allowed || saving) return
+                      void submitQuality(opt.quality)
+                    }}
+                    className={cx(
+                      'flex w-full items-start gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:shadow-[var(--fc-focus)]',
+                      !opt.allowed
+                        ? 'cursor-not-allowed opacity-60'
+                        : selected
+                          ? 'bg-accent-soft text-text'
+                          : 'text-text hover:bg-surface-2',
+                    )}
+                  >
+                    <span className="mt-0.5 grid size-4 shrink-0 place-items-center text-accent-text">
+                      {selected && <Check size={13} weight="bold" aria-hidden />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-1.5 text-[12.5px] font-semibold">
+                        <span>{primary}</span>
+                        {opt.recommended && (
+                          <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10.5px] font-medium text-text-2">
+                            Best for {platformName}
+                          </span>
+                        )}
+                      </span>
+                      {subLine && (
+                        <span
+                          className={cx(
+                            'mt-0.5 flex items-center gap-1 text-[11px]',
+                            !opt.allowed
+                              ? 'text-text-3'
+                              : opt.note
+                                ? 'text-warn'
+                                : optShared
+                                  ? 'text-ok'
+                                  : 'text-text-3',
+                          )}
+                        >
+                          {opt.allowed && opt.note && (
+                            <>
+                              <Info size={11} weight="fill" aria-hidden className="shrink-0" />
+                              <span className="sr-only">(i) </span>
+                            </>
+                          )}
+                          <span className="truncate">{subLine}</span>
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
 
-            {optionsLoading && !destOpts ? (
-              <div role="status" aria-label="Loading quality options" className="py-1">
-                <Skeleton className="h-28 w-full rounded-[8px]" />
-              </div>
-            ) : optionsError && !destOpts ? (
-              <div className="flex flex-col gap-2 py-1 text-[12px]">
-                <p className="m-0 text-text-2">{describeError(optionsError).message}</p>
-                {onReloadOptions && (
-                  <div>
-                    <Button size="sm" variant="outline" onClick={onReloadOptions}>
-                      Try again
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ) : !destOpts ? (
-              <p className="m-0 py-1.5 text-[12px] text-text-3">No quality presets available.</p>
-            ) : (
-              <>
-                <div
-                  ref={listboxRef}
-                  role="listbox"
-                  aria-label={`${dest.name} quality options`}
-                  onKeyDown={onListboxKeyDown}
-                  className="flex flex-col gap-1"
-                >
-                  {curated.map((opt) => {
-                    const selected = matchesQualitySelection(opt.quality, destOpts.current)
-                    const optShared = formatSharedWith(opt.shares_encoder_with, destinationsById)
-                    const primary =
-                      opt.quality.mode === 'same_as_main'
-                        ? 'Same as main'
-                        : /\b(?:Mbps|kbps)\b/i.test(opt.label)
-                          ? opt.label
-                          : `${opt.label} · ${formatRate(opt.resolved.kbps)}`
-                    const subLine = !opt.allowed
-                      ? opt.disabled_reason || 'PC limit'
-                      : optShared
-                        ? `shared with ${optShared}`
-                        : opt.note
-                          ? opt.note
-                          : opt.quality.mode === 'same_as_main'
-                            ? `${formatResFps(opt.resolved.width, opt.resolved.height, opt.resolved.fps)} · ${formatRate(opt.resolved.kbps)}`
-                            : opt.auto_fitted
-                              ? 'Adjusted to fit'
-                              : null
-
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        role="option"
-                        aria-selected={selected}
-                        aria-disabled={!opt.allowed || saving || undefined}
-                        onClick={() => {
-                          if (!opt.allowed || saving) return
-                          void submitQuality(opt.quality)
-                        }}
-                        className={cx(
-                          'flex w-full items-start gap-2 rounded-[8px] px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:shadow-[var(--fc-focus)]',
-                          !opt.allowed
-                            ? 'cursor-not-allowed opacity-60'
-                            : selected
-                              ? 'bg-accent-soft text-text'
-                              : 'text-text hover:bg-surface-2',
-                        )}
-                      >
-                        <span className="mt-0.5 grid size-4 shrink-0 place-items-center text-accent-text">
-                          {selected && <Check size={13} weight="bold" aria-hidden />}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex flex-wrap items-center gap-1.5 text-[12.5px] font-semibold">
-                            <span>{primary}</span>
-                            {opt.recommended && (
-                              <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[10.5px] font-medium text-text-2">
-                                Best for {platformName}
-                              </span>
-                            )}
-                          </span>
-                          {subLine && (
-                            <span
-                              className={cx(
-                                'mt-0.5 flex items-center gap-1 text-[11px]',
-                                !opt.allowed
-                                  ? 'text-text-3'
-                                  : opt.note
-                                    ? 'text-warn'
-                                    : optShared
-                                      ? 'text-ok'
-                                      : 'text-text-3',
-                              )}
-                            >
-                              {opt.allowed && opt.note && (
-                                <>
-                                  <Info size={11} weight="fill" aria-hidden className="shrink-0" />
-                                  <span className="sr-only">(i) </span>
-                                </>
-                              )}
-                              <span className="truncate">{subLine}</span>
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {limits && (
-                  <div className="mt-2 border-t border-line pt-2">
-                    <button
-                      type="button"
-                      aria-expanded={customOpen}
-                      onClick={() => setCustomOpen((v) => !v)}
-                      className="flex w-full items-center justify-between rounded-[8px] px-2 py-1 text-[12px] font-medium text-text-2 hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:shadow-[var(--fc-focus)]"
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <SlidersHorizontal size={13} aria-hidden />
-                        <span>Custom…</span>
-                      </span>
-                      <CaretDown
-                        size={11}
-                        aria-hidden
-                        className={cx('transition-transform', customOpen && 'rotate-180')}
-                      />
-                    </button>
-
-                    {customOpen && (
-                      <div className="mt-2 flex flex-col gap-2 px-0.5">
-                        <label className="flex flex-col gap-1">
-                          <span className="text-[11px] font-medium text-text-3">Resolution</span>
-                          <Select
-                            aria-label="Resolution"
-                            value={`${draft.width}x${draft.height}`}
-                            onChange={(e) => {
-                              const picked = resChoices.find((r) => r.value === e.target.value)
-                              if (!picked) return
-                              setDraft((d) => ({
-                                ...d,
-                                width: picked.width,
-                                height: picked.height,
-                              }))
-                            }}
-                          >
-                            {resChoices.map((r) => (
-                              <option key={r.value} value={r.value}>
-                                {r.label}
-                              </option>
-                            ))}
-                          </Select>
-                        </label>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <label className="flex flex-col gap-1">
-                            <span className="text-[11px] font-medium text-text-3">Frame rate</span>
-                            <Select
-                              aria-label="Frame rate"
-                              value={String(draft.fps)}
-                              onChange={(e) =>
-                                setDraft((d) => ({ ...d, fps: Number(e.target.value) }))
-                              }
-                            >
-                              {limits.fps_choices.map((f) => (
-                                <option key={f} value={String(f)}>
-                                  {f} fps
-                                </option>
-                              ))}
-                            </Select>
-                          </label>
-
-                          <label className="flex flex-col gap-1">
-                            <span className="text-[11px] font-medium text-text-3">Bitrate</span>
-                            <Select
-                              aria-label="Bitrate"
-                              value={String(draft.kbps)}
-                              onChange={(e) =>
-                                setDraft((d) => ({ ...d, kbps: Number(e.target.value) }))
-                              }
-                            >
-                              {bitrateChoices.map((k) => (
-                                <option key={k} value={String(k)}>
-                                  {formatRate(k)}
-                                </option>
-                              ))}
-                            </Select>
-                          </label>
-                        </div>
-
-                        {limits.codecs.length > 1 && (
-                          <label className="flex flex-col gap-1">
-                            <span className="text-[11px] font-medium text-text-3">Codec</span>
-                            <Select
-                              aria-label="Codec"
-                              value={draft.codec}
-                              onChange={(e) =>
-                                setDraft((d) => ({ ...d, codec: e.target.value as VideoCodec }))
-                              }
-                            >
-                              {limits.codecs.map((c) => (
-                                <option key={c} value={c}>
-                                  {CODEC_LABELS[c] ?? c.toUpperCase()}
-                                </option>
-                              ))}
-                            </Select>
-                          </label>
-                        )}
-
-                        {customEval.softNote && (
-                          <p className="m-0 flex items-center gap-1 text-[11px] text-warn">
-                            <Info size={11} weight="fill" aria-hidden className="shrink-0" />
-                            <span>{customEval.softNote}</span>
-                          </p>
-                        )}
-
-                        <div className="flex items-center justify-between gap-2 pt-0.5">
-                          <span className="text-[11px] text-text-3">
-                            {customEval.overBudget
-                              ? customEval.reason || 'PC encode limit reached'
-                              : customEval.sharedWithNames.length > 0
-                                ? `shared with ${customEval.sharedWithNames.join(', ')}`
-                                : customEval.extraEncodes > 0
-                                  ? '+1 video encode'
-                                  : 'Uses active encode'}
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            busy={saving}
-                            disabled={saving || customEval.overBudget}
-                            onClick={() =>
-                              void submitQuality({
-                                mode: 'custom',
-                                width: draft.width,
-                                height: draft.height,
-                                fps: draft.fps,
-                                kbps: draft.kbps,
-                                codec: draft.codec,
-                              })
-                            }
-                          >
-                            Apply
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-
-            {saveError && (
-              <div
-                role="alert"
-                className="mt-2 flex items-start justify-between gap-2 rounded-[8px] border border-danger/30 bg-danger-soft px-2.5 py-1.5 text-[11.5px] text-danger"
-              >
-                <span className="min-w-0 flex-1">{saveError}</span>
+            {limits && (
+              <div className="mt-2 border-t border-line pt-2">
                 <button
                   type="button"
-                  aria-label="Dismiss error"
-                  onClick={() => setSaveError(null)}
-                  className="shrink-0 rounded p-0.5 hover:bg-danger/10 focus-visible:outline-none focus-visible:shadow-[var(--fc-focus)]"
+                  aria-expanded={customOpen}
+                  onClick={() => setCustomOpen((v) => !v)}
+                  className="flex w-full items-center justify-between rounded-[8px] px-2 py-1 text-[12px] font-medium text-text-2 hover:bg-surface-2 hover:text-text focus-visible:outline-none focus-visible:shadow-[var(--fc-focus)]"
                 >
-                  <X size={12} weight="bold" aria-hidden />
+                  <span className="inline-flex items-center gap-1.5">
+                    <SlidersHorizontal size={13} aria-hidden />
+                    <span>Custom…</span>
+                  </span>
+                  <CaretDown
+                    size={11}
+                    aria-hidden
+                    className={cx('transition-transform', customOpen && 'rotate-180')}
+                  />
                 </button>
+
+                {customOpen && (
+                  <div className="mt-2 flex flex-col gap-2 px-0.5">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-[11px] font-medium text-text-3">Resolution</span>
+                      <Select
+                        aria-label="Resolution"
+                        value={`${draft.width}x${draft.height}`}
+                        onChange={(e) => {
+                          const picked = resChoices.find((r) => r.value === e.target.value)
+                          if (!picked) return
+                          setDraft((d) => ({
+                            ...d,
+                            width: picked.width,
+                            height: picked.height,
+                          }))
+                        }}
+                      >
+                        {resChoices.map((r) => (
+                          <option key={r.value} value={r.value}>
+                            {r.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[11px] font-medium text-text-3">Frame rate</span>
+                        <Select
+                          aria-label="Frame rate"
+                          value={String(draft.fps)}
+                          onChange={(e) => setDraft((d) => ({ ...d, fps: Number(e.target.value) }))}
+                        >
+                          {limits.fps_choices.map((f) => (
+                            <option key={f} value={String(f)}>
+                              {f} fps
+                            </option>
+                          ))}
+                        </Select>
+                      </label>
+
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[11px] font-medium text-text-3">Bitrate</span>
+                        <Select
+                          aria-label="Bitrate"
+                          value={String(draft.kbps)}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, kbps: Number(e.target.value) }))
+                          }
+                        >
+                          {bitrateChoices.map((k) => (
+                            <option key={k} value={String(k)}>
+                              {formatRate(k)}
+                            </option>
+                          ))}
+                        </Select>
+                      </label>
+                    </div>
+
+                    {limits.codecs.length > 1 && (
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[11px] font-medium text-text-3">Codec</span>
+                        <Select
+                          aria-label="Codec"
+                          value={draft.codec}
+                          onChange={(e) =>
+                            setDraft((d) => ({ ...d, codec: e.target.value as VideoCodec }))
+                          }
+                        >
+                          {limits.codecs.map((c) => (
+                            <option key={c} value={c}>
+                              {CODEC_LABELS[c] ?? c.toUpperCase()}
+                            </option>
+                          ))}
+                        </Select>
+                      </label>
+                    )}
+
+                    {customEval.softNote && (
+                      <p className="m-0 flex items-center gap-1 text-[11px] text-warn">
+                        <Info size={11} weight="fill" aria-hidden className="shrink-0" />
+                        <span>{customEval.softNote}</span>
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-between gap-2 pt-0.5">
+                      <span className="text-[11px] text-text-3">
+                        {customEval.overBudget
+                          ? customEval.reason || 'PC encode limit reached'
+                          : customEval.sharedWithNames.length > 0
+                            ? `shared with ${customEval.sharedWithNames.join(', ')}`
+                            : customEval.extraEncodes > 0
+                              ? '+1 video encode'
+                              : 'Uses active encode'}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        busy={saving}
+                        disabled={saving || customEval.overBudget}
+                        onClick={() =>
+                          void submitQuality({
+                            mode: 'custom',
+                            width: draft.width,
+                            height: draft.height,
+                            fps: draft.fps,
+                            kbps: draft.kbps,
+                            codec: draft.codec,
+                          })
+                        }
+                      >
+                        Apply
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </div>,
-          portalHost,
+          </>
         )}
+
+        {saveError && (
+          <div
+            role="alert"
+            className="mt-2 flex items-start justify-between gap-2 rounded-[8px] border border-danger/30 bg-danger-soft px-2.5 py-1.5 text-[11.5px] text-danger"
+          >
+            <span className="min-w-0 flex-1">{saveError}</span>
+            <button
+              type="button"
+              aria-label="Dismiss error"
+              onClick={() => setSaveError(null)}
+              className="shrink-0 rounded p-0.5 hover:bg-danger/10 focus-visible:outline-none focus-visible:shadow-[var(--fc-focus)]"
+            >
+              <X size={12} weight="bold" aria-hidden />
+            </button>
+          </div>
+        )}
+      </PopoverSurface>
     </div>
   )
 }

@@ -11,6 +11,13 @@ import {
   type GoLiveView,
   type QualityOption,
 } from '@ferrocast/api'
+import {
+  Dialog,
+  PREVIEW_OVERLAYS_EVENT,
+  getPreviewOverlays,
+  resetPreviewOverlayRegistry,
+  subscribePreviewOverlays,
+} from '@ferrocast/ui'
 import { useLive } from '../../lib/store'
 import {
   DestinationQualityPicker,
@@ -186,6 +193,7 @@ let host: HTMLDivElement | null = null
 let requestMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
+  resetPreviewOverlayRegistry()
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -203,6 +211,7 @@ afterEach(async () => {
   await act(async () => prev?.unmount())
   host?.remove()
   host = null
+  resetPreviewOverlayRegistry()
   useLive.setState({ conn: null })
 })
 
@@ -310,54 +319,73 @@ describe('quality helpers', () => {
 })
 
 describe('DestinationQualityPicker component', () => {
-  it('opens in a data-over-preview popover inside dialog/body, fires HOLES_CHANGED, and Escape keeps outer dialog open', async () => {
-    const holeEvents = vi.fn()
-    window.addEventListener('fc:preview-holes', holeEvents)
-
-    const dialog = document.createElement('dialog')
-    dialog.open = true
-    const dialogRoot = document.createElement('div')
-    dialog.append(dialogRoot)
-    document.body.append(dialog)
+  it('opens in a PopoverSurface inside Dialog/body, registers in PreviewOverlayRegistry, and Escape keeps outer Dialog open', async () => {
+    HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+      this.setAttribute('open', '')
+    }
+    HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+      this.removeAttribute('open')
+    }
+    const overlayEvents = vi.fn()
+    const notifyEvents = vi.fn()
+    const onDialogClose = vi.fn()
     const onDialogKey = vi.fn()
-    dialog.addEventListener('keydown', onDialogKey)
+    window.addEventListener(PREVIEW_OVERLAYS_EVENT, overlayEvents)
+    const unsub = subscribePreviewOverlays(notifyEvents)
 
-    const r = createRoot(dialogRoot)
     const resp = makeResponse()
     try {
       await act(async () => {
-        r.render(
-          <DestinationQualityPicker dest={makeDest()} qualityResponse={resp} onUpdated={vi.fn()} />,
+        root!.render(
+          <Dialog open onClose={onDialogClose} title="Your platforms">
+            <div onKeyDown={onDialogKey}>
+              <DestinationQualityPicker
+                dest={makeDest()}
+                qualityResponse={resp}
+                onUpdated={vi.fn()}
+              />
+            </div>
+          </Dialog>,
         )
       })
 
-      const trigger = dialogRoot.querySelector<HTMLButtonElement>(
-        '[data-quality-trigger="twitch"]',
-      )!
+      const dialog = document.querySelector<HTMLDialogElement>('dialog[open]')!
+      const trigger = dialog.querySelector<HTMLButtonElement>('[data-quality-trigger="twitch"]')!
       expect(trigger.textContent).toContain('1080p60 · 6 Mbps · auto')
+      expect(
+        getPreviewOverlays().some((e) => e.target === dialog.querySelector('[data-over-preview]')),
+      ).toBe(true)
 
       await act(async () => {
         trigger.click()
         await flush()
+        await new Promise((resolve) => window.requestAnimationFrame(() => resolve(undefined)))
       })
 
       const popover = dialog.querySelector<HTMLElement>('[data-quality-popover="twitch"]')
       expect(popover).not.toBeNull()
+      expect(popover?.parentElement).toBe(dialog)
       expect(popover?.hasAttribute('data-over-preview')).toBe(true)
-      expect(holeEvents).toHaveBeenCalled()
+      expect(getPreviewOverlays().some((e) => e.target === popover)).toBe(true)
+      expect(notifyEvents).toHaveBeenCalled()
+      expect(overlayEvents).toHaveBeenCalled()
 
+      // Escape while focused inside popover closes only the popover, keeping Dialog open.
+      const firstOption = popover?.querySelector<HTMLButtonElement>('[role="option"]')
+      firstOption?.focus()
       await act(async () => {
         document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
         await flush()
       })
 
       expect(dialog.querySelector('[data-quality-popover="twitch"]')).toBeNull()
+      expect(getPreviewOverlays().some((e) => e.target === popover)).toBe(false)
+      expect(onDialogClose).not.toHaveBeenCalled()
       expect(onDialogKey).not.toHaveBeenCalled()
       expect(document.activeElement).toBe(trigger)
     } finally {
-      await act(async () => r.unmount())
-      dialog.remove()
-      window.removeEventListener('fc:preview-holes', holeEvents)
+      unsub()
+      window.removeEventListener(PREVIEW_OVERLAYS_EVENT, overlayEvents)
     }
   })
 
