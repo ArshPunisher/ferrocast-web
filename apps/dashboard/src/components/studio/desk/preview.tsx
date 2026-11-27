@@ -1328,15 +1328,15 @@ function PreviewBoxes({ running }: { running: boolean }) {
   // ran over the bar and each other). Widths take off the 24 of padding and the 24 between;
   // heights the padding, the label (18), its gap and the bar (40).
   const half =
-    'w-[min(calc(100cqw-24px),calc((100cqh-140px)/2*16/9))] sm:w-[min(calc((100cqw-48px)/2),calc((100cqh-100px)*16/9))]'
+    'w-[min(calc(100cqw-24px),340px)] sm:w-[calc((100cqw-48px)/2)] min-[900px]:w-[min(calc((100cqw-48px)/2),calc((100cqh-100px)*16/9))]'
   return (
     <div
       data-stage-bg
       data-studio-stage
-      className="flex min-h-16 flex-1 flex-col bg-[var(--fc-stage)] [container-type:size]"
+      className="flex min-h-16 flex-1 flex-col bg-[var(--fc-stage)] [container-type:inline-size] min-[900px]:[container-type:size]"
     >
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-3 sm:flex-row sm:gap-6">
-        <figure className="m-0 flex flex-col gap-3">
+        <figure className="m-0 flex min-w-0 flex-col gap-2 sm:gap-3">
           <figcaption className="flex items-center gap-1.5 text-[12.5px] font-bold text-text-2">
             <span aria-hidden className="size-[7px] rounded-full bg-accent-text" />
             Preview: {scenes.data?.preview}
@@ -1352,7 +1352,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
             <PausedCard compact />
           </div>
         </figure>
-        <figure className="m-0 flex flex-col gap-3">
+        <figure className="m-0 flex min-w-0 flex-col gap-2 sm:gap-3">
           <figcaption className="flex items-center gap-1.5 text-[12.5px] font-bold text-danger">
             <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
             On air: {scenes.data?.current}
@@ -1591,37 +1591,38 @@ function SwitchBar() {
       <div className="w-[min(220px,22%)] min-w-24 flex-none">
         <TBar />
       </div>
-      <span className="flex-1" />
-      <IconButton
-        size="xs"
-        label="Swap the preview and what's on air"
-        onClick={() => void run('swap', () => done(api.swapScenes())).then((ok) => ok && refresh())}
-      >
-        <ArrowsLeftRight size={15} weight="bold" />
-      </IconButton>
-      <IconButton
-        size="xs"
-        label={black ? 'Fade back from black' : 'Fade to black'}
-        aria-pressed={black}
-        className={cx(black && 'bg-danger-fill text-white hover:bg-danger-fill')}
-        onClick={() =>
-          void run('black', () => done(api.fadeToBlack())).then((ok) => ok && refresh())
-        }
-      >
-        <MoonStars size={15} weight={black ? 'fill' : 'bold'} />
-      </IconButton>
-      <IconButton size="xs" label="Studio Mode options" onClick={optionsMenu}>
-        <DotsThree size={16} weight="bold" />
-      </IconButton>
-      <Button
-        variant="primary"
-        size="xs"
-        className="flex-none"
-        busy={busy === 'go'}
-        onClick={() => go()}
-      >
-        <ArrowFatRight size={14} weight="fill" /> Transition
-      </Button>
+      <span className="ml-auto flex flex-none items-center gap-2">
+        <IconButton
+          size="xs"
+          label="Swap the preview and what's on air"
+          onClick={() => void run('swap', () => done(api.swapScenes())).then((ok) => ok && refresh())}
+        >
+          <ArrowsLeftRight size={15} weight="bold" />
+        </IconButton>
+        <IconButton
+          size="xs"
+          label={black ? 'Fade back from black' : 'Fade to black'}
+          aria-pressed={black}
+          className={cx(black && 'bg-danger-fill text-white hover:bg-danger-fill')}
+          onClick={() =>
+            void run('black', () => done(api.fadeToBlack())).then((ok) => ok && refresh())
+          }
+        >
+          <MoonStars size={15} weight={black ? 'fill' : 'bold'} />
+        </IconButton>
+        <IconButton size="xs" label="Studio Mode options" onClick={optionsMenu}>
+          <DotsThree size={16} weight="bold" />
+        </IconButton>
+        <Button
+          variant="primary"
+          size="xs"
+          className="flex-none"
+          busy={busy === 'go'}
+          onClick={() => go()}
+        >
+          <ArrowFatRight size={14} weight="fill" /> Transition
+        </Button>
+      </span>
       {menu}
     </div>
   )
