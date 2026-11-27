@@ -333,8 +333,9 @@ export function ReadyCheck({
           ref={pillWrapRef}
           data-over-preview
           className={cx(
-            'pointer-events-auto inline-flex max-w-full items-center rounded-full border bg-surface-1 shadow-2',
-            pillToneClass,
+            'pointer-events-auto inline-flex max-w-full items-center rounded-full bg-surface-1 shadow-2 ring-1 ring-inset',
+            // An inner ring, so the pill is exactly as tall as its button (the card lines up with it).
+            pillToneClass.replace('border-', 'ring-'),
           )}
         >
           <button
