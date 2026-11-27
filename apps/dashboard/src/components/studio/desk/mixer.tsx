@@ -56,6 +56,7 @@ import {
   stepMeter,
   useLatest,
   useLevelFeed,
+  useSourceLost,
   type LevelFeed,
 } from './meter-feed'
 
@@ -580,6 +581,7 @@ const dbText = (a: EngineAudio) =>
   a.muted ? 'Muted' : a.volume_db <= -100 ? 'Silent' : `${a.volume_db.toFixed(1)} dB`
 
 function Row({ a, feed, locked, onAudio, onMenu, decay }: ChannelProps) {
+  const lost = useSourceLost(feed, a.name)
   return (
     <div
       onContextMenu={onMenu}
@@ -598,6 +600,15 @@ function Row({ a, feed, locked, onAudio, onMenu, decay }: ChannelProps) {
         >
           {a.name}
         </span>
+        {lost && (
+          <span
+            data-not-connected=""
+            title="No sound is coming from it. Is the device plugged in and switched on?"
+            className="shrink-0 rounded-full border border-line bg-surface-2 px-1.5 py-0.5 text-[11px] font-bold text-text-3"
+          >
+            Not connected
+          </span>
+        )}
         {(a.push_to_talk || a.push_to_mute) && (
           <span
             title={
@@ -682,6 +693,7 @@ function Row({ a, feed, locked, onAudio, onMenu, decay }: ChannelProps) {
  * The dB scale is printed once beside the strips (DeskScale), not on each.
  */
 function Strip({ a, feed, locked, onAudio, onMenu, decay }: ChannelProps) {
+  const lost = useSourceLost(feed, a.name)
   return (
     <div
       onContextMenu={onMenu}
@@ -698,6 +710,15 @@ function Strip({ a, feed, locked, onAudio, onMenu, decay }: ChannelProps) {
       >
         {a.muted ? 'Muted' : a.volume_db <= -100 ? 'Silent' : a.volume_db.toFixed(1)}
       </span>
+      {lost && (
+        <span
+          data-not-connected=""
+          title="No sound is coming from it. Is the device plugged in and switched on?"
+          className="-mt-1 text-[10.5px] font-bold text-text-3"
+        >
+          No signal
+        </span>
+      )}
       <Meter
         vertical
         feed={feed}

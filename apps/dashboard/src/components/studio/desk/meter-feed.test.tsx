@@ -9,12 +9,14 @@ import {
   ATTACK_MS,
   FLOOR,
   POLL_MS,
+  FROZEN_MS,
   STALE_MS,
   activeMeters,
   initialMeter,
   stepMeter,
   useLevelFeed,
   useLevelStatus,
+  useSourceLost,
 } from './meter-feed'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -179,5 +181,54 @@ describe('live meters', () => {
       await vi.advanceTimersByTimeAsync(STALE_MS + 150)
     })
     expect(latestStatus).toBe('disconnected')
+  })
+
+  it('shows a sound whose level never moves as silent and not connected, and recovers when it moves', async () => {
+    let level = -20
+    const api = {
+      levels: vi.fn(async (): Promise<Record<string, EngineLevel>> => ({
+        // The unplugged USB sound repeats its last level; the other one is alive.
+        Usb: { peak: [-20, -20], magnitude: [-30, -30] },
+        Mic: {
+          peak: [level, level],
+          magnitude: [level, level],
+        },
+      })),
+    } as unknown as EngineApi
+    let lost = false
+    function Probe() {
+      const feed = useLevelFeed(api, ['Usb', 'Mic'])
+      lost = useSourceLost(feed, 'Usb')
+      return (
+        <Meter
+          feed={feed}
+          feedName="Usb"
+          muted={false}
+          volumeDb={0}
+          label="Usb volume"
+          onVolume={() => undefined}
+        />
+      )
+    }
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<Probe />)
+    })
+    const cover = () => host.querySelector<HTMLElement>('.bg-inset\\/80')!
+    // Moving a little each poll: alive. (Mic moves; Usb does not.)
+    for (let i = 0; i < 20; i++) {
+      level = -40 + (i % 3)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(100)
+      })
+    }
+    expect(lost).toBe(false)
+    expect(cover().style.transform).not.toMatch(/translate3d\(0(\.0+)?%/)
+    // After FROZEN_MS of the same numbers the bar falls and it reads as not connected.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FROZEN_MS + 1500)
+    })
+    expect(lost).toBe(true)
+    expect(cover().style.transform).toMatch(/translate3d\(0(\.0+)?%/)
   })
 })
