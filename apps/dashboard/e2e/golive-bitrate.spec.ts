@@ -36,7 +36,10 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
     await expect(
       settingsDialog.getByText('Twitch 6 · YouTube 12 · Kick 8 Mbps').nth(1),
     ).toBeVisible()
-    await settingsDialog.getByRole('button', { name: 'About bitrate per platform' }).click()
+    const bitrateInfo = settingsDialog.getByRole('button', { name: 'About bitrate per platform' })
+    await bitrateInfo.scrollIntoViewIfNeeded()
+    await settled(page)
+    await bitrateInfo.click()
     await expect(settingsDialog.locator('div.fixed[data-over-preview="true"]')).toContainText(
       /Twitch takes at most 6 Mbps/,
     )
