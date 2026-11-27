@@ -10,7 +10,7 @@ import {
   tameText,
   type HistoryStream,
 } from '@ferrocast/api'
-import { Button, PlatformMark } from '@ferrocast/ui'
+import { Button, PlatformMark, cx } from '@ferrocast/ui'
 
 const FIRST = 25
 
@@ -93,7 +93,13 @@ export function StreamTable({
               >
                 <th
                   scope="row"
-                  className="sticky left-0 z-[1] max-w-[190px] bg-surface-1 px-3 py-2.5 text-left font-normal sm:max-w-[300px]"
+                  // Solid, so scrolled cells never show through; the picked row's tint is laid
+                  // over it, not lost under it.
+                  className={cx(
+                    'sticky left-0 z-[1] max-w-[190px] bg-surface-1 px-3 py-2.5 text-left font-normal sm:max-w-[300px]',
+                    selected === `${s.platform}:${s.key}` &&
+                      'bg-[image:linear-gradient(var(--fc-accent-soft),var(--fc-accent-soft))]',
+                  )}
                 >
                   <span className="flex items-center gap-2.5">
                     <PlatformMark platform={s.platform} size={15} />
@@ -118,7 +124,10 @@ export function StreamTable({
                           {s.title ? tameText(s.title) : PLATFORM_LABEL[s.platform]}
                         </span>
                       )}
-                      <span className="block truncate text-[13.5px] text-text-3">
+                      <span
+                        className="block truncate text-[13.5px] text-text-3"
+                        title={`${when(s.started_at)}${s.category ? ` · ${tameText(s.category)}` : ''}`}
+                      >
                         {when(s.started_at)}
                         {s.category ? ` · ${tameText(s.category)}` : ''}
                       </span>

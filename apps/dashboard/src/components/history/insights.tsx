@@ -252,7 +252,11 @@ export function StreamDetail({ stream }: { stream: HistoryStream }) {
     <div className="flex flex-col gap-4" data-testid="stream-detail">
       <div className="flex min-w-0 items-center gap-2.5">
         <PlatformMark platform={stream.platform} size={16} />
-        <p className="min-w-0 truncate text-[16px] font-semibold text-text" dir="auto">
+        <p
+          className="min-w-0 truncate text-[16px] font-semibold text-text"
+          dir="auto"
+          title={stream.title ? tameText(stream.title) : PLATFORM_LABEL[stream.platform]}
+        >
           {stream.title ? tameText(stream.title) : PLATFORM_LABEL[stream.platform]}
         </p>
         <span className="shrink-0 font-mono text-[13.5px] text-text-3 tabular-nums">
@@ -369,7 +373,7 @@ export function BestTimes({ streams, now }: { streams: HistoryStream[]; now: num
         tabIndex={0}
         role="region"
         aria-label="Weekday and start time grid"
-        className="fc-scroll -mx-4 overflow-x-auto px-4 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none sm:mx-0 sm:px-0"
+        className="fc-scroll -mx-4 overflow-x-auto px-4 py-1 -my-1 focus-visible:shadow-[var(--fc-focus-inset)] focus-visible:outline-none sm:mx-0 sm:px-1 sm:-mx-1"
       >
         <div
           role="img"
@@ -429,11 +433,11 @@ export function BestTimes({ streams, now }: { streams: HistoryStream[]; now: num
           ))}
         </div>
       </div>
-      <figcaption className="flex items-center gap-2 text-[13px] text-text-3">
+      <figcaption className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-text-3">
         <span>Fewer viewers</span>
         <span
           aria-hidden="true"
-          className="h-2 w-24 rounded-full bg-gradient-to-r from-arc/20 to-arc"
+          className="h-2 w-24 shrink-0 rounded-full bg-gradient-to-r from-arc/20 to-arc"
         />
         <span>More</span>
         <span className="ml-auto">Your time zone</span>

@@ -223,10 +223,10 @@ export function OwnAddress({
           </p>
           <section aria-label="Record 1 of 2: CNAME" className="flex flex-col gap-2">
             <p className="text-[14.5px] font-semibold text-text-2">1. Point the address here</p>
-            <dl className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.7fr)]">
+            <dl className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)]">
               <Cell label="Type" value={dns.type} />
               <Cell label="Name" value={dns.host || dns.name} copy="Name" />
-              <Cell label="Target" value={dns.target} copy="Target" />
+              <Cell wide label="Target" value={dns.target} copy="Target" />
             </dl>
             <p className="text-[14.5px] leading-snug text-text-2">
               Some providers want the full name,{' '}
@@ -419,10 +419,10 @@ function ProofRecord({ proof }: { proof: TipDomain['proof'] }) {
         <p className="text-[14.5px] font-semibold text-text-2">2. Prove it’s yours</p>
         {proof.found ? <Badge tone="ok">Found</Badge> : <Badge tone="warn">Required</Badge>}
       </div>
-      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.7fr)]">
+      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)]">
         <Cell label="Type" value={proof.type} />
         <Cell label="Name" value={proof.host} copy="TXT name" />
-        <Cell label="Value" value={proof.value} copy="TXT value" />
+        <Cell wide label="Value" value={proof.value} copy="TXT value" />
       </dl>
       <p className="text-[14.5px] leading-snug text-text-2">
         Full name{' '}
@@ -440,10 +440,10 @@ function ClaimProof({ proof }: { proof: TipDomainClaimProof }) {
   return (
     <section aria-label="TXT record to prove it’s yours" className="flex flex-col gap-2">
       <p className="text-[15px] font-semibold text-text">Prove it’s yours with this TXT record</p>
-      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.7fr)]">
+      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)]">
         <Cell label="Type" value={proof.type} />
         <Cell label="Name" value={proof.host} copy="TXT name" />
-        <Cell label="Value" value={proof.value} copy="TXT value" />
+        <Cell wide label="Value" value={proof.value} copy="TXT value" />
       </dl>
       <p className="text-[14.5px] leading-snug text-text-2">
         Full name{' '}
@@ -456,18 +456,34 @@ function ClaimProof({ proof }: { proof: TipDomainClaimProof }) {
   )
 }
 
-function Cell({ label, value, copy }: { label: string; value: string; copy?: string }) {
+/** One DNS value. The copy button sits beside the label, so the value gets the whole width
+    and the card never changes height when the button says "Copied". */
+function Cell({
+  label,
+  value,
+  copy,
+  wide = false,
+}: {
+  label: string
+  value: string
+  copy?: string
+  wide?: boolean
+}) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-[12px] border border-line bg-surface-2 px-3 py-2.5">
-      <dt className="text-[13.5px] font-semibold text-text-3">{label}</dt>
-      <dd className="flex min-w-0 items-center justify-between gap-2">
+    <div
+      className={`flex min-w-0 flex-col gap-1 rounded-[12px] border border-line bg-surface-2 px-3 py-2.5${wide ? ' sm:col-span-2' : ''}`}
+    >
+      <div className="flex min-h-8 items-center justify-between gap-2">
+        <dt className="text-[13.5px] font-semibold text-text-3">{label}</dt>
+        {copy && <CopyButton text={value} what={copy} />}
+      </div>
+      <dd className="min-w-0">
         <code
           translate="no"
-          className="min-w-0 font-mono text-[16px] font-semibold break-all text-text"
+          className="block min-w-0 font-mono text-[16px] font-semibold break-all text-text"
         >
           {value}
         </code>
-        {copy && <CopyButton text={value} what={copy} />}
       </dd>
     </div>
   )
