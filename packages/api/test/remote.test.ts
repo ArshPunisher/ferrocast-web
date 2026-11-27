@@ -47,6 +47,19 @@ describe('the role rules (same as the PC and the relay)', () => {
       expect(remoteAllowed('mod', m, p), `${m} ${p}`).toBe(false)
   })
 
+  it('allows owner to read quality-options while keeping per-destination quality local-only', () => {
+    expect(remoteAllowed('owner', 'GET', '/golive/quality-options')).toBe(true)
+    expect(remoteAllowed('mod', 'GET', '/golive/quality-options')).toBe(false)
+    for (const path of [
+      '/golive/destinations/twitch/quality',
+      '/golive/destinations/twitch/light',
+      '/golive/destinations/twitch/enhanced',
+    ]) {
+      expect(remoteAllowed('owner', 'PUT', path), `owner PUT ${path}`).toBe(false)
+      expect(remoteAllowed('mod', 'PUT', path), `mod PUT ${path}`).toBe(false)
+    }
+  })
+
   it('lets owners do everything but the denied list', () => {
     for (const [m, p] of [
       ['GET', '/settings'],

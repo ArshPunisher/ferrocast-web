@@ -20,6 +20,8 @@ export interface DestinationConfig {
   enabled: boolean
   /** Left out: `main`. */
   canvas?: Canvas
+  /** Requested per-destination video quality; left out: same as main. */
+  quality?: DestinationQuality
   /** Takes the Ferrocast Studio's lighter stream (720p); left out when not. */
   light?: boolean
   /** Twitch Enhanced Broadcasting (Twitch, main picture); left out when off. */
@@ -185,10 +187,136 @@ export interface RuleNotice {
   fix_kbps?: number
 }
 
+export interface CustomQuality {
+  width: number
+  height: number
+  fps: number
+  kbps: number
+  codec?: VideoCodec | null
+}
+
+export type DestinationQuality =
+  | { mode: 'same_as_main' }
+  | ({ mode: 'custom' } & CustomQuality)
+
+export interface ResolvedQuality {
+  width: number
+  height: number
+  fps: number
+  kbps: number
+  codec: VideoCodec
+  audio_kbps: number
+  auto_fitted: boolean
+  separate_encode: boolean
+  group_id: string
+  shared_with: string[]
+}
+
+export interface EncodeGroupView {
+  id: string
+  canvas: Canvas
+  width: number
+  height: number
+  fps: number
+  kbps: number
+  codec: VideoCodec
+  members: string[]
+  live_fps: number | null
+  live_kbps: number | null
+  dropped_frames: number | null
+  encode_ms: number | null
+}
+
+export type BudgetSource =
+  | 'apple_silicon'
+  | 'bench'
+  | 'nvenc_default'
+  | 'hw_default'
+  | 'cpu_default'
+  | 'unknown'
+
+export type BudgetStatus = 'ok' | 'limit' | 'over' | 'unknown'
+
+export interface EncodeBudgetCheck {
+  status: BudgetStatus
+  source: BudgetSource
+  used_mpx_s: number
+  limit_mpx_s: number | null
+  used_sessions: number
+  max_sessions: number | null
+  note?: string | null
+}
+
+export type QualitySource = 'studio' | 'obs' | 'none'
+
+export interface QualityCanvasSummary {
+  width: number
+  height: number
+  fps: number
+  kbps: number
+  codec: VideoCodec
+  audio_kbps: number
+}
+
+export interface QualityOptionResolved {
+  width: number
+  height: number
+  fps: number
+  kbps: number
+  codec: VideoCodec
+}
+
+export interface QualityOption {
+  id: string
+  label: string
+  quality: DestinationQuality
+  resolved: QualityOptionResolved
+  auto_fitted: boolean
+  recommended: boolean
+  note: string | null
+  shares_encoder_with: string[]
+  allowed: boolean
+  disabled_reason: string | null
+}
+
+export interface CustomQualityLimits {
+  max_width: number
+  max_height: number
+  min_kbps: number
+  max_kbps: number
+  fps_choices: number[]
+  codecs: VideoCodec[]
+  recommended_width: number
+  recommended_height: number
+  recommended_fps: number
+  recommended_kbps: number
+}
+
+export interface DestinationQualityOptions {
+  id: string
+  canvas: Canvas
+  locked_reason: string | null
+  current: DestinationQuality
+  resolved: ResolvedQuality
+  options: QualityOption[]
+  custom_limits: CustomQualityLimits | null
+}
+
+export interface GoLiveQualityOptionsResponse {
+  source: QualitySource
+  main: QualityCanvasSummary
+  vertical: QualityCanvasSummary | null
+  budget: EncodeBudgetCheck
+  destinations: Record<string, DestinationQualityOptions>
+}
+
+export type QualityOptionsResponse = GoLiveQualityOptionsResponse
+
 /** Calm chip shown when Ferrocast Studio auto-caps its shared encode for Twitch/Kick (Contract C-2). */
 export interface CappedInfo {
   kbps: number
   resolution?: [number, number]
+  fps?: number
   separate_encode: boolean
   summary: string
   detail: string
@@ -214,6 +342,14 @@ export interface DestinationView {
   issues?: RuleNotice[]
   /** Calm cap badge shown when Studio fits its shared encode to Twitch/Kick limits (Contract C-2). */
   capped?: CappedInfo
+  /** Requested per-destination video quality. */
+  quality?: DestinationQuality
+  /** Effective stream this destination receives after platform fit and encoder coalescing. */
+  resolved_quality?: ResolvedQuality
+  /** True while a live quality switch is restarting this destination's encoder. */
+  switching_quality?: boolean
+  /** Calm note when custom quality clears a soft platform recommendation. */
+  quality_note?: string | null
   /** Sent straight from the Ferrocast Studio by this protocol; absent for RTMP. */
   direct?: DirectKind
   /** Takes the Ferrocast Studio's lighter stream (720p, 3,000 kbps); absent when not. */
@@ -323,6 +459,10 @@ export interface GoLiveView {
   cut: CutView
   /** Advanced mode's settings (A2.5). */
   advanced: Advanced
+  /** Planned or active encode groups shared across enabled destinations. */
+  encode_groups?: EncodeGroupView[]
+  /** Concurrent video encode capacity check for the current destinations. */
+  encode_budget?: EncodeBudgetCheck
 }
 
 /** Upload protection's rule, as Advanced mode writes it. */
@@ -556,6 +696,10 @@ export interface GoLiveFrame {
   vertical_live: boolean
   vertical_stats: StreamStats
   destinations: DestinationView[]
+  /** Planned or active encode groups shared across enabled destinations. */
+  encode_groups?: EncodeGroupView[]
+  /** Concurrent video encode capacity check for the current destinations. */
+  encode_budget?: EncodeBudgetCheck
   /** What the cutter is doing (A2.4), every second. */
   cut_state?: CutState | null
   /** Fetching ffmpeg: progress. */
@@ -609,6 +753,15 @@ export function goliveApi(c: FerroClient) {
         'PUT',
         `/api/v1/golive/destinations/${encodeURIComponent(id)}/enhanced`,
         { on },
+      ),
+    /** Available per-destination quality presets, limits, and PC encode budget summary. */
+    qualityOptions: () => get<GoLiveQualityOptionsResponse>('/golive/quality-options'),
+    /** Set per-destination video quality (same_as_main or custom). */
+    setQuality: (id: string, quality: DestinationQuality) =>
+      c.request<GoLiveView>(
+        'PUT',
+        `/api/v1/golive/destinations/${encodeURIComponent(id)}/quality`,
+        quality,
       ),
     removeCustom: (id: string) =>
       c.request<void>('DELETE', `/api/v1/golive/destinations/${encodeURIComponent(id)}`),
