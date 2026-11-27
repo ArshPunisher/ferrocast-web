@@ -686,7 +686,11 @@ export function PlatformsQualityModal({
                   <CaretLeft size={16} weight="bold" />
                 </IconButton>
               )}
-              <h2 id={headingId} className="truncate font-display text-[15px] font-bold text-text">
+              <h2
+                id={headingId}
+                className="truncate font-display text-[15px] font-bold text-text"
+                title={titleText}
+              >
                 {titleText}
               </h2>
             </div>
@@ -835,7 +839,10 @@ export function PlatformsQualityModal({
                             <Logo kind={d.kind} size={26} />
                             <span className="min-w-0 flex-1 text-left">
                               <span className="flex items-center gap-1.5">
-                                <b className="truncate text-[13.5px] font-semibold text-text">
+                                <b
+                                  className="truncate text-[13.5px] font-semibold text-text"
+                                  title={d.name}
+                                >
                                   {d.name}
                                 </b>
                                 {d.canvas === 'vertical' && (
@@ -860,6 +867,7 @@ export function PlatformsQualityModal({
                               <span
                                 data-row-quality={d.id}
                                 className="block truncate text-[12px] text-text-2 tabular-nums"
+                                title={rowQualityLine}
                               >
                                 {rowQualityLine}
                               </span>
@@ -1797,7 +1805,9 @@ export function PlatformsQualityModal({
                         ) : (
                           <Clock size={14} className="shrink-0 text-text-3" aria-hidden />
                         )}
-                        <span className="truncate">{evalResult.footerCopy}</span>
+                        <span className="truncate" title={evalResult.footerCopy}>
+                          {evalResult.footerCopy}
+                        </span>
                       </span>
                       <div className="flex shrink-0 items-center gap-2">
                         <Button variant="outline" size="sm" onClick={handleCancel}>

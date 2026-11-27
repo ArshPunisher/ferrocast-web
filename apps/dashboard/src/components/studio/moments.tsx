@@ -91,7 +91,9 @@ export function DontMissLane() {
             </span>
             <span className="text-sm font-semibold break-words text-text">{i.title}</span>
             {i.detail && (
-              <span className="line-clamp-2 text-[14.5px] break-words text-text-2">{i.detail}</span>
+              <span className="line-clamp-2 text-[14.5px] break-words text-text-2" title={i.detail}>
+                {i.detail}
+              </span>
             )}
             <IconButton
               size="sm"
@@ -195,7 +197,9 @@ export function MarkersPanel({ since, title = 'Markers' }: { since?: number; tit
               <span className="w-20 shrink-0 font-mono text-[14.5px] tabular-nums text-text-2">
                 {m.offset_ms === null ? '--:--:--' : timecode(m.offset_ms)}
               </span>
-              <span className="min-w-0 flex-1 truncate text-sm text-text">{m.label}</span>
+              <span className="min-w-0 flex-1 truncate text-sm text-text" title={m.label}>
+                {m.label}
+              </span>
               {/* One chip: a clip marker is already "Clip"; anything else that was clipped says so. */}
               {m.clip || m.kind === 'clip' ? (
                 <Badge tone="accent">

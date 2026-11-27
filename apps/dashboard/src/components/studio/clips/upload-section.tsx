@@ -161,7 +161,6 @@ export function UploadSection({
           'For a tall or square clip of up to 3 minutes. Ferrocast adds #Shorts to the description so YouTube treats it as one.'
         }
       />
-      {shortsNote && <p className="-mt-2 text-[13.5px] text-text-3">{shortsNote}</p>}
       <Switch
         checked={kids}
         onChange={setKids}

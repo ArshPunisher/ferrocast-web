@@ -130,7 +130,10 @@ for (const vp of [
       await dialog.locator('[data-section="details"]').getByLabel('Name').fill('a/b')
       await expect(dialog.getByText(/No \//)).toBeVisible()
       await dialog.getByRole('button', { name: 'Move to Trash' }).click()
-      await expect(page.getByRole('dialog', { name: /Move Boss fight to the Trash/ })).toBeVisible()
+      await expect(
+        dialog.getByRole('group', { name: /Move Boss fight to the Trash/ }),
+      ).toBeVisible()
+      await expect(page.locator('dialog[open]')).toHaveCount(1)
       await shot(page, `${vp.name}-11-trash-confirm`)
     })
 

@@ -14,9 +14,9 @@ import {
 import {
   Badge,
   Button,
-  ConfirmDialog,
   Dialog,
   Field,
+  InfoTip,
   Input,
   Segmented,
   Skeleton,
@@ -297,26 +297,49 @@ function DetailsSection({
         <dd className="text-text">{clipSize(clip.size)}</dd>
       </dl>
       <div className="flex flex-col items-start gap-2 border-t border-line pt-4">
-        <Button
-          variant="danger-ghost"
-          icon={<Trash size={17} aria-hidden="true" />}
-          busy={busy === 'trash'}
-          onClick={() => setConfirm(true)}
-        >
-          Move to Trash
-        </Button>
-        <p className="text-[13.5px] text-text-3">
-          It goes to the Trash (Recycle Bin), not gone for good.
-        </p>
+        {confirm ? (
+          // Asked here, not in a second dialog on top of this one.
+          <div
+            role="group"
+            aria-label={`Move ${clip.name} to the Trash?`}
+            className="flex w-full flex-col gap-2"
+          >
+            <p className="flex items-center gap-1 text-[15px] font-semibold text-text">
+              <span className="min-w-0 break-words">Move {clip.name} to the Trash?</span>
+              <InfoTip label="What happens">
+                Its captions go with it. You can take it back out of the Trash.
+              </InfoTip>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="danger"
+                icon={<Trash size={17} aria-hidden="true" />}
+                busy={busy === 'trash'}
+                onClick={() => void trash()}
+              >
+                Move to Trash
+              </Button>
+              <Button variant="ghost" data-cancel onClick={() => setConfirm(false)}>
+                Keep
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <Button
+              variant="danger-ghost"
+              icon={<Trash size={17} aria-hidden="true" />}
+              busy={busy === 'trash'}
+              onClick={() => setConfirm(true)}
+            >
+              Move to Trash
+            </Button>
+            <p className="text-[13.5px] text-text-3">
+              It goes to the Trash (Recycle Bin), not gone for good.
+            </p>
+          </>
+        )}
       </div>
-      <ConfirmDialog
-        open={confirm}
-        onClose={() => setConfirm(false)}
-        title={`Move ${clip.name} to the Trash?`}
-        description="Its captions go with it. You can take it back out of the Trash."
-        confirm="Move to Trash"
-        onConfirm={() => void trash()}
-      />
     </div>
   )
 }

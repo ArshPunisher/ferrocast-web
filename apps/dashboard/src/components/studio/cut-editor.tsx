@@ -596,7 +596,7 @@ function Numbers({
           )}
         <label className="flex items-center justify-between gap-3 text-[14px] text-text-2">
           Size
-          <span className="inline-block w-56">
+          <span className="block min-w-0 max-w-56 flex-1">
             <Select
               className="h-8"
               value={`${cut.width}x${cut.height}`}
@@ -615,7 +615,7 @@ function Numbers({
         </label>
         <label className="flex items-center justify-between gap-3 text-[14px] text-text-2">
           Frame rate
-          <span className="inline-block w-56">
+          <span className="block min-w-0 max-w-56 flex-1">
             <Select
               className="h-8"
               value={String(cut.fps)}
@@ -629,7 +629,7 @@ function Numbers({
         {num('Bitrate', cut.kbps, (n) => onChange({ ...cut, kbps: n }), 'kbps')}
         <label className="flex items-center justify-between gap-3 text-[14px] text-text-2">
           Encoder
-          <span className="inline-block w-56">
+          <span className="block min-w-0 max-w-56 flex-1">
             <Select
               className="h-8"
               value={cut.encoder ?? 'auto'}

@@ -200,7 +200,10 @@ export function CountersPanel() {
                 className="flex flex-wrap items-center gap-2 rounded-control px-2 py-2 hover:bg-surface-2"
               >
                 <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
-                  <p className="truncate text-sm font-semibold text-text">
+                  <p
+                    className="truncate text-sm font-semibold text-text"
+                    title={`${c.name.replace(/_/g, ' ')} ${c.command ?? ''}`.trim()}
+                  >
                     {c.name.replace(/_/g, ' ')}{' '}
                     {c.command && (
                       <span className="font-mono text-[13.5px] font-normal text-text-3">
@@ -218,7 +221,7 @@ export function CountersPanel() {
                   <Minus size={15} />
                 </IconButton>
                 <span
-                  className="w-12 text-center font-mono text-lg font-semibold tabular-nums text-text"
+                  className="min-w-12 px-1 text-center font-mono text-lg font-semibold tabular-nums text-text"
                   aria-live="polite"
                 >
                   {value}

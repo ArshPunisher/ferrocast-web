@@ -685,7 +685,9 @@ export function Platforms({
                         }
                         className="fc-press inline-flex h-[24px] max-w-full items-center gap-1 rounded-full border border-line bg-surface-2 px-2.5 text-[12px] font-medium text-text-2 hover:border-line-strong hover:text-text focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none"
                       >
-                        <span className="truncate">{buildQualitySummaryText(d, ctrl.usesObs)}</span>
+                        <span className="truncate" title={buildQualitySummaryText(d, ctrl.usesObs)}>
+                          {buildQualitySummaryText(d, ctrl.usesObs)}
+                        </span>
                         <CaretDown
                           size={11}
                           weight="bold"
@@ -996,7 +998,9 @@ function RowAlerts({
           className={cx('shrink-0', danger ? 'text-danger' : 'text-warn')}
           aria-hidden
         />
-        <span className="min-w-0 truncate">{first.label}</span>
+        <span className="min-w-0 truncate" title={first.label}>
+          {first.label}
+        </span>
         {notices.length > 1 && <span className="shrink-0 text-text-2">+{notices.length - 1}</span>}
         <Info
           size={12}
@@ -1102,6 +1106,7 @@ export function RowText({
             compact ? 'text-[13.5px] leading-tight font-semibold' : 'text-[15px]',
             !d.enabled && 'text-text-2',
           )}
+          title={d.name}
         >
           {d.name}
         </b>
@@ -1443,7 +1448,7 @@ function Step({
         className={cx(
           'grid size-7 place-items-center rounded-full border font-mono text-[14px] font-extrabold',
           done
-            ? 'border-ok bg-ok text-white'
+            ? 'border-ok-fill bg-ok-fill text-white'
             : 'border-accent-line bg-accent-soft text-accent-text',
         )}
         aria-hidden
@@ -1524,7 +1529,9 @@ function CopyRow({ label, value, onCopy }: { label: string; value: string; onCop
   return (
     <div className="flex items-center gap-2 rounded-control border border-line bg-surface-2 px-2.5 py-1.5">
       <span className="w-20 shrink-0 text-[13px] font-medium text-text-2">{label}</span>
-      <code className="min-w-0 flex-1 truncate font-mono text-[13.5px] text-text">{value}</code>
+      <code className="min-w-0 flex-1 truncate font-mono text-[13.5px] text-text" title={value}>
+        {value}
+      </code>
       <IconButton label={`Copy ${label.toLowerCase()}`} size="sm" onClick={onCopy}>
         <Copy size={15} />
       </IconButton>

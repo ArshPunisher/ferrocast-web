@@ -228,7 +228,7 @@ function InfoTabs({
     <div
       role="tablist"
       aria-label="Which platform"
-      className="-mx-1 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line px-1 [scrollbar-width:none]"
+      className="fc-focus-inset -mx-1 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line px-1 [scrollbar-width:none]"
       onKeyDown={onKey}
     >
       {tabs.map((t) => {
@@ -291,7 +291,7 @@ function OwnLines({
           <span aria-hidden="true" className="inline-flex shrink-0">
             <PlatformMark platform={p} size={13} />
           </span>
-          <span className="min-w-0 truncate">
+          <span className="min-w-0 truncate" title={`${PLATFORM_LABEL[p]} uses its own: “${v}”`}>
             {PLATFORM_LABEL[p]} uses its own: <span className="text-text-2">“{v}”</span>
           </span>
           <button
@@ -1109,7 +1109,9 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
                     className="w-full rounded-control px-2 py-2 text-left hover:bg-surface-2"
                     onClick={() => setForm(toForm(h.info))}
                   >
-                    <span className="block truncate text-sm text-text">{summary(h.info)}</span>
+                    <span className="block truncate text-sm text-text" title={summary(h.info)}>
+                      {summary(h.info)}
+                    </span>
                     <span className="block text-[14.5px] text-text-3">
                       {relativeTime(h.at, now)} · {h.results.filter((r) => r.ok).length} of{' '}
                       {h.results.length} platforms
@@ -1148,7 +1150,7 @@ function PresetChips({
         <li key={p.id} className="flex items-center rounded-full bg-surface-3">
           <button
             type="button"
-            title={summary(p.info)}
+            title={`${p.name} — ${summary(p.info)}`}
             onClick={() => onPick(p)}
             className="max-w-[220px] truncate rounded-l-full py-1 pr-1 pl-3 text-[13.5px] font-bold text-text hover:text-accent-text"
           >

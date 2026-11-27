@@ -208,7 +208,9 @@ export function ScenesPanel({
                       : 'border-line bg-surface-2 hover:border-line-strong',
                   )}
                 >
-                  <span className="w-full truncate text-sm font-semibold text-text">{sc.name}</span>
+                  <span className="w-full truncate text-sm font-semibold text-text" title={sc.name}>
+                    {sc.name}
+                  </span>
                   <span className="text-[13.5px] text-text-3">
                     {on
                       ? 'On air'

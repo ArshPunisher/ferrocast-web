@@ -225,7 +225,7 @@ export function AdvancedCard({ view, onSaved }: { view: GoLiveView; onSaved: () 
         <div
           role="tablist"
           aria-label="Which settings"
-          className="-mx-1 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line px-1 [scrollbar-width:none]"
+          className="fc-focus-inset -mx-1 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line px-1 [scrollbar-width:none]"
         >
           {tabs.map((t) => (
             <button

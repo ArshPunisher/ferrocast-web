@@ -61,7 +61,7 @@ export function SchedulePanel() {
         </Button>
       }
     >
-      <div className="flex flex-col gap-3 p-4 sm:p-5">
+      <div className="flex flex-col gap-3">
         {res.error && !res.data ? (
           <LoadError error={res.error} onRetry={res.reload} />
         ) : !res.data ? (

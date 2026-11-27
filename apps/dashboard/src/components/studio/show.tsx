@@ -560,12 +560,15 @@ export function ShowPanel({ presets = [] }: { presets?: StreamPreset[] }) {
               {show?.phase === 'starting' && show.live_scene && (
                 <Button
                   variant="primary"
+                  className="min-w-0! shrink!"
                   busy={busy === 'live'}
                   onClick={() =>
                     act('live', () => studio.liveScene(), 'Switched to the live scene.')
                   }
                 >
-                  Switch to {show.live_scene}
+                  <span className="min-w-0 truncate" title={`Switch to ${show.live_scene}`}>
+                    Switch to {show.live_scene}
+                  </span>
                 </Button>
               )}
               {active && (

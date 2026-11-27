@@ -121,7 +121,9 @@ export function JobRow({
           <CheckCircle size={18} className="text-ok" weight="fill" aria-hidden="true" />
           {job.output && (
             <>
-              <span className="min-w-0 truncate text-text-2">Made {job.output}</span>
+              <span className="min-w-0 truncate text-text-2" title={`Made ${job.output}`}>
+                Made {job.output}
+              </span>
               {onShow && (
                 <Button size="xs" variant="outline" onClick={() => onShow(job.output!)}>
                   Show
