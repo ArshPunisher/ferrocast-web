@@ -131,6 +131,8 @@ export function FileDrop() {
     window.addEventListener('ferrocast:drop', on)
     return () => {
       window.clearTimeout(quiet)
+      dragging = null
+      setOver(null)
       window.removeEventListener('ferrocast:drop', on)
     }
   }, [api, scene, refresh])

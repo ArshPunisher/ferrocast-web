@@ -60,11 +60,15 @@ export function useHints(): Hints {
  */
 export const HOLES_CHANGED = 'fc:preview-holes'
 
-/** Says so after every render of the overlay that holds the holes. */
-function useTellHoles(): void {
+/** Says so after renders where overlay holes are active or just cleared. */
+function useTellHoles(active: boolean): void {
+  const wasActive = useRef(false)
   useEffect(() => {
-    window.dispatchEvent(new Event(HOLES_CHANGED))
-    notifyPreviewOverlays()
+    if (active || wasActive.current) {
+      window.dispatchEvent(new Event(HOLES_CHANGED))
+      notifyPreviewOverlays()
+    }
+    wasActive.current = active
   })
 }
 
@@ -139,8 +143,9 @@ export function SnapOverlay({
   canvas: { width: number; height: number } | null
 }) {
   const h = useHints()
-  useTellHoles()
-  if (!canvas || !h.owner || h.owner !== boxRef.current) return null
+  const active = Boolean(canvas && h.owner && h.owner === boxRef.current)
+  useTellHoles(active)
+  if (!active || !canvas) return null
   const { width: W, height: H } = canvas
   return (
     <div aria-hidden data-snap-hints className="pointer-events-none absolute inset-0">
@@ -262,8 +267,9 @@ export function GroupBox({
   canvas: { width: number; height: number } | null
   className?: string
 }) {
-  useTellHoles()
-  if (!rect || !canvas) return null
+  const active = Boolean(rect && canvas)
+  useTellHoles(active)
+  if (!active || !rect || !canvas) return null
   const { width: W, height: H } = canvas
   const w = rect.right - rect.left
   const h = rect.bottom - rect.top

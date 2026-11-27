@@ -11,11 +11,12 @@ import {
 import { useLive } from '../../../lib/store'
 import { DeskProvider, type Desk } from './common'
 import { LayoutMenu } from './desk'
+import { FileDrop } from './file-drop'
 import { DockHeader, DockWorkspace } from './layout'
 import { PausedCard } from './performance'
 import { GuideOverlay, OverflowMask } from './preview-guides'
 import { ScenesDock } from './scenes'
-import { GroupBox, SnapOverlay, clearHints, setHints } from './snap-overlay'
+import { GroupBox, HOLES_CHANGED, SnapOverlay, clearHints, setHints } from './snap-overlay'
 import { SourcesDock } from './sources'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -343,5 +344,72 @@ describe('Guides, SnapOverlay, GroupBox, and PausedCard registry', () => {
     for (const el of nodes) el.getBoundingClientRect = () => rect(20, 20, 40, 2)
     expect(getPreviewOverlays().filter((e) => e.kind === 'guide').length).toBeGreaterThanOrEqual(10)
     expect(findUnregisteredPreviewOverlays(stage)).toEqual([])
+  })
+
+  it('does not broadcast HOLES_CHANGED on idle SnapOverlay or GroupBox renders (F17)', async () => {
+    const box = document.body.appendChild(document.createElement('div'))
+    const host = document.body.appendChild(document.createElement('div'))
+    let count = 0
+    const onHoles = () => {
+      count += 1
+    }
+    window.addEventListener(HOLES_CHANGED, onHoles)
+
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <>
+          <SnapOverlay boxRef={{ current: box }} canvas={{ width: 1920, height: 1080 }} />
+          <GroupBox rect={null} canvas={{ width: 1920, height: 1080 }} />
+        </>,
+      ),
+    )
+    expect(count).toBe(0)
+
+    await act(async () =>
+      root!.render(
+        <>
+          <SnapOverlay boxRef={{ current: box }} canvas={{ width: 1920, height: 1080 }} />
+          <GroupBox rect={null} canvas={{ width: 1920, height: 1080 }} />
+        </>,
+      ),
+    )
+    expect(count).toBe(0)
+    window.removeEventListener(HOLES_CHANGED, onHoles)
+  })
+})
+
+describe('FileDrop clears preview hole when drag tracking resets on scene change (CR-10)', () => {
+  it('discards hint and clears preview hole if scene changes mid-drag without a leave event', async () => {
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        <DeskProvider value={makeDesk({ scene: 'Gameplay' })}>
+          <FileDrop />
+        </DeskProvider>,
+      ),
+    )
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('ferrocast:drop', {
+          detail: { kind: 'enter', paths: ['/tmp/intro.png'] },
+        }),
+      )
+    })
+    expect(host.textContent).toContain('Drop to add to Gameplay')
+    expect(getPreviewOverlays()).toHaveLength(1)
+
+    // Scene changes mid-drag; OS sends no leave event. Hint and preview hole must clear cleanly.
+    await act(async () =>
+      root!.render(
+        <DeskProvider value={makeDesk({ scene: 'BRB' })}>
+          <FileDrop />
+        </DeskProvider>,
+      ),
+    )
+    expect(host.textContent).toBe('')
+    expect(getPreviewOverlays()).toHaveLength(0)
   })
 })
