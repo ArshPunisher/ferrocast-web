@@ -13,6 +13,7 @@ import { DemoStore, type StoreFault } from './features/store'
 import { DemoClips } from './features/clips'
 import { actorOf, formatMoney, isAlertable, majorUnits } from '../format'
 import { THEME_IDS } from '../types'
+import { DEFAULT_CHAT_TTS, validateChatTts } from '../tts-voices'
 import { AlertQueue, type QueueAction } from '../queue'
 import { accountUrl, resolveLinks, validateCreatorLinks } from '../links'
 import { anySample, namedActor, sample } from '../samples'
@@ -384,6 +385,8 @@ export class DemoEngine {
   private timersList: Timer[] = seedTimers()
   private tts: TtsSettings = clone(TTS)
   private ttsPending: TtsPending[] = []
+  private chatTtsUserLast = new Map<string, number>()
+  private chatTtsGlobalLast = 0
   private tips: TipSettings = clone(TIPS)
   /** Webhook secrets as the relay keeps them. Never sent back. */
   private tipSecrets: Partial<Record<TipProviderKey, string>> = {
@@ -1653,12 +1656,25 @@ export class DemoEngine {
     if (a === 'timers') return this.crud(method, seg, body, this.timersList, 'timer', validateTimer)
 
     // tts
-    if (is('GET', 'tts')) return { ...clone(this.tts), currency: this.settings.currency }
+    if (is('GET', 'tts'))
+      return {
+        ...clone(this.tts),
+        chat: clone(this.tts.chat ?? DEFAULT_CHAT_TTS),
+        currency: this.settings.currency,
+      }
     if (is('PUT', 'tts')) {
-      const t = requireObj(body) as TtsSettings
+      const t = requireObj(body) as TtsSettings & { chat?: Record<string, unknown> }
       if (t.max_chars !== undefined && (t.max_chars < 10 || t.max_chars > 500))
         throw new HttpError(400, 'invalid', 'max_chars: must be between 10 and 500.')
-      this.tts = { ...this.tts, ...t }
+      const nextChat = t.chat
+        ? { ...(this.tts.chat ?? DEFAULT_CHAT_TTS), ...t.chat }
+        : { ...(this.tts.chat ?? DEFAULT_CHAT_TTS) }
+      nextChat.command = String(nextChat.command ?? DEFAULT_CHAT_TTS.command).trim()
+      const chatErrors = validateChatTts(nextChat)
+      const firstErr = Object.entries(chatErrors)[0]
+      if (firstErr) throw new HttpError(400, 'invalid', `chat.${firstErr[0]}: ${firstErr[1]}`)
+      this.tts = { ...this.tts, ...t, chat: nextChat }
+      if (!this.tts.enabled || !nextChat.enabled) this.emitAlertsTtsStop()
       return { ...clone(this.tts), currency: this.settings.currency }
     }
     if (is('GET', 'tts', 'voices')) return clone(VOICES)
@@ -2454,6 +2470,7 @@ export class DemoEngine {
         break
       case 'mute':
         this.queue.setMuted(true)
+        this.emitAlertsTtsStop()
         break
       case 'unmute':
         this.queue.setMuted(false)
@@ -2632,7 +2649,12 @@ export class DemoEngine {
     )
     for (const s of this.overlaySubs)
       this.sendOverlay(s, 'delete_message', { platform: o.platform, message_id: o.message_id })
+    this.emitAlertsTtsStop()
+    const before = this.ttsPending.length
     this.ttsPending = this.ttsPending.filter((t) => t.event_id !== e.id)
+    if (this.ttsPending.length !== before) {
+      this.broadcastLive({ v: 1, type: 'tts_pending', data: clone(this.ttsPending) })
+    }
     return undefined
   }
 
@@ -2650,6 +2672,8 @@ export class DemoEngine {
       )
     for (const s of this.overlaySubs)
       this.sendOverlay(s, 'delete_user', { platform: o.platform, user_id: o.user_id })
+    if (o.platform) this.purgeUserPendingTts(o.platform, o.user_id)
+    this.emitAlertsTtsStop()
     return undefined
   }
 
@@ -2700,6 +2724,8 @@ export class DemoEngine {
       )
       for (const s of this.overlaySubs)
         this.sendOverlay(s, 'delete_user', { platform: p, user_id: o.user.user_id })
+      this.purgeUserPendingTts(p, o.user.user_id)
+      this.emitAlertsTtsStop()
     }
     return { banned, failed }
   }
@@ -2721,6 +2747,7 @@ export class DemoEngine {
       }))
     if (on && this.panicCfg.pause_alerts) this.queue.pause()
     if (!on && this.panicCfg.pause_alerts) this.applyQueue(this.queue.resume(Date.now()))
+    if (on && this.panicCfg.pause_tts) this.emitAlertsTtsStop()
     this.saveQueueFlags()
     this.broadcastQueue()
     for (const a of applied) {
@@ -2977,6 +3004,25 @@ export class DemoEngine {
     if (forOverlays && origin !== 'test' && !opts.held)
       for (const s of this.overlaySubs) if (this.overlayWants(s, e)) this.sendOverlay(s, 'event', e)
 
+    if (kind.type === 'message_deleted') {
+      const target = this.events.find(
+        (x) => x.platform === e.platform && x.source_id === kind.message_id,
+      )
+      if (target) {
+        const before = this.ttsPending.length
+        this.ttsPending = this.ttsPending.filter((t) => t.event_id !== target.id)
+        if (this.ttsPending.length !== before) {
+          this.broadcastLive({ v: 1, type: 'tts_pending', data: clone(this.ttsPending) })
+        }
+      }
+      this.emitAlertsTtsStop()
+    } else if (kind.type === 'ban' || kind.type === 'user_messages_cleared') {
+      if (kind.target.id) this.purgeUserPendingTts(e.platform, kind.target.id)
+      this.emitAlertsTtsStop()
+    } else if (kind.type === 'chat_message' && !opts.held && origin === 'live') {
+      this.maybeSpeakDemoChat(e, now)
+    }
+
     if (isAlertable(e) && (origin === 'live' || origin === 'replay' || origin === 'test')) {
       const sel = select(this.rules, e, this.rand)
       if (sel) {
@@ -3007,6 +3053,137 @@ export class DemoEngine {
       }
     }
     return e
+  }
+
+  private emitAlertsTtsStop(): void {
+    for (const s of this.overlaySubs) {
+      if (
+        this.overlays.find((o) => o.id === s.overlayId)?.widgets.some((w) => w.kind === 'alerts')
+      ) {
+        this.sendOverlay(s, 'tts_stop', {})
+      }
+    }
+  }
+
+  private purgeUserPendingTts(platform: Platform, userId: string): void {
+    const before = this.ttsPending.length
+    this.ttsPending = this.ttsPending.filter((item) => {
+      const ev = this.events.find((e) => e.id === item.event_id)
+      const uid = ev ? actorOf(ev)?.id : undefined
+      return !(item.platform === platform && uid === userId)
+    })
+    if (this.ttsPending.length !== before) {
+      this.broadcastLive({ v: 1, type: 'tts_pending', data: clone(this.ttsPending) })
+    }
+  }
+
+  private maybeSpeakDemoChat(e: FerroEvent, now: number): void {
+    if (e.kind.type !== 'chat_message' || (e.channel && e.channel.id !== `${e.platform}-chan`))
+      return
+    const chat = this.tts.chat ?? DEFAULT_CHAT_TTS
+    if (!this.tts.enabled || !chat.enabled) return
+    if (this.panicOn && this.panicCfg.pause_tts) return
+    if (this.queue.snapshot().muted) return
+    const actor = e.kind.actor
+    if ((actor.roles & Roles.BOT) !== 0) return
+
+    const frags = e.kind.content.fragments ?? [{ type: 'text' as const, text: e.kind.content.text }]
+    let emoteCount = 0
+    const parts: string[] = []
+    for (const f of frags) {
+      if (f.type === 'emote') emoteCount += 1
+      else if (f.type === 'text') parts.push(f.text)
+      else if (f.type === 'mention') parts.push(`@${f.login}`)
+      else if (f.type === 'link' && chat.skip_links) return
+    }
+    let raw = parts.join(' ').trim()
+    if (!raw) return
+
+    if (chat.mode === 'command') {
+      const prefix = chat.command.trim().toLowerCase()
+      const lower = raw.toLowerCase()
+      if (!lower.startsWith(prefix)) return
+      const rest = raw.slice(prefix.length)
+      if (rest.length > 0 && !/^\s/.test(rest)) return
+      raw = rest.trim()
+      if (!raw) return
+    } else {
+      if (raw.startsWith('!')) return
+      if (chat.mode === 'subs_mods') {
+        const allowed =
+          Roles.BROADCASTER |
+          Roles.MODERATOR |
+          Roles.VIP |
+          Roles.SUBSCRIBER |
+          Roles.MEMBER |
+          Roles.FOUNDER |
+          Roles.STAFF
+        if ((actor.roles & allowed) === 0) return
+      }
+    }
+
+    if (
+      chat.skip_links &&
+      /(?:https?:\/\/|www\.|\b[a-z0-9-]+\.(?:com|net|org|gg|tv|io|co)\b)/i.test(raw)
+    ) {
+      return
+    }
+    const words = raw.split(/\s+/).filter(Boolean)
+    if (chat.skip_emote_spam && (emoteCount > 5 || (emoteCount >= 3 && words.length < 2))) return
+
+    const lowerWords = raw.toLowerCase()
+    for (const bw of this.filters.words.list) {
+      const needle = bw.trim().toLowerCase()
+      if (needle && lowerWords.includes(needle)) return
+    }
+
+    let cleaned = raw
+      .split(/\s+/)
+      .filter((w) => !w.includes('@'))
+      .map((w) => ((w.match(/\d/g)?.length ?? 0) >= 5 ? 'number' : w))
+      .join(' ')
+      .slice(0, chat.max_chars)
+      .trim()
+    if (!cleaned) return
+    if (this.tts.read_names) cleaned = `${actor.display_name} says: ${cleaned}`
+
+    const userKey = `${e.platform}:${actor.id ?? actor.login ?? actor.display_name}`
+    const cdMs = chat.cooldown_s * 1000
+    const prevUser = this.chatTtsUserLast.get(userKey)
+    if (cdMs > 0 && prevUser !== undefined && now - prevUser < cdMs) return
+
+    if (this.tts.hold_for_approval) {
+      const chatPendingCount = this.ttsPending.filter((item) => {
+        const ev = this.events.find((x) => x.id === item.event_id)
+        return ev?.kind.type === 'chat_message'
+      }).length
+      if (chatPendingCount >= Math.max(1, chat.queue_limit)) return
+      this.chatTtsUserLast.set(userKey, now)
+      this.ttsPending.push({
+        id: `tts-${++this.alertSeq}`,
+        event_id: e.id,
+        platform: e.platform,
+        name: actor.display_name,
+        text: cleaned,
+        amount: null,
+        received_at: now,
+      })
+      this.broadcastLive({ v: 1, type: 'tts_pending', data: clone(this.ttsPending) })
+      return
+    }
+
+    const globalMs = chat.global_cooldown_s * 1000
+    if (globalMs > 0 && this.chatTtsGlobalLast > 0 && now - this.chatTtsGlobalLast < globalMs)
+      return
+    this.chatTtsUserLast.set(userKey, now)
+    this.chatTtsGlobalLast = now
+    for (const s of this.overlaySubs) {
+      if (
+        this.overlays.find((o) => o.id === s.overlayId)?.widgets.some((w) => w.kind === 'alerts')
+      ) {
+        this.sendOverlay(s, 'tts', { id: `chat-tts-${e.id}`, text: cleaned, audio: null })
+      }
+    }
   }
 
   private applyQueue(actions: QueueAction[]): void {

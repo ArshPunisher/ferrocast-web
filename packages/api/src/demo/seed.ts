@@ -2,6 +2,7 @@
 // Names and messages are made up but realistic; nothing here is a real account.
 
 import { defaultRules, newVariation } from '../alert'
+import { DEFAULT_CHAT_TTS } from '../tts-voices'
 import type {
   AlertRule,
   BanEntry,
@@ -389,6 +390,7 @@ export const TTS: TtsSettings = {
   max_chars: 200,
   hold_for_approval: true,
   read_names: true,
+  chat: { ...DEFAULT_CHAT_TTS },
 }
 
 export const VOICES: TtsVoice[] = [

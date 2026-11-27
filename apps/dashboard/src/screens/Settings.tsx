@@ -69,6 +69,7 @@ import { ProSettings } from '../components/pro'
 import { CloudBackups } from '../components/cloud-backups'
 import { CloudSyncSettings } from '../components/cloud-sync'
 import { TtsVoicePicker } from '../components/tts-voices'
+import { ChatTtsGroup } from '../components/chat-tts-settings'
 import { RemoteDevices } from '../components/remote'
 import { MusicSettings } from '../components/music-settings'
 import { AutomationsSettings } from '../components/automations-settings'
@@ -403,8 +404,12 @@ function Tts({ currency }: { currency?: string | undefined }) {
   const client = useClient()
   const res = useResource((c) => c.tts())
   const voices = useResource((c) => c.ttsVoices())
+  const overlays = useResource((c) => c.overlays())
   const { run } = useAction()
   const t = res.data
+  const hasAlertsOverlay = overlays.data
+    ? overlays.data.some((o) => o.widgets.some((w) => w.kind === 'alerts'))
+    : true
   const save = (next: TtsSettings) => {
     res.set(next)
     void run('tts', () => client.saveTts(next))
@@ -495,6 +500,11 @@ function Tts({ currency }: { currency?: string | undefined }) {
                   />
                 </Row>
               </Group>
+              <ChatTtsGroup
+                value={t.chat}
+                hasAlertsOverlay={hasAlertsOverlay}
+                onSave={(chat) => save({ ...t, chat })}
+              />
             </>
           ) : (
             <p className="mx-1 text-[14px] text-text-3">
