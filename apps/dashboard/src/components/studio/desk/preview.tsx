@@ -834,13 +834,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
       })
     }
     warmStillRef.current = warmStill
-    const unfreeze = () => {
-      if (thawTimer) {
-        window.clearTimeout(thawTimer)
-        thawTimer = 0
-      }
-      frozen = 0
-      hidNative = false
+    const clearStillStyles = () => {
       for (const b of boxes()) {
         if (!b) continue
         b.style.backgroundImage = ''
@@ -849,19 +843,37 @@ function PreviewBoxes({ running }: { running: boolean }) {
         b.style.opacity = ''
       }
     }
+    const unfreeze = () => {
+      if (thawTimer) {
+        window.clearTimeout(thawTimer)
+        thawTimer = 0
+      }
+      freezeSeq += 1
+      frozen = 0
+      hidNative = false
+      clearStillStyles()
+    }
     const freeze = (hideNative: boolean, hints?: PreviewLiveResizePayload['still']) => {
       if (thawTimer) {
         window.clearTimeout(thawTimer)
         thawTimer = 0
       }
       const token = (frozen = ++freezeSeq)
+      const atCollection = collectionKeyRef.current
       const names = slotNames()
       const hintFor = (index: number) =>
         index === 0 ? hints?.main : index === 1 ? hints?.program : hints?.vertical
       const now = Date.now()
 
       const hideNativeNow = () => {
-        if (!alive || frozen !== token || !hideNative || hidNative) return
+        if (
+          !alive ||
+          frozen !== token ||
+          collectionKeyRef.current !== atCollection ||
+          !hideNative ||
+          hidNative
+        )
+          return
         hidNative = true
         const off = (r: PreviewRect | null) => r && { ...r, opacity: 0 }
         last = JSON.stringify(['still', still])
@@ -876,7 +888,6 @@ function PreviewBoxes({ running }: { running: boolean }) {
         const name = names[i]
         if (!name) return
         const w = targetWidth(b)
-        const atCollection = collectionKeyRef.current
         const exact = stillCache.get(stillKey(name, w, atCollection))
         let matched = exact
         if (!matched) {
@@ -890,13 +901,8 @@ function PreviewBoxes({ running }: { running: boolean }) {
         if (!paintedSync) pendingInitial += 1
         void Promise.resolve(apiRef.current.thumbnail(name, w))
           .then(async (res) => {
-            if (
-              !alive ||
-              frozen !== token ||
-              collectionKeyRef.current !== atCollection ||
-              !res ||
-              !isSafeStillUrl(res.image)
-            ) {
+            if (!alive || frozen !== token || collectionKeyRef.current !== atCollection) return
+            if (!res || !isSafeStillUrl(res.image)) {
               if (!paintedSync) {
                 pendingInitial -= 1
                 if (pendingInitial <= 0) hideNativeNow()
@@ -913,6 +919,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
             }
           })
           .catch(() => {
+            if (!alive || frozen !== token || collectionKeyRef.current !== atCollection) return
             if (!paintedSync) {
               pendingInitial -= 1
               if (pendingInitial <= 0) hideNativeNow()
@@ -1002,7 +1009,10 @@ function PreviewBoxes({ running }: { running: boolean }) {
       void put(withVisibleOpacity(rect), withVisibleOpacity(program), withVisibleOpacity(tallRect))
         .then((placed) => {
           if (!alive) return
-          if (placed) hidNative = false
+          if (placed) {
+            hidNative = false
+            if (restoringFromHidden && !frozen) clearStillStyles()
+          }
           warmStill()
           // Keep the still briefly underneath until the live frame takes over cleanly.
           if (placed && thawing && frozen === thawing) {
@@ -1026,6 +1036,13 @@ function PreviewBoxes({ running }: { running: boolean }) {
     }
     resyncPreviewRef.current = () => {
       if (!alive) return
+      if (thawTimer) {
+        window.clearTimeout(thawTimer)
+        thawTimer = 0
+      }
+      freezeSeq += 1
+      frozen = 0
+      if (!hidNative) clearStillStyles()
       stillCache.clear()
       stillInFlight.clear()
       last = ''

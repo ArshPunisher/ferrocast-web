@@ -2845,4 +2845,120 @@ describe('Studio preview live-resize and scale sync', () => {
       host.remove()
     }
   })
+
+  it('ignores obsolete uncached freeze-thumbnail resolution or rejection after collection switch without hiding native preview', async () => {
+    const { desk, req, putCalls } = setupPreviewTest()
+    const pendingThumbs: Array<{
+      resolve: (v: { image: string }) => void
+      reject: (err: Error) => void
+    }> = []
+    req.mockImplementation((method: string, path: string) => {
+      if (method === 'GET' && path.includes('/thumbnail')) {
+        return new Promise((resolve, reject) => {
+          pendingThumbs.push({ resolve, reject })
+        })
+      }
+      return Promise.resolve(undefined)
+    })
+    Object.assign(desk as unknown as Record<string, unknown>, { collectionKey: 1 })
+
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const canvasBox = host.querySelector<HTMLElement>('[data-canvas-box]')!
+
+      // Start uncached divider-drag freeze in Collection 1 (thumbnail stays pending).
+      const thumbsBeforeDragA = pendingThumbs.length
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: true, axis: 'x' } }),
+        )
+        await Promise.resolve()
+      })
+      const freezeThumbA = pendingThumbs[thumbsBeforeDragA]
+      expect(freezeThumbA).toBeDefined()
+
+      // Switch to Collection 2 and end drag so Collection 2's preview is placed cleanly.
+      ;(desk as unknown as Record<string, unknown>).collectionKey = 2
+      ;(desk.scenes as { data: { current: string } }).data = {
+        ...(desk.scenes as { data: { current: string } }).data,
+        current: 'Scene B',
+      } as never
+      await act(async () => {
+        root.render(
+          <DeskProvider value={{ ...(desk as Record<string, unknown>) } as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: false, axis: 'x' } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const putsAfterSwitch1 = putCalls().length
+
+      // Resolving Collection 1's obsolete freeze thumbnail must NOT send opacity: 0.
+      await act(async () => {
+        freezeThumbA!.resolve({ image: 'data:image/png;base64,STALE_COL_A' })
+        await vi.advanceTimersByTimeAsync(150)
+      })
+      const putsAfterResolveA = putCalls().slice(putsAfterSwitch1)
+      expect(
+        putsAfterResolveA.some(
+          (c) => (c[2] as { rect?: { opacity?: number } }).rect?.opacity === 0,
+        ),
+      ).toBe(false)
+      expect(canvasBox.style.backgroundImage).toBe('')
+
+      // Start uncached divider-drag freeze in Collection 2, then switch to Collection 3 and reject.
+      const thumbsBeforeDragB = pendingThumbs.length
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: true, axis: 'x' } }),
+        )
+        await Promise.resolve()
+      })
+      const freezeThumbB = pendingThumbs[thumbsBeforeDragB]
+      expect(freezeThumbB).toBeDefined()
+      ;(desk as unknown as Record<string, unknown>).collectionKey = 3
+      ;(desk.scenes as { data: { current: string } }).data = {
+        ...(desk.scenes as { data: { current: string } }).data,
+        current: 'Scene C',
+      } as never
+      await act(async () => {
+        root.render(
+          <DeskProvider value={{ ...(desk as Record<string, unknown>) } as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: false, axis: 'x' } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const putsAfterSwitch2 = putCalls().length
+
+      await act(async () => {
+        freezeThumbB!.reject(new Error('obsolete thumb error'))
+        await vi.advanceTimersByTimeAsync(150)
+      })
+      const putsAfterRejectB = putCalls().slice(putsAfterSwitch2)
+      expect(
+        putsAfterRejectB.some((c) => (c[2] as { rect?: { opacity?: number } }).rect?.opacity === 0),
+      ).toBe(false)
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
 })
