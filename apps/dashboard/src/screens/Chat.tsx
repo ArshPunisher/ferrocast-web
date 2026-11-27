@@ -233,7 +233,7 @@ export function Chat() {
     >
       <header
         data-testid="chat-pane-header"
-        className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-1.5 @[640px]:min-h-11 @[640px]:flex-nowrap @[640px]:py-0"
+        className="flex min-h-11 shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-1.5 @[520px]:min-h-11 @[520px]:flex-nowrap @[520px]:py-0"
       >
         <h1
           id="chat-title"
@@ -241,8 +241,10 @@ export function Chat() {
         >
           Chat
         </h1>
+        {/* min-w-0: with four platforms it wraps inside its pill and the bar grows, instead of pushing Hide bots out of sight. */}
         <Segmented
           label="Show chat from"
+          className="min-w-0"
           size="sm"
           value={filter}
           onChange={setFilter}
@@ -252,7 +254,7 @@ export function Chat() {
               label: (
                 <span className="inline-flex items-center gap-1.5">
                   <span>All</span>
-                  <span className="hidden font-mono text-[12px] tabular-nums opacity-85 @[720px]:inline">
+                  <span className="hidden font-mono text-[12px] tabular-nums opacity-85 @[580px]:inline">
                     {counts.total}
                   </span>
                 </span>

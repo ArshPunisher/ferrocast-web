@@ -473,10 +473,11 @@ function Cell({
     <div
       className={`flex min-w-0 flex-col gap-1 rounded-[12px] border border-line bg-surface-2 px-3 py-2.5${wide ? ' sm:col-span-2' : ''}`}
     >
-      <div className="flex min-h-8 items-center justify-between gap-2">
-        <dt className="text-[13.5px] font-semibold text-text-3">{label}</dt>
+      {/* The copy button sits at the label's end, so the value gets the whole width. */}
+      <dt className="flex min-h-8 items-center justify-between gap-2 text-[13.5px] font-semibold text-text-3">
+        {label}
         {copy && <CopyButton text={value} what={copy} />}
-      </div>
+      </dt>
       <dd className="min-w-0">
         <code
           translate="no"
