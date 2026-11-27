@@ -30,6 +30,8 @@ export interface ModalDraft {
   height: number
   fps: number
   kbps: number
+  /** Explicit codec of a saved custom quality; null lets the engine choose. */
+  codec: VideoCodec | null
 }
 
 export interface ModalPeerCandidate {
@@ -71,8 +73,13 @@ export interface ModalModel {
     note: string | null
     shares_encoder_with: string[]
     allowed?: boolean
+    disabled_reason?: string | null
   } | null
   lockedReason: string | null
+  /** What the engine last accepted for this destination, with any just-applied override. */
+  saved: DestinationQuality
+  /** True while `saved` comes from an accepted change the options feed has not caught up with. */
+  savedIsFresh: boolean
 }
 
 export interface MatchMainEndpoint {
@@ -93,7 +100,7 @@ export interface MatchMainSoftTip {
 }
 
 export interface MatchMainSharedCap {
-  maxSessions: number
+  maxSessions: number | null
   summary: string
   detail: string
 }
@@ -106,6 +113,7 @@ export interface MatchMainComparison {
   resCut: boolean
   fpsCut: boolean
   rateCut: boolean
+  codecChanged: boolean
   anyCut: boolean
   sharedCap: MatchMainSharedCap | null
   reasons: string[]
@@ -131,6 +139,11 @@ export interface BudgetIssue {
   matchLabel: string | null
 }
 
+export interface ModalBlock {
+  kind: 'engine'
+  reason: string
+}
+
 export interface ModalEvaluation {
   effective: {
     width: number
@@ -145,6 +158,10 @@ export interface ModalEvaluation {
   sharesWith: string[]
   hardLimit: HardLimitIssue | null
   budgetExceeded: BudgetIssue | null
+  /** A peer's encode this destination could join, found without relying on the estimate above. */
+  peerCandidate: ModalPeerCandidate | null
+  /** The engine marked the chosen option as unavailable right now. */
+  engineBlock: ModalBlock | null
   softNote: string | null
   isReconnecting: boolean
   isDirty: boolean
@@ -154,7 +171,7 @@ export interface ModalEvaluation {
 }
 
 export interface ApiQualityErrorInfo {
-  kind: 'locked' | 'limit' | 'budget' | 'timeout' | 'other'
+  kind: 'locked' | 'limit' | 'budget' | 'timeout' | 'restart' | 'busy' | 'other'
   title: string
   detail: string
   retryable: boolean
@@ -166,8 +183,11 @@ const PORTRAIT_TIERS = [1440, 1080, 720, 540] as const
 
 const BITRATE_LADDER = [
   800, 1500, 2500, 3000, 4000, 4500, 6000, 8000, 9000, 12000, 15000, 18000, 24000, 32000, 40000,
-  51000,
+  51000, 60000,
 ] as const
+
+/** The engine's ceiling for a custom bitrate (probe.rs MAX_CUSTOM_KBPS). */
+export const MAX_CUSTOM_KBPS = 60000
 
 export function formatModalRate(kbps: number): string {
   if (kbps < 1000) return `${Math.round(kbps)} kbps`
@@ -264,8 +284,14 @@ function fallbackLimitsFor(
   canvasFps: number,
 ): CustomQualityLimits {
   const portrait = dest.canvas === 'vertical' || canvasHeight > canvasWidth
-  const fallbackMaxW = portrait ? 1080 : Math.max(1920, canvasWidth)
-  const fallbackMaxH = portrait ? Math.max(1920, canvasHeight) : Math.max(1080, canvasHeight)
+  // Kick closes streams above 1080p whatever the canvas is, so it never widens with it.
+  const kickLandscape = dest.kind === 'kick' && !portrait
+  const fallbackMaxW = portrait ? 1080 : kickLandscape ? 1920 : Math.max(1920, canvasWidth)
+  const fallbackMaxH = portrait
+    ? Math.max(1920, canvasHeight)
+    : kickLandscape
+      ? 1080
+      : Math.max(1080, canvasHeight)
   const maxKbps =
     dest.kind === 'twitch' && !dest.enhanced
       ? 6000
@@ -273,7 +299,7 @@ function fallbackLimitsFor(
         ? 8000
         : dest.canvas === 'vertical'
           ? 15000
-          : 51000
+          : MAX_CUSTOM_KBPS
   return {
     max_width: fallbackMaxW,
     max_height: fallbackMaxH,
@@ -292,10 +318,13 @@ export function buildModalModel({
   dest,
   destOpts,
   response,
+  accepted,
 }: {
   dest: DestinationView
   destOpts: DestinationQualityOptions | null
   response: GoLiveQualityOptionsResponse | null
+  /** The quality the last successful change saved, until a newer options feed replaces it. */
+  accepted?: DestinationQuality | null
 }): ModalModel {
   const resolvedFallback = destOpts?.resolved ?? dest.resolved_quality ?? null
   const canvasMain =
@@ -315,7 +344,7 @@ export function buildModalModel({
                 width: 1080,
                 height: 1920,
                 fps: response.main.fps,
-                kbps: Math.min(response.main.kbps, 6000),
+                kbps: response.main.kbps,
                 codec: response.main.codec,
                 audio_kbps: response.main.audio_kbps,
               }
@@ -423,7 +452,7 @@ export function buildModalModel({
   const hasHardBitrateCeiling = bitrateHardMaxKbps < 45000
   const bitrateRangeMaxKbps = hasHardBitrateCeiling
     ? Math.min(
-        51000,
+        MAX_CUSTOM_KBPS,
         bitrateHardMaxKbps <= 6000
           ? 9000
           : bitrateHardMaxKbps <= 9000
@@ -455,6 +484,7 @@ export function buildModalModel({
         note: sameOpt.note,
         shares_encoder_with: sameOpt.shares_encoder_with,
         allowed: sameOpt.allowed,
+        disabled_reason: sameOpt.disabled_reason,
       }
     : canvasMain
       ? (() => {
@@ -511,13 +541,16 @@ export function buildModalModel({
     softNoteTemplate,
     sameAsMainResolved,
     lockedReason: destOpts?.locked_reason ?? null,
+    saved: accepted ?? destOpts?.current ?? dest.quality ?? { mode: 'same_as_main' },
+    savedIsFresh: Boolean(accepted),
   }
 }
 
 export function initialDraftFromModel(model: ModalModel): ModalDraft {
-  const current = model.destOpts?.current ?? model.dest.quality ?? { mode: 'same_as_main' as const }
-  const resolved =
-    model.destOpts?.resolved ?? model.dest.resolved_quality ?? model.sameAsMainResolved
+  const current = model.saved
+  const resolved = model.savedIsFresh
+    ? (model.dest.resolved_quality ?? model.destOpts?.resolved ?? model.sameAsMainResolved)
+    : (model.destOpts?.resolved ?? model.dest.resolved_quality ?? model.sameAsMainResolved)
   if (current.mode === 'custom') {
     return {
       matchMain: false,
@@ -525,6 +558,7 @@ export function initialDraftFromModel(model: ModalModel): ModalDraft {
       height: current.height,
       fps: current.fps,
       kbps: current.kbps,
+      codec: current.codec ?? null,
     }
   }
   return {
@@ -533,7 +567,15 @@ export function initialDraftFromModel(model: ModalModel): ModalDraft {
     height: resolved?.height ?? 1080,
     fps: resolved?.fps ?? 60,
     kbps: resolved?.kbps ?? 6000,
+    codec: null,
   }
+}
+
+/** The codec a custom quality with no explicit codec ends up with (engine: main's, if allowed). */
+export function defaultCustomCodec(model: ModalModel): string {
+  const main = model.canvasMain?.codec
+  if (main && model.limits.codecs.includes(main as VideoCodec)) return main
+  return model.limits.codecs[0] ?? 'h264'
 }
 
 export function clampDraftToHardLimits(model: ModalModel, draft: ModalDraft): ModalDraft {
@@ -570,6 +612,7 @@ export function clampDraftToHardLimits(model: ModalModel, draft: ModalDraft): Mo
         : allowedRes.height,
     fps: clampedFps,
     kbps: clampedKbps,
+    codec: draft.codec,
   }
 }
 
@@ -579,16 +622,22 @@ function encodeTupleKey(t: {
   height: number
   fps: number
   kbps: number
+  codec: string
 }): string {
-  return `${t.canvas}:${t.width}x${t.height}@${t.fps}:${t.kbps}`
+  return `${t.canvas}:${t.width}x${t.height}@${t.fps}:${t.kbps}:${t.codec}`
 }
 
 export function draftFitsLimits(
   limits: CustomQualityLimits,
-  t: { width: number; height: number; fps: number; kbps: number },
+  t: { width: number; height: number; fps: number; kbps: number; codec?: string },
 ): boolean {
   const allowedFps = limits.fps_choices.length === 0 || limits.fps_choices.includes(t.fps)
+  const allowedCodec =
+    t.codec === undefined ||
+    limits.codecs.length === 0 ||
+    limits.codecs.includes(t.codec as VideoCodec)
   return (
+    allowedCodec &&
     t.width <= limits.max_width &&
     t.height <= limits.max_height &&
     allowedFps &&
@@ -623,7 +672,7 @@ export function evaluateModalDraft(
           height: draft.height,
           fps: draft.fps,
           kbps: draft.kbps,
-          codec: model.limits.codecs[0] ?? 'h264',
+          codec: draft.codec ?? defaultCustomCodec(model),
         }
 
   const fixedDraft = clampDraftToHardLimits(model, { ...draft, matchMain: false })
@@ -679,16 +728,12 @@ export function evaluateModalDraft(
   }
 
   // Peer sharing & budget computation across enabled destinations on the same canvas.
+  const keyOf = (t: { width: number; height: number; fps: number; kbps: number; codec: string }) =>
+    encodeTupleKey({ canvas: ctx.dest.canvas, ...t })
   const otherEnabled = ctx.allDestinations.filter(
     (other) => other.id !== ctx.dest.id && other.enabled && other.canvas === ctx.dest.canvas,
   )
-  const draftKey = encodeTupleKey({
-    canvas: ctx.dest.canvas,
-    width: effective.width,
-    height: effective.height,
-    fps: effective.fps,
-    kbps: effective.kbps,
-  })
+  const draftKey = keyOf(effective)
   const peerTuples = otherEnabled
     .map((other) => ({
       dest: other,
@@ -704,89 +749,118 @@ export function evaluateModalDraft(
     )
 
   const sharesWith = peerTuples
-    .filter(
-      ({ resolved }) =>
-        encodeTupleKey({
-          canvas: ctx.dest.canvas,
-          width: resolved.width,
-          height: resolved.height,
-          fps: resolved.fps,
-          kbps: resolved.kbps,
-        }) === draftKey,
-    )
+    .filter(({ resolved }) => keyOf(resolved) === draftKey)
     .map(({ dest }) => dest.name)
 
-  // Budget check using session delta against passed budget or model response budget.
+  // Whether the draft differs from what is saved.
+  const initial = model.saved
+  const isDirty =
+    draft.matchMain !== (initial.mode === 'same_as_main') ||
+    (!draft.matchMain &&
+      initial.mode === 'custom' &&
+      (initial.width !== draft.width ||
+        initial.height !== draft.height ||
+        initial.fps !== draft.fps ||
+        initial.kbps !== draft.kbps ||
+        (initial.codec ?? null) !== draft.codec))
+
+  // A peer's encode this destination could join. Found on its own, so it is also on offer when the
+  // engine refuses a change for a reason the estimate below cannot see (for example Mpx/s).
+  const ownGroup = ctx.dest.resolved_quality?.group_id ?? null
+  const compatiblePeer = peerTuples.find(
+    ({ dest: other, resolved }) =>
+      draftFitsLimits(model.limits, resolved) &&
+      keyOf(resolved) !== draftKey &&
+      // Rejoining the encode it is already in changes nothing, unless an edit moved it away.
+      !(!isDirty && ownGroup && other.resolved_quality?.group_id === ownGroup),
+  )
+  const matchesSameAsMain = (r: NonNullable<DestinationView['resolved_quality']>) =>
+    model.sameAsMainResolved !== null &&
+    r.width === model.sameAsMainResolved.width &&
+    r.height === model.sameAsMainResolved.height &&
+    r.fps === model.sameAsMainResolved.fps &&
+    r.kbps === model.sameAsMainResolved.kbps &&
+    r.codec === model.sameAsMainResolved.codec
+  const peerCandidate: ModalPeerCandidate | null = compatiblePeer
+    ? {
+        id: compatiblePeer.dest.id,
+        name: compatiblePeer.dest.name,
+        label: `${formatModalResFps(compatiblePeer.resolved.width, compatiblePeer.resolved.height, compatiblePeer.resolved.fps)} · ${formatModalRate(compatiblePeer.resolved.kbps)}`,
+        quality:
+          compatiblePeer.dest.quality?.mode === 'same_as_main' &&
+          matchesSameAsMain(compatiblePeer.resolved)
+            ? { mode: 'same_as_main' }
+            : {
+                mode: 'custom',
+                width: compatiblePeer.resolved.width,
+                height: compatiblePeer.resolved.height,
+                fps: compatiblePeer.resolved.fps,
+                kbps: compatiblePeer.resolved.kbps,
+                // Always explicit: a null codec would follow the main stream and could miss the peer.
+                codec: compatiblePeer.resolved.codec,
+              },
+      }
+    : null
+
+  // Budget estimate from session counts. It cannot see everything the engine counts (Mpx/s, the
+  // recording's share of the main encode), so it only ever blocks a clear overshoot; the engine's
+  // answer is final and drives the inline recovery.
   const activeBudget = ctx.budget ?? model.budget ?? null
   let budgetExceeded: BudgetIssue | null = null
   if (activeBudget && activeBudget.max_sessions !== null && activeBudget.max_sessions > 0) {
-    const otherKeys = new Set(
-      peerTuples.map(({ resolved }) =>
-        encodeTupleKey({
-          canvas: ctx.dest.canvas,
-          width: resolved.width,
-          height: resolved.height,
-          fps: resolved.fps,
-          kbps: resolved.kbps,
-        }),
-      ),
-    )
-    const currentResolved = model.destOpts?.resolved ?? ctx.dest.resolved_quality
-    const currentKey = currentResolved
-      ? encodeTupleKey({
-          canvas: ctx.dest.canvas,
-          width: currentResolved.width,
-          height: currentResolved.height,
-          fps: currentResolved.fps,
-          kbps: currentResolved.kbps,
+    const otherKeys = new Set(peerTuples.map(({ resolved }) => keyOf(resolved)))
+    // The main stream's own encode is already running, so joining it adds nothing.
+    const mainKey = model.canvasMain
+      ? keyOf({
+          width: model.canvasMain.width,
+          height: model.canvasMain.height,
+          fps: model.canvasMain.fps,
+          kbps: model.canvasMain.kbps,
+          codec: model.canvasMain.codec,
         })
-      : draftKey
+      : null
+    const currentResolved = model.savedIsFresh
+      ? ctx.dest.resolved_quality
+      : (model.destOpts?.resolved ?? ctx.dest.resolved_quality)
+    const currentKey = currentResolved ? keyOf(currentResolved) : draftKey
 
     const wasShared = ctx.dest.enabled && otherKeys.has(currentKey)
-    const willShare = ctx.dest.enabled && otherKeys.has(draftKey)
+    const willShare = ctx.dest.enabled && (otherKeys.has(draftKey) || draftKey === mainKey)
     const deltaSessions = ctx.dest.enabled ? (wasShared ? 1 : 0) - (willShare ? 1 : 0) : 0
     const estimatedSessions = Math.max(1, (activeBudget.used_sessions ?? 1) + deltaSessions)
-    const isSameAsOriginal =
-      draftKey === currentKey &&
-      ((draft.matchMain &&
-        (model.destOpts?.current.mode ?? ctx.dest.quality?.mode ?? 'same_as_main') ===
-          'same_as_main') ||
-        (!draft.matchMain && (model.destOpts?.current.mode ?? ctx.dest.quality?.mode) === 'custom'))
+    const isSameAsOriginal = draftKey === currentKey && !isDirty
 
     if (
       (estimatedSessions > activeBudget.max_sessions && !willShare) ||
       (activeBudget.status === 'over' && isSameAsOriginal && !willShare)
     ) {
-      const compatiblePeer = peerTuples.find(({ resolved }) =>
-        draftFitsLimits(model.limits, resolved),
-      )
-      const peer: ModalPeerCandidate | null = compatiblePeer
-        ? {
-            id: compatiblePeer.dest.id,
-            name: compatiblePeer.dest.name,
-            label: `${formatModalResFps(compatiblePeer.resolved.width, compatiblePeer.resolved.height, compatiblePeer.resolved.fps)} · ${formatModalRate(compatiblePeer.resolved.kbps)}`,
-            quality:
-              compatiblePeer.dest.quality?.mode === 'same_as_main' &&
-              compatiblePeer.resolved.width === model.sameAsMainResolved?.width &&
-              compatiblePeer.resolved.height === model.sameAsMainResolved?.height &&
-              compatiblePeer.resolved.fps === model.sameAsMainResolved?.fps &&
-              compatiblePeer.resolved.kbps === model.sameAsMainResolved?.kbps
-                ? { mode: 'same_as_main' }
-                : {
-                    mode: 'custom',
-                    width: compatiblePeer.resolved.width,
-                    height: compatiblePeer.resolved.height,
-                    fps: compatiblePeer.resolved.fps,
-                    kbps: compatiblePeer.resolved.kbps,
-                    codec: null,
-                  },
-          }
-        : null
       budgetExceeded = {
         usedSessions: estimatedSessions,
         maxSessions: activeBudget.max_sessions,
-        peer,
-        matchLabel: peer ? `Match ${peer.name} · ${peer.label}` : null,
+        peer: peerCandidate,
+        matchLabel: peerCandidate ? `Match ${peerCandidate.name} · ${peerCandidate.label}` : null,
+      }
+    }
+  }
+
+  // The engine already simulated the exact option the draft equals: honour a refusal.
+  let engineBlock: ModalBlock | null = null
+  if (isDirty) {
+    const option = draft.matchMain
+      ? (model.destOpts?.options.find((o) => o.quality.mode === 'same_as_main') ?? null)
+      : (model.destOpts?.options.find(
+          (o) =>
+            o.quality.mode === 'custom' &&
+            o.quality.width === draft.width &&
+            o.quality.height === draft.height &&
+            o.quality.fps === draft.fps &&
+            o.quality.kbps === draft.kbps &&
+            (o.quality.codec ?? null) === draft.codec,
+        ) ?? null)
+    if (option && option.allowed === false) {
+      engineBlock = {
+        kind: 'engine',
+        reason: option.disabled_reason ?? 'Your PC cannot switch to that right now.',
       }
     }
   }
@@ -806,25 +880,16 @@ export function evaluateModalDraft(
     }
   }
 
-  const initial = model.destOpts?.current ?? model.dest.quality ?? { mode: 'same_as_main' as const }
-  const isDirty =
-    draft.matchMain !== (initial.mode === 'same_as_main') ||
-    (!draft.matchMain &&
-      initial.mode === 'custom' &&
-      (initial.width !== draft.width ||
-        initial.height !== draft.height ||
-        initial.fps !== draft.fps ||
-        initial.kbps !== draft.kbps))
-
   const isReconnecting = ctx.dest.enabled && ctx.dest.health?.state === 'reconnecting'
   const resultTone: ModalEvaluation['resultTone'] = hardLimit
     ? 'bad'
-    : budgetExceeded || softNote || isReconnecting
+    : budgetExceeded || engineBlock || softNote || isReconnecting
       ? 'warn'
       : 'neutral'
 
   const blockedByLock = Boolean(model.lockedReason)
-  const blocked = blockedByLock || Boolean(hardLimit) || Boolean(budgetExceeded)
+  const blocked =
+    blockedByLock || Boolean(hardLimit) || Boolean(budgetExceeded) || Boolean(engineBlock)
   const canApply = !blocked && (isDirty || isReconnecting)
 
   return {
@@ -835,6 +900,8 @@ export function evaluateModalDraft(
     sharesWith,
     hardLimit,
     budgetExceeded,
+    peerCandidate,
+    engineBlock,
     softNote,
     isReconnecting,
     isDirty,
@@ -856,8 +923,16 @@ export function toDestinationQualityPayload(draft: ModalDraft): DestinationQuali
     height: draft.height,
     fps: draft.fps,
     kbps: draft.kbps,
-    codec: null,
+    codec: draft.codec,
   }
+}
+
+/** Mirrors the engine's wording for a PC that cannot run another separate encode. */
+function sharedCapText(maxSessions: number | null): string {
+  if (maxSessions === null) {
+    return "Your PC's video encoder is at capacity for separate encodes; lower main quality or turn off a platform."
+  }
+  return `Your PC can run ${maxSessions} stream ${maxSessions === 1 ? 'encode' : 'encodes'} at once; lower main quality or turn off a platform.`
 }
 
 export function buildMatchMainComparison(
@@ -867,6 +942,7 @@ export function buildMatchMainComparison(
   const isVertical = model.dest.canvas === 'vertical'
   const switchMatchLabel = isVertical ? 'Match vertical picture' : 'Match main stream'
   const baseLabel = isVertical ? 'Vertical picture' : 'Main stream'
+  const name = model.dest.name
 
   const baseRaw = model.canvasMain ??
     model.sameAsMainResolved ?? {
@@ -876,53 +952,9 @@ export function buildMatchMainComparison(
       kbps: 6000,
       codec: 'h264',
     }
-
-  const hasSharedDetail = Boolean(
-    model.dest.capped &&
-    !model.dest.capped.separate_encode &&
-    (model.dest.capped.detail.includes('Your PC can run') ||
-      model.dest.capped.summary.startsWith('Shared cap:') ||
-      model.budget?.status === 'over'),
-  )
-  const overBudgetShared =
-    hasSharedDetail ||
-    Boolean(model.sameAsMainResolved?.allowed === false && model.budget?.status === 'over') ||
-    Boolean(
-      model.budget?.status === 'over' &&
-      model.budget.max_sessions === 1 &&
-      model.sameAsMainResolved?.shares_encoder_with.length,
-    )
-
-  const cappedFallback =
-    overBudgetShared && model.dest.resolved_quality
-      ? {
-          width: model.dest.resolved_quality.width,
-          height: model.dest.resolved_quality.height,
-          fps: model.dest.resolved_quality.fps,
-          kbps: Math.min(
-            model.dest.resolved_quality.kbps,
-            model.dest.capped?.kbps && model.dest.capped.kbps > 0
-              ? model.dest.capped.kbps
-              : model.dest.resolved_quality.kbps,
-          ),
-          codec: model.dest.resolved_quality.codec,
-        }
-      : overBudgetShared && model.dest.capped && model.dest.capped.kbps > 0
-        ? {
-            width: model.dest.capped.resolution?.[0] ?? baseRaw.width,
-            height: model.dest.capped.resolution?.[1] ?? baseRaw.height,
-            fps: model.dest.capped.fps ?? baseRaw.fps,
-            kbps: model.dest.capped.kbps,
-            codec: baseRaw.codec,
-          }
-        : null
-
-  const fittedRaw =
-    cappedFallback &&
-    (cappedFallback.kbps < (model.sameAsMainResolved?.kbps ?? baseRaw.kbps) ||
-      cappedFallback.width < (model.sameAsMainResolved?.width ?? baseRaw.width))
-      ? cappedFallback
-      : (model.sameAsMainResolved ?? baseRaw)
+  // What the engine would send for Match main. It already includes the platform's limits and any
+  // PC-wide sharing, so it is the one source for the right-hand side.
+  const fittedRaw = model.sameAsMainResolved ?? baseRaw
 
   const base: MatchMainEndpoint = {
     width: baseRaw.width,
@@ -948,42 +980,101 @@ export function buildMatchMainComparison(
   const resCut = fitted.width < base.width || fitted.height < base.height
   const fpsCut = fitted.fps < base.fps
   const rateCut = fitted.kbps < base.kbps
+  const codecChanged = fitted.codec !== base.codec
+  const engineFitted = Boolean(model.sameAsMainResolved?.auto_fitted)
   const anyCut = resCut || fpsCut || rateCut
+  const changed = anyCut || codecChanged || engineFitted
+  const sharesWith = model.sameAsMainResolved?.shares_encoder_with ?? []
+  const sharesText = sharesWith.join(' & ')
+
+  // How far the platform's own limits alone would have lowered each value.
+  const platformW = Math.min(base.width, model.limits.max_width)
+  const platformH = Math.min(base.height, model.limits.max_height)
+  const allowedFps = model.limits.fps_choices.filter((f) => f <= base.fps)
+  const platformFps = allowedFps.length > 0 ? Math.max(...allowedFps) : base.fps
+  const platformKbps = Math.min(base.kbps, model.bitrateHardMaxKbps)
+  const pcCut =
+    !ignoreServiceLimits &&
+    (fitted.width < platformW ||
+      fitted.height < platformH ||
+      fitted.fps < platformFps ||
+      fitted.kbps < platformKbps)
+
+  // When the saved choice is already Match main, the engine's own note for it is authoritative.
+  const capped = model.saved.mode === 'same_as_main' ? (model.dest.capped ?? null) : null
+  const cappedApplies = Boolean(
+    capped?.resolution &&
+    capped.kbps === fitted.kbps &&
+    capped.resolution[0] === fitted.width &&
+    capped.resolution[1] === fitted.height,
+  )
+  const planShared = cappedApplies && capped !== null && !capped.separate_encode
+  const planCoalesced =
+    cappedApplies &&
+    capped !== null &&
+    capped.separate_encode &&
+    (model.dest.resolved_quality?.shared_with.length ?? 0) > 0
 
   let sharedCap: MatchMainSharedCap | null = null
-  if (overBudgetShared) {
-    const maxSessions = model.budget?.max_sessions ?? 1
-    const fallbackDetail = `Your PC can run ${maxSessions} stream ${maxSessions === 1 ? 'encode' : 'encodes'} at once; lower main quality or turn off a platform.`
+  const maxSessions = model.budget?.max_sessions ?? null
+  if (planShared && capped) {
+    sharedCap = { maxSessions, summary: capped.summary, detail: capped.detail }
+  } else if (
+    !planCoalesced &&
+    pcCut &&
+    sharesWith.length === 0 &&
+    model.budget?.status === 'over'
+  ) {
+    const detail = sharedCapText(maxSessions)
     sharedCap = {
       maxSessions,
-      summary: model.dest.capped?.summary ?? `Shared cap: ${fitted.resFps} · ${fitted.rate}`,
-      detail: model.dest.capped?.detail?.includes('Your PC can run')
-        ? model.dest.capped.detail
-        : fallbackDetail,
+      summary: `Shared cap: ${fitted.resFps} · ${fitted.rate}`,
+      detail,
     }
   }
 
   const reasons: string[] = []
   if (sharedCap) {
     reasons.push(sharedCap.detail)
-  } else if (!anyCut) {
+  } else if (!changed) {
     reasons.push('Exactly the same picture, no extra work for your PC.')
   } else {
-    if (resCut) {
+    if (resCut && !(pcCut && (fitted.width < platformW || fitted.height < platformH))) {
+      reasons.push(`Size lowered to ${Math.min(fitted.width, fitted.height)}p, ${name}’s limit.`)
+    }
+    if (fpsCut && !(pcCut && fitted.fps < platformFps)) {
+      reasons.push(`Frame rate lowered to ${fitted.fps} fps, ${name}’s limit.`)
+    }
+    if (rateCut && !(pcCut && fitted.kbps < platformKbps)) {
+      reasons.push(`Bitrate capped at ${fitted.rate}, ${name}’s limit.`)
+    }
+    if (codecChanged) {
       reasons.push(
-        `Size lowered to ${Math.min(fitted.width, fitted.height)}p, ${model.dest.name}’s limit.`,
+        `Video format changed to ${String(fittedRaw.codec).toUpperCase()}, the one ${name} takes.`,
       )
     }
-    if (fpsCut) {
-      reasons.push(`Frame rate lowered to ${fitted.fps} fps, ${model.dest.name}’s limit.`)
+    if (planCoalesced && capped) {
+      reasons.push(capped.detail)
+    } else if (pcCut) {
+      reasons.push(
+        sharesWith.length > 0
+          ? `Shares one encode with ${sharesText} to stay within your PC’s encoder limit.`
+          : `Lowered to ${fitted.resFps} · ${fitted.rate} to fit your PC’s encoder.`,
+      )
     }
-    if (rateCut) {
-      reasons.push(`Bitrate capped at ${fitted.rate}, ${model.dest.name}’s limit.`)
+    if (!anyCut && !codecChanged) {
+      reasons.push(`Adjusted to ${name}’s encoder rules.`)
     }
-    const baseKeep = isVertical
-      ? `Your vertical picture keeps ${base.resFps}.`
-      : `Your recording keeps ${base.resFps}.`
-    reasons.push(`Runs as its own encode. ${baseKeep}`)
+    if (planCoalesced || (pcCut && sharesWith.length > 0)) {
+      // The sharing line above already says it does not run alone.
+    } else if (sharesWith.length > 0) {
+      reasons.push(`Shares one encode with ${sharesText}.`)
+    } else {
+      const baseKeep = isVertical
+        ? `Your vertical picture keeps ${base.resFps}.`
+        : `Your recording keeps ${base.resFps}.`
+      reasons.push(`Runs as its own encode. ${baseKeep}`)
+    }
   }
 
   let softTip: MatchMainSoftTip | null = null
@@ -998,10 +1089,8 @@ export function buildMatchMainComparison(
     const portrait = isVertical || fitted.height > fitted.width
     const targetWidth = Math.min(model.limits.max_width, portrait ? 1080 : 1920)
     const targetHeight = Math.min(model.limits.max_height, portrait ? 1920 : 1080)
-    const allowedFps = model.fpsOptions.filter(
-      (f) => !f.locked && f.fps <= Math.min(fitted.fps, 60),
-    )
-    const targetFps = allowedFps[allowedFps.length - 1]?.fps ?? Math.min(fitted.fps, 60)
+    const softFps = model.fpsOptions.filter((f) => !f.locked && f.fps <= Math.min(fitted.fps, 60))
+    const targetFps = softFps[softFps.length - 1]?.fps ?? Math.min(fitted.fps, 60)
     const targetKbps = Math.min(model.bitrateHardMaxKbps, Math.max(model.bitrateMinKbps, base.kbps))
     const targetResFps = formatModalResFps(targetWidth, targetHeight, targetFps)
     softTip = {
@@ -1013,6 +1102,7 @@ export function buildMatchMainComparison(
         height: targetHeight,
         fps: targetFps,
         kbps: targetKbps,
+        codec: null,
       },
     }
   }
@@ -1025,6 +1115,7 @@ export function buildMatchMainComparison(
     resCut,
     fpsCut,
     rateCut,
+    codecChanged,
     anyCut,
     sharedCap,
     reasons,
@@ -1069,6 +1160,31 @@ export function mapQualityApiError(
         title: `Couldn't switch ${label}. Kept previous quality.`,
         detail: message || 'No keyframe arrived in time. Nothing else was touched.',
         retryable: true,
+        canClamp: false,
+      }
+    case 'golive_needs_new_encode':
+      return {
+        kind: 'restart',
+        title: `${label} needs a new encode, so it can't switch while live.`,
+        detail:
+          'Stop the stream and go live again, or pick a quality another platform already uses.',
+        retryable: false,
+        canClamp: false,
+      }
+    case 'golive_switch_cancelled':
+      return {
+        kind: 'restart',
+        title: `The stream stopped before ${label} could switch.`,
+        detail: 'Nothing changed. Change it again when you go live.',
+        retryable: false,
+        canClamp: false,
+      }
+    case 'conflict':
+      return {
+        kind: 'busy',
+        title: 'Another quality switch is still running.',
+        detail: 'Wait a moment for it to finish, then try again.',
+        retryable: false,
         canClamp: false,
       }
     default:

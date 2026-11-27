@@ -181,11 +181,15 @@ function findBudgetMatchPeer(
     (p) => p.id !== dest.id && p.enabled && p.canvas === dest.canvas && p.resolved_quality,
   )
   const limits = optsById[dest.id]?.custom_limits
+  const ownGroup = dest.resolved_quality?.group_id ?? null
   for (const peer of sameCanvasPeers) {
     const pq = peer.resolved_quality!
+    // Joining an encode this destination is already part of changes nothing for the PC.
+    if (ownGroup && pq.group_id === ownGroup) continue
     const fits =
       !limits ||
-      (pq.width <= limits.max_width &&
+      ((limits.codecs.length === 0 || limits.codecs.includes(pq.codec)) &&
+        pq.width <= limits.max_width &&
         pq.height <= limits.max_height &&
         pq.kbps >= limits.min_kbps &&
         pq.kbps <= limits.max_kbps &&
@@ -207,13 +211,18 @@ function findBudgetMatchPeer(
   return null
 }
 
+/** A destination is LIVE only while its own push reports it is delivering. */
+function isSending(d: DestinationView, canvasLive: boolean): boolean {
+  return Boolean(canvasLive && d.enabled && d.health?.state === 'live')
+}
+
 function findBudgetOffenderIds(view: GoLiveView): Set<string> {
   if (view.encode_budget?.status !== 'over') return new Set()
   const enabled = view.destinations.filter((d) => d.enabled)
   const separate = enabled.filter((d) => d.resolved_quality?.separate_encode)
   const customOffenders = separate.filter((d) => d.quality?.mode === 'custom')
   if (customOffenders.length > 0) return new Set(customOffenders.map((d) => d.id))
-  const nonMain = separate.filter((d) => d.resolved_quality?.group_id !== 'g-main')
+  const nonMain = separate.filter((d) => d.resolved_quality?.group_id !== 'main')
   if (nonMain.length > 0) return new Set([nonMain[nonMain.length - 1]!.id])
   return enabled.length > 0 ? new Set([enabled[enabled.length - 1]!.id]) : new Set()
 }
@@ -560,6 +569,7 @@ export function buildDestinationRowVM(
       height: d.resolved_quality.height,
       fps: d.resolved_quality.fps,
       kbps: d.resolved_quality.kbps,
+      codec: null,
     })
     const fixRes = formatModalResFps(fixed.width, fixed.height, fixed.fps)
     const reason =
@@ -691,7 +701,7 @@ export function buildDestinationRowVM(
 
   // 10. Custom choice above soft recommendation (line 2 warning -> popover Open quality).
   if (d.quality?.mode === 'custom' && d.quality_note && !ctx.usesObs && d.enabled) {
-    const isLive = Boolean(liveFor && d.enabled)
+    const isLive = isSending(d, liveFor)
     return {
       dest: d,
       liveFor,
@@ -723,7 +733,7 @@ export function buildDestinationRowVM(
   }
 
   // 11. Normal LIVE or OFF row: line 2 is the clickable quality trigger opening Modal A.
-  const isLive = Boolean(liveFor && d.enabled)
+  const isLive = isSending(d, liveFor)
   return {
     dest: d,
     liveFor,
@@ -819,7 +829,10 @@ export function buildGoLiveDockVM(view: GoLiveView, ctx: BuildDockContext): GoLi
   const mainAllFailed = !ctx.usesObs && Boolean(allDestinationsFailed(view.destinations, 'main'))
   const allLiveFailed =
     mainAllFailed ||
-    (view.live && enabledRows.length > 0 && enabledRows.every((r) => r.tagKind === 'error'))
+    (view.live &&
+      enabledRows.length > 0 &&
+      // A quality problem is not a stopped push: a row still delivering keeps the stream going.
+      enabledRows.every((r) => r.tagKind === 'error' && r.dest.health?.state !== 'live'))
   if (allLiveFailed) {
     const retryIds = enabledRows
       .filter((r) => r.dest.health?.state === 'failed' || r.dest.health?.state === 'paused')

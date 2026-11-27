@@ -65,7 +65,7 @@ function makeView(overrides: Partial<GoLiveView> = {}): GoLiveView {
     },
     encode_groups: [
       {
-        id: 'g-main',
+        id: 'main',
         canvas: 'main',
         width: 2560,
         height: 1440,
@@ -117,7 +117,7 @@ function makeView(overrides: Partial<GoLiveView> = {}): GoLiveView {
           audio_kbps: 160,
           auto_fitted: false,
           separate_encode: false,
-          group_id: 'g-main',
+          group_id: 'main',
           shared_with: [],
         },
       }),
@@ -235,7 +235,7 @@ describe('golive-list-model (List 3b API state mapping)', () => {
             audio_kbps: 160,
             auto_fitted: false,
             separate_encode: false,
-            group_id: 'g-main',
+            group_id: 'main',
             shared_with: [],
           },
         }),
@@ -687,6 +687,108 @@ describe('golive-list-model (List 3b API state mapping)', () => {
       mode: 'strip',
       text: 'Couldn’t save. Changes weren’t applied.',
       action: { kind: 'retry_save', label: 'Try again' },
+    })
+  })
+  it('keeps the stream going when a delivering destination only has a quality problem', () => {
+    const view = makeView({
+      live: true,
+      destinations: [
+        makeDest({
+          health: { state: 'live', kbps: 6160, dropped: 0, since_ms: 1000 },
+          issues: [{ code: 'bitrate', summary: 'Over the limit', detail: 'x', fix_kbps: 5000 }],
+        }),
+      ],
+    })
+    const vm = buildGoLiveDockVM(view, { usesObs: false, qualityOptionsById: {} })
+    expect(vm.footer).not.toMatchObject({ text: 'Nothing is sending' })
+    expect(vm.mainRows[0]).toMatchObject({ tagKind: 'error' })
+    expect(vm.footer.mode === 'summary' ? vm.footer.problems.length : -1).toBe(1)
+  })
+
+  it('shows LIVE only for destinations whose own push is delivering', () => {
+    const view = makeView({
+      live: true,
+      destinations: [
+        makeDest({ health: { state: 'live', kbps: 6160, dropped: 0, since_ms: 1000 } }),
+        makeDest({
+          id: 'youtube',
+          kind: 'youtube',
+          name: 'YouTube',
+          health: { state: 'waiting', kbps: 0, dropped: 0, since_ms: 0 },
+        }),
+        makeDest({
+          id: 'kick',
+          kind: 'kick',
+          name: 'Kick',
+          health: { state: 'stopped', kbps: 0, dropped: 0, since_ms: 0 },
+        }),
+      ],
+    })
+    const vm = buildGoLiveDockVM(view, { usesObs: false, qualityOptionsById: {} })
+    expect(vm.mainRows.map((r) => r.tagKind)).toEqual(['live', 'off', 'off'])
+    expect(vm.mainRows[1]!.pipTone).toBe('off')
+  })
+
+  it('does not offer Match to share with a peer that already shares the same encode', () => {
+    const shared = (id: string, name: string, group: string, shareWith: string) =>
+      makeDest({
+        id,
+        name,
+        kind: 'custom',
+        quality: { mode: 'custom', width: 1280, height: 720, fps: 30, kbps: 3000, codec: 'h264' },
+        resolved_quality: {
+          width: 1280,
+          height: 720,
+          fps: 30,
+          kbps: 3000,
+          codec: 'h264',
+          audio_kbps: 160,
+          auto_fitted: false,
+          separate_encode: true,
+          group_id: group,
+          shared_with: [shareWith],
+        },
+        health: { state: 'live', kbps: 3160, dropped: 0, since_ms: 1000 },
+      })
+    const view = makeView({
+      live: true,
+      encode_budget: {
+        status: 'over',
+        source: 'apple_silicon',
+        used_mpx_s: 500,
+        limit_mpx_s: 400,
+        used_sessions: 3,
+        max_sessions: 2,
+      },
+      destinations: [
+        shared('a', 'A', 'g-ab', 'B'),
+        shared('b', 'B', 'g-ab', 'A'),
+        makeDest({
+          id: 'c',
+          name: 'C',
+          kind: 'custom',
+          quality: {
+            mode: 'custom',
+            width: 1920,
+            height: 1080,
+            fps: 60,
+            kbps: 6000,
+            codec: 'h264',
+          },
+          resolved_quality: {
+            ...makeDest().resolved_quality!,
+            auto_fitted: false,
+            group_id: 'g-c',
+          },
+          health: { state: 'live', kbps: 6160, dropped: 0, since_ms: 1000 },
+        }),
+      ],
+    })
+    const vm = buildGoLiveDockVM(view, { usesObs: false, qualityOptionsById: {} })
+    // A is the offender; B is already in its encode, so only C is a useful match.
+    expect(vm.footer).toMatchObject({
+      mode: 'strip',
+      action: { kind: 'match_to_share', destId: 'a', quality: { mode: 'custom', width: 1920 } },
     })
   })
 })

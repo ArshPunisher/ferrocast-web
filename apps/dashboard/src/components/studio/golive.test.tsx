@@ -1259,7 +1259,7 @@ describe('per-destination quality integration in GoLiveDock and Platforms', () =
             audio_kbps: 160,
             auto_fitted: false,
             separate_encode: false,
-            group_id: 'g-main',
+            group_id: 'main',
             shared_with: [],
           },
         },

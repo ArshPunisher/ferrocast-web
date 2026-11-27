@@ -226,7 +226,7 @@ export function PlatformsQualityModal({
   const [draft, setDraft] = useState<ModalDraft>(() =>
     model
       ? initialDraftFromModel(model)
-      : { matchMain: true, width: 1920, height: 1080, fps: 60, kbps: 6000 },
+      : { matchMain: true, width: 1920, height: 1080, fps: 60, kbps: 6000, codec: null },
   )
 
   // Reset draft cleanly whenever switching selected platform or receiving fresh engine state when clean.
@@ -1283,6 +1283,7 @@ export function PlatformsQualityModal({
                                                 height: p.quality.height,
                                                 fps: p.quality.fps,
                                                 kbps: p.quality.kbps,
+                                                codec: p.quality.codec ?? null,
                                               })
                                             } else {
                                               commitDraft({ ...draft, matchMain: true })
