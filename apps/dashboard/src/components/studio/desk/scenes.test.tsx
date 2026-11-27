@@ -961,4 +961,69 @@ describe('ScenesDock pointer drag and keyboard reorder (Group E)', () => {
     await flush()
     expect(api.moveScene).not.toHaveBeenCalled()
   })
+
+  it('re-fetches scene thumbnails on collectionKey change even with identical scene names and uses canvas aspect', async () => {
+    const prevDesktop = window.__FERROCAST__
+    window.__FERROCAST__ = { api: '', desktop: true }
+    localStorage.setItem('fc-studio-scenes-grid', '1')
+    let generation = 1
+    const thumbnail = vi.fn(async (name: string) => ({
+      image: `data:image/png;base64,${name}-gen-${generation}`,
+    }))
+    const scenesA: EngineScenes = {
+      current: 'Main',
+      preview: null,
+      transition: { kind: 'fade', ms: 300 },
+      top_layer: null,
+      vertical: null,
+      scenes: [makeScene('Main', { current: true })],
+    }
+    const { desk } = makeDesk(scenesA, { thumbnail })
+    Object.assign(desk as unknown as Record<string, unknown>, {
+      size: { width: 1024, height: 768 },
+      collectionKey: 1,
+    })
+    const host = document.body.appendChild(document.createElement('div'))
+    const created = createRoot(host)
+    roots.push(created)
+    root = created
+    try {
+      await act(async () => {
+        created.render(
+          <DeskProvider value={desk}>
+            <ScenesDock />
+          </DeskProvider>,
+        )
+      })
+      await flush()
+
+      const firstImg = host.querySelector('img') as HTMLImageElement | null
+      expect(firstImg?.src).toContain('Main-gen-1')
+      // Non-16:9 canvas uses exact 1024 / 768 aspect ratio on grid thumb frame, not hardcoded aspect-video.
+      const thumbBox = firstImg?.parentElement as HTMLElement | null
+      expect(thumbBox?.className).not.toContain('aspect-video')
+      expect(thumbBox?.style.aspectRatio).toBe('1024 / 768')
+
+      // Switch collection keeping scene name "Main": old thumbnail clears and gen-2 loads.
+      generation = 2
+      const nextDesk = {
+        ...desk,
+        collectionKey: 2,
+        scenes: { ...desk.scenes, data: { ...scenesA } },
+      } as unknown as Desk
+      await act(async () => {
+        created.render(
+          <DeskProvider value={nextDesk}>
+            <ScenesDock />
+          </DeskProvider>,
+        )
+      })
+      await flush()
+      expect(thumbnail).toHaveBeenCalledTimes(2)
+      expect((host.querySelector('img') as HTMLImageElement | null)?.src).toContain('Main-gen-2')
+    } finally {
+      if (prevDesktop === undefined) delete window.__FERROCAST__
+      else window.__FERROCAST__ = prevDesktop
+    }
+  })
 })

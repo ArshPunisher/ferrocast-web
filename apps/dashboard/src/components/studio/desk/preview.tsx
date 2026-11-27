@@ -41,6 +41,7 @@ import {
   X,
 } from '@phosphor-icons/react'
 import {
+  describeError,
   type EngineItem,
   type EngineSettings,
   type EngineStudioOptions,
@@ -71,6 +72,7 @@ import {
   isValidPreviewLiveResizePayload,
   isValidScaleChangedPayload,
   subscribePreviewOverlays,
+  toast,
 } from '@ferrocast/ui'
 import { isSafeModeLocked } from '../../safe-mode'
 import { LoadError } from '../../Panel'
@@ -263,6 +265,20 @@ let view: PreviewView = readView()
 
 const stageSubs = new Set<() => void>()
 let stageSize: StageSize | null = null
+let stageAspect = 16 / 9
+
+function setStageAspect(next: number): void {
+  if (!(next > 0) || Math.abs(stageAspect - next) < 1e-6) return
+  stageAspect = next
+  const b = getStageBounds(view.zoom)
+  if (b) {
+    const pan = clampPan(view.pan, b.maxPan)
+    if (pan[0] !== view.pan[0] || pan[1] !== view.pan[1]) {
+      view = { ...view, pan }
+      for (const cb of viewSubs) cb()
+    }
+  }
+}
 
 function displayedPan(v: PreviewView = view): [number, number] {
   const b = getStageBounds(v.zoom)
@@ -295,7 +311,7 @@ function useStageSize(): StageSize | null {
 
 function getStageMetrics(): { fit: StageSize; stage: StageSize } | null {
   if (!stageSize) return null
-  const fit = fitBoxSize(stageSize.width, stageSize.height)
+  const fit = fitBoxSize(stageSize.width, stageSize.height, stageAspect)
   if (!(fit.width > 0 && fit.height > 0)) return null
   return { fit, stage: stageSize }
 }
@@ -509,7 +525,15 @@ function PreviewBoxes({ running }: { running: boolean }) {
   const api = useEngine()
   const apiRef = useRef(api)
   apiRef.current = api
-  const { scenes, canvas, setCanvas } = useDesk()
+  const { scenes, canvas, setCanvas, size, collectionKey: rawCollectionKey } = useDesk()
+  const collectionKey = typeof rawCollectionKey === 'number' ? rawCollectionKey : 0
+  const canvasW = size && typeof size.width === 'number' && size.width > 0 ? size.width : 1920
+  const canvasH = size && typeof size.height === 'number' && size.height > 0 ? size.height : 1080
+  const mainAspect = canvasW / canvasH
+  const mainAspectCss = `${canvasW} / ${canvasH}`
+  useEffect(() => {
+    setStageAspect(mainAspect)
+  }, [mainAspect])
   const studio = !!scenes.data?.preview
   // The vertical picture beside the main one (not in Studio Mode, which is the main one's).
   const vertical = studio ? null : (scenes.data?.vertical ?? null)
@@ -755,7 +779,8 @@ function PreviewBoxes({ running }: { running: boolean }) {
         : [shown.current.current, null, shown.current.vertical]
     const targetWidth = (b: HTMLElement) =>
       Math.min(640, Math.max(64, Math.round(b.clientWidth * scale)))
-    const stillKey = (name: string, w: number) => `${name}:${w}:${Math.round(scale * 100)}`
+    const stillKey = (name: string, w: number) =>
+      `${collectionKey}:${name}:${w}:${Math.round(scale * 100)}`
     const setCacheEntry = (key: string, scene: string, width: number, url: string) => {
       stillCache.delete(key)
       if (stillCache.size >= 8) {
@@ -940,7 +965,15 @@ function PreviewBoxes({ running }: { running: boolean }) {
         }
       }
       // The window's height is part of it: the native side places the view from the bottom.
-      const key = JSON.stringify([rect, program, tallRect, window.innerHeight, scale])
+      // Collection switches bump `collectionKey` so vertical/main preview rects always sync cleanly.
+      const key = JSON.stringify([
+        rect,
+        program,
+        tallRect,
+        window.innerHeight,
+        scale,
+        collectionKey,
+      ])
       still = [rect, program, tallRect]
       if (key === last) {
         if (frozen) unfreeze()
@@ -1171,6 +1204,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
     window.addEventListener('resize', onResize)
     return () => {
       alive = false
+      stillCache.clear()
       warmStillRef.current = null
       cancelAnimationFrame(raf)
       window.clearTimeout(again)
@@ -1196,7 +1230,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
       unfreeze()
       void put(null, null, null).catch(() => undefined)
     }
-  }, [api, running, desktop, studio, tall])
+  }, [api, running, desktop, studio, tall, collectionKey, mainAspectCss])
   // Keep edited canvas synced when only one picture is shown even if PictureViewPick is collapsed in OverflowRow.
   useEffect(() => {
     if (tall && pv.view !== 'both') setCanvas(pv.view === 'wide' ? 'main' : 'vertical')
@@ -1206,24 +1240,31 @@ function PreviewBoxes({ running }: { running: boolean }) {
   // The zoom, and where the zoomed canvas sits against the stage's centre (clamped so Fit stays
   // centred and never carries a stale pan offset after a resize or zoom-out).
   const pan = stage
-    ? clampPan(pv.pan, zoomBoundsPan(pv.zoom, fitBoxSize(stage.width, stage.height), stage))
+    ? clampPan(
+        pv.pan,
+        zoomBoundsPan(pv.zoom, fitBoxSize(stage.width, stage.height, mainAspect), stage),
+      )
     : pv.pan
   const [panX, panY] = pan
   const boxStyle = {
     '--fc-zoom': pv.zoom,
+    '--fc-aspect': String(mainAspect),
+    aspectRatio: mainAspectCss,
     ...(panX || panY ? { transform: `translate(${panX}px, ${panY}px)` } : {}),
   } as CSSProperties
   // Re-sync native preview rects immediately when zoom, pan, or split view changes CSS transforms.
   useEffect(() => {
     if (running && desktop) window.dispatchEvent(new Event(HOLES_CHANGED))
-  }, [running, desktop, pv.zoom, panX, panY, pv.view])
+  }, [running, desktop, pv.zoom, panX, panY, pv.view, mainAspectCss])
   const editing = useStageEdit(onTall ? vRef : ref, running && desktop)
   const screen = cx(
-    // Square like the picture the app draws on it. In the app the picture covers it, so it's
-    // left clear: if the page lags the window for a moment, the stage shows, never a black box.
-    'relative grid aspect-video touch-none place-items-center p-4 text-center text-[14px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent',
+    // Follows the canvas aspect ratio so non-16:9 setups aren't cropped or pillarboxed in the box.
+    // In the app the live picture covers it, so it stays transparent when active.
+    'relative grid touch-none place-items-center p-4 text-center text-[14px] text-[#9aa1ac] outline-none select-none focus-visible:ring-2 focus-visible:ring-accent',
     desktop && running ? 'bg-transparent' : 'bg-[#0a0b0d]',
   )
+  const mainBoxWidth =
+    'w-[calc(min(100cqw,(100cqw*9/16-12px)*var(--fc-aspect))*var(--fc-zoom))] min-[900px]:w-[calc(min(100cqw,100cqh*var(--fc-aspect))*var(--fc-zoom))]'
   if (tall) {
     // The wide picture and the tall one side by side (as OBS with a vertical canvas), nothing
     // above them (owner's pick P2), both at full brightness (owner, 28 Oct): a press on the
@@ -1257,12 +1298,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
           className={cx(stageClass, 'min-w-0 flex-1', onTall && 'cursor-pointer')}
           {...(onTall ? pick('main') : editing)}
         >
-          <div
-            ref={ref}
-            data-canvas-box
-            style={boxStyle}
-            className={cx(screen, 'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))]')}
-          >
+          <div ref={ref} data-canvas-box style={boxStyle} className={cx(screen, mainBoxWidth)}>
             {!desktop && 'The live picture shows in the Ferrocast app.'}
             <PausedCard />
             <GuideOverlay safe={pv.safe} />
@@ -1298,9 +1334,8 @@ function PreviewBoxes({ running }: { running: boolean }) {
     )
   }
   if (!studio)
-    // The canvas is an exact 16:9 box fitted inside the stage (smaller when zoomed out), with
-    // room around it for what's off the canvas. The whole stage takes clicks: a handle can be
-    // grabbed outside the canvas.
+    // The canvas is fitted inside the stage using its actual aspect ratio (smaller when zoomed out),
+    // with room around it for what's off the canvas.
     return (
       <div
         ref={stageRef}
@@ -1309,12 +1344,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
         className="grid min-h-16 flex-1 touch-none overscroll-contain grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] place-items-center overflow-hidden bg-[var(--fc-stage)] p-3 outline-none select-none [container-type:size] focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset"
         {...editing}
       >
-        <div
-          ref={ref}
-          data-canvas-box
-          style={boxStyle}
-          className={cx(screen, 'w-[calc(min(100cqw,100cqh*16/9)*var(--fc-zoom))]')}
-        >
+        <div ref={ref} data-canvas-box style={boxStyle} className={cx(screen, mainBoxWidth)}>
           {!desktop && 'The live picture shows in the Ferrocast app.'}
           <PausedCard />
           <GuideOverlay safe={pv.safe} />
@@ -1329,8 +1359,12 @@ function PreviewBoxes({ running }: { running: boolean }) {
   // two, 12 to the label above and to the bar below (owner's recording, 11 Nov: the picture
   // ran over the bar and each other). Widths take off the 24 of padding and the 24 between;
   // heights the padding, the label (18), its gap and the bar (40).
+  const halfStyle = {
+    '--fc-aspect': String(mainAspect),
+    aspectRatio: mainAspectCss,
+  } as CSSProperties
   const half =
-    'w-[min(calc(100cqw-24px),340px)] sm:w-[calc((100cqw-48px)/2)] min-[900px]:w-[min(calc((100cqw-48px)/2),calc((100cqh-100px)*16/9))]'
+    'w-[min(calc(100cqw-24px),340px)] sm:w-[calc((100cqw-48px)/2)] min-[900px]:w-[min(calc((100cqw-48px)/2),calc((100cqh-100px)*var(--fc-aspect)))]'
   return (
     <div
       data-stage-bg
@@ -1345,6 +1379,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
           </figcaption>
           <div
             ref={ref}
+            style={halfStyle}
             aria-label="Studio Mode preview: edit here, then send it on air. Click a source to pick it, drag to move it, drag a handle to resize it."
             className={cx(screen, half)}
             {...editing}
@@ -1359,7 +1394,12 @@ function PreviewBoxes({ running }: { running: boolean }) {
             <span aria-hidden className="size-[7px] rounded-full bg-danger-fill" />
             On air: {scenes.data?.current}
           </figcaption>
-          <div ref={programRef} aria-label="What's on air" className={cx(screen, half)}>
+          <div
+            ref={programRef}
+            style={halfStyle}
+            aria-label="What's on air"
+            className={cx(screen, half)}
+          >
             <PausedCard compact />
           </div>
         </figure>
@@ -1416,7 +1456,7 @@ function PictureViewPick() {
     vertical: 'Vertical picture only',
   }
   return (
-    <div role="group" aria-label="Pictures shown" className="flex items-center gap-0.5">
+    <div role="group" aria-label="Pictures shown" className="flex items-center gap-1">
       {VIEWS.map((v) => (
         <button
           key={v}
@@ -3111,7 +3151,8 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
   const c = size
   // One canvas pixel per screen pixel: derived strictly from the stage's fitted width (not from
   // the current zoomed box), so repeated clicks on 100% never drift or double-scale.
-  const fitSize = stage ? fitBoxSize(stage.width, stage.height) : null
+  const mainAspect = c && c.width > 0 && c.height > 0 ? c.width / c.height : 16 / 9
+  const fitSize = stage ? fitBoxSize(stage.width, stage.height, mainAspect) : null
   const pixelZoom = c && fitSize ? pixelZoomForStage(c.width, fitSize.width) : null
   const clampedPan =
     stage && fitSize ? clampPan(pv.pan, zoomBoundsPan(pv.zoom, fitSize, stage)) : pv.pan
@@ -3154,7 +3195,7 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
         <div
           role="group"
           aria-label="Zoom"
-          className={cx('flex items-center gap-0.5', panel && 'flex-wrap gap-1')}
+          className={cx('flex items-center gap-1', panel && 'flex-wrap')}
         >
           {ZOOMS.map((z) => {
             const active = Math.abs(pv.zoom - z) < 0.005 && isCentered
@@ -3214,7 +3255,11 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
         size="sm"
         label={pv.frames ? 'Hide source outlines' : 'Show every source’s outline'}
         aria-pressed={pv.frames}
-        className={cx(pv.frames ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
+        className={cx(
+          pv.frames
+            ? 'bg-accent-soft! text-accent-text! shadow-[inset_0_0_0_1px_var(--fc-accent-line)]!'
+            : 'text-text-2',
+        )}
         onClick={() => setPv({ frames: !pv.frames })}
       >
         <BoundingBox size={17} weight={pv.frames ? 'fill' : 'regular'} aria-hidden />
@@ -3229,7 +3274,11 @@ function ViewControls({ panel = false }: { panel?: boolean }) {
             : 'Side handles stretch frames. Click to keep their shape'
         }
         aria-pressed={pv.keep}
-        className={cx(pv.keep ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
+        className={cx(
+          pv.keep
+            ? 'bg-accent-soft! text-accent-text! shadow-[inset_0_0_0_1px_var(--fc-accent-line)]!'
+            : 'text-text-2',
+        )}
         onClick={() => setPv({ keep: !pv.keep })}
       >
         {pv.keep ? (
@@ -3316,8 +3365,14 @@ export function StageBar() {
     // The menu opens once the list is in, at the button.
     const el = e.currentTarget as HTMLElement
     const { clientX, clientY } = e
-    const list = await api.history().catch(() => null)
-    if (!list) return
+    let list
+    try {
+      list = await api.history()
+    } catch (err) {
+      const d = describeError(err)
+      toast({ tone: 'error', message: d.message, ...(d.hint ? { hint: d.hint } : {}) })
+      return
+    }
     const at = {
       type: 'click',
       preventDefault() {},
@@ -3464,7 +3519,11 @@ export function StageBar() {
               : 'Lock the preview: sources can be picked but not moved or resized'
           }
           aria-pressed={pv.locked}
-          className={cx(pv.locked ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
+          className={cx(
+            pv.locked
+              ? 'bg-accent-soft! text-accent-text! shadow-[inset_0_0_0_1px_var(--fc-accent-line)]!'
+              : 'text-text-2',
+          )}
           onClick={() => setPv({ locked: !pv.locked })}
         >
           {pv.locked ? (
@@ -3497,7 +3556,7 @@ export function StageBar() {
               }
               className={cx(
                 pv.safe.action || pv.safe.title || pv.safe.cross || pv.overflow === 'hide'
-                  ? 'bg-accent-soft! text-accent-text!'
+                  ? 'bg-accent-soft! text-accent-text! shadow-[inset_0_0_0_1px_var(--fc-accent-line)]!'
                   : 'text-text-2',
               )}
               onClick={(e) => open(e, 'Guides', guideItems)}
@@ -3638,7 +3697,11 @@ export function StageBar() {
               : 'Studio Mode: edit a scene before it goes on air'
           }
           aria-pressed={!!scenes.data?.preview}
-          className={cx(scenes.data?.preview ? 'bg-accent-soft! text-accent-text!' : 'text-text-2')}
+          className={cx(
+            scenes.data?.preview
+              ? 'bg-accent-soft! text-accent-text! shadow-[inset_0_0_0_1px_var(--fc-accent-line)]!'
+              : 'text-text-2',
+          )}
           onClick={() =>
             void run('studio', () => done(api.studioMode(!scenes.data?.preview))).then(
               (ok) => ok && refresh(),
@@ -3653,7 +3716,7 @@ export function StageBar() {
       key: 'history',
       rank: 4,
       render: (panel) => (
-        <span className={cx('flex items-center', panel && 'flex-wrap gap-1')}>
+        <span className={cx('flex items-center gap-1', panel && 'flex-wrap')}>
           <ToolButton
             panel={panel}
             text="Undo"

@@ -77,10 +77,12 @@ const THUMB_MS = 2500
  * Only in the app: from a phone they'd go through the relay.
  */
 function useSceneThumbs(names: string[], on: boolean): Record<string, string> {
-  const { api } = useDesk()
+  const { api, collectionKey: rawCollectionKey } = useDesk()
+  const collectionKey = typeof rawCollectionKey === 'number' ? rawCollectionKey : 0
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
   const key = names.join('\n')
   useEffect(() => {
+    setThumbs({})
     if (!on || !inDesktopApp() || !key) return
     let alive = true
     let timer = 0
@@ -100,7 +102,7 @@ function useSceneThumbs(names: string[], on: boolean): Record<string, string> {
       alive = false
       window.clearTimeout(timer)
     }
-  }, [api, on, key])
+  }, [api, on, key, collectionKey])
   return thumbs
 }
 
@@ -134,7 +136,23 @@ function edgeScrollDelta(el: HTMLElement, x: number, y: number): number {
 
 export function ScenesDock() {
   const desk = useDesk()
-  const { api, scenes, refresh, edit, openTransitions } = desk
+  const { api, scenes, size, refresh, edit, openTransitions } = desk
+  const mainRatio =
+    size &&
+    typeof size.width === 'number' &&
+    size.width > 0 &&
+    typeof size.height === 'number' &&
+    size.height > 0
+      ? size.width / size.height
+      : 16 / 9
+  const mainRatioCss =
+    size &&
+    typeof size.width === 'number' &&
+    size.width > 0 &&
+    typeof size.height === 'number' &&
+    size.height > 0
+      ? `${size.width} / ${size.height}`
+      : '16 / 9'
   const { busy, run } = useAction()
   const { open, menu } = useContextMenu()
   const [naming, setNaming] = useState<{ from: string | null; value: string } | null>(null)
@@ -1007,9 +1025,10 @@ export function ScenesDock() {
                           {/* The scene's picture, as OBS's multiview: red ring and LIVE on air,
                               Arc and PREVIEW for Studio Mode's preview. */}
                           <span
+                            style={tall ? undefined : { aspectRatio: mainRatioCss }}
                             className={cx(
                               'relative block overflow-hidden rounded-[calc(var(--fc-radius-control)-3px)] bg-inset',
-                              tall ? 'mx-auto aspect-[9/16] h-24' : 'aspect-video',
+                              tall ? 'mx-auto aspect-[9/16] h-24' : mainRatio < 1 && 'mx-auto h-24',
                               s.current && 'shadow-[inset_0_0_0_2px_var(--fc-danger-fill)]',
                               s.preview &&
                                 !s.current &&

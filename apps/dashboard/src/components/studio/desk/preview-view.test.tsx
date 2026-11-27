@@ -7,6 +7,8 @@ import {
   DIVIDER_DRAG_EVENT,
   PREVIEW_LIVE_RESIZE_EVENT,
   SCALE_CHANGED_EVENT,
+  currentToasts,
+  dismissToast,
   findUnregisteredPreviewOverlays,
 } from '@ferrocast/ui'
 import { DeskProvider } from './common'
@@ -2737,6 +2739,91 @@ describe('Studio preview live-resize and scale sync', () => {
     } finally {
       decoyHeader.remove()
       appHeader.remove()
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('uses real canvas aspect ratio instead of 16:9, resends vertical rect on collectionKey change, surfaces history errors, and gaps toggle pills', async () => {
+    const { desk, req, putCalls } = setupPreviewTest()
+    Object.assign(desk as unknown as Record<string, unknown>, {
+      size: { width: 1024, height: 768 },
+      collectionKey: 1,
+      setCanvas: vi.fn(),
+    })
+    const historySpy = vi.fn(async () => {
+      throw new Error('History DB unavailable')
+    })
+    ;(desk.api as Record<string, unknown>).history = historySpy
+    ;(desk.scenes as { data: unknown }).data = {
+      current: 'Main',
+      preview: null,
+      transition: { kind: 'cut_transition', ms: 0 },
+      vertical: { current: 'Vert', preview: null, scenes: [{ name: 'Vert' }] },
+      scenes: [{ name: 'Main' }],
+    }
+    req.mockImplementation(async (method: string, path: string) => {
+      if (method === 'GET' && path.includes('/history')) {
+        throw new Error('History DB unavailable')
+      }
+      return undefined
+    })
+
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+            <StageBar />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+
+      const mainCanvasBox = host.querySelector<HTMLElement>('[data-canvas-box]')!
+      expect(mainCanvasBox.className).not.toContain('aspect-video')
+      expect(mainCanvasBox.style.aspectRatio).toBe('1024 / 768')
+      expect(mainCanvasBox.style.getPropertyValue('--fc-aspect')).toBe(String(1024 / 768))
+
+      // Changing collectionKey re-sends vertical + main rect even when DOM geometry didn't move.
+      const beforeCollectionSwitch = putCalls().length
+      ;(desk as unknown as Record<string, unknown>).collectionKey = 2
+      await act(async () => {
+        root.render(
+          <DeskProvider value={{ ...(desk as Record<string, unknown>) } as never}>
+            <PreviewBox running />
+            <StageBar />
+          </DeskProvider>,
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(putCalls().length).toBeGreaterThan(beforeCollectionSwitch)
+
+      // Toggle buckets in OverflowRow and History group have explicit spacing.
+      const viewBucket = host.querySelector('[data-ov="view"]')
+      expect(viewBucket?.className).toMatch(/\bgap-(1|1\.5|2)\b/)
+      const historyBtn = host.querySelector(
+        'button[aria-label*="History"]',
+      ) as HTMLButtonElement | null
+      expect(historyBtn?.parentElement?.className).toMatch(/\bgap-(1|1\.5|2)\b/)
+
+      // Clicking History surfaces error toast rather than swallowing rejection.
+      if (historyBtn) {
+        currentToasts().forEach((t) => dismissToast(t.id))
+        await act(async () => {
+          historyBtn.click()
+          for (let i = 0; i < 6; i++) await Promise.resolve()
+        })
+        expect(historySpy).toHaveBeenCalledTimes(1)
+        expect(currentToasts()).toEqual(
+          expect.arrayContaining([expect.objectContaining({ tone: 'error' })]),
+        )
+      }
+    } finally {
       await act(async () => root.unmount())
       host.remove()
     }

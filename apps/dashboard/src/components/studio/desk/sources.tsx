@@ -151,7 +151,8 @@ export function SourcesDock() {
     () => new Set(recordsKey ? recordsKey.split('\n') : []),
     [recordsKey],
   )
-  const { api, scene, items, refresh, selected, select, edit, setAdding, clip, setClip } = desk
+  const { api, scene, items, prefs, refresh, selected, select, edit, setAdding, clip, setClip } =
+    desk
   const { also, pickMore } = desk
   const { busy, run } = useAction()
   const studioClip = useStudioClipboard(api)
@@ -382,7 +383,9 @@ export function SourcesDock() {
       async () => {
         const [t, s] = await Promise.all([api.transform(scene, item.id), api.studioSettings()])
         if (!t.width || !t.height) throw new Error(`${item.name} has no size yet.`)
-        return api.setStudioSettings({ ...s, width: t.width, height: t.height })
+        const r = await api.setStudioSettings({ ...s, width: t.width, height: t.height })
+        prefs.set(r.settings)
+        return r
       },
       { success: (r) => r?.restart ?? 'The canvas now matches this source.' },
     ).then((r) => r && refresh())
