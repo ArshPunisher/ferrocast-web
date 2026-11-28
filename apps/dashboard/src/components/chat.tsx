@@ -609,12 +609,19 @@ export function ChatScroller({
     else if (count > last.current) setUnseen((u) => u + (count - last.current))
     last.current = count
   }, [count, stuck])
+  const lastTop = useRef(0)
   const onScroll = () => {
     const el = ref.current
     if (!el) return
+    // Moving up is always the reader's: rows growing never do that. Wheel and touch events stop
+    // while a flick keeps coasting (iOS Safari, a held arrow key), so intent alone would snap
+    // that scroll back to the bottom.
+    const movedUp = el.scrollTop < lastTop.current - 1
+    lastTop.current = el.scrollTop
     const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48
-    if (!atBottom && Date.now() - intent.current > 800) {
+    if (!atBottom && !movedUp && stuckRef.current && Date.now() - intent.current > 800) {
       el.scrollTop = el.scrollHeight
+      lastTop.current = el.scrollTop
       return
     }
     setStuck(atBottom)
