@@ -94,6 +94,23 @@ test('inventory of heavy styles in the previews', async ({ page }) => {
   console.log('DIAG inventory ' + JSON.stringify(inv))
 })
 
+test('platform facts', async ({ page }) => {
+  await page.goto('./?autoplay=0&latency=0#/home')
+  const facts = await page.evaluate(() => {
+    const c = document.createElement('canvas')
+    const gl = c.getContext('webgl') as WebGLRenderingContext | null
+    const ext = gl?.getExtension('WEBGL_debug_renderer_info')
+    return {
+      ua: navigator.userAgent,
+      platform: navigator.platform,
+      zoom: CSS.supports('zoom', '1'),
+      webgl: gl ? String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)) : null,
+      dpr: window.devicePixelRatio,
+    }
+  })
+  console.log('DIAG facts ' + JSON.stringify(facts))
+})
+
 test('home page frames (control)', async ({ page }) => {
   await page.addInitScript(() => {
     const w = window as unknown as { __f: number }
