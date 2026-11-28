@@ -876,9 +876,12 @@ describe('One Modal B PlatformsQualityModal component', () => {
 
     it('does not let a finished save close a dialog that was reopened for another platform', async () => {
       let finish: (v: unknown) => void = () => {}
+      // The request must really have started, or finishing it later proves nothing.
+      let started = false
       const request = vi.fn(async (method: string, path: string) => {
         if (method === 'PUT' && path.includes('/destinations/twitch/quality')) {
           return new Promise((resolve) => {
+            started = true
             finish = resolve
           })
         }
@@ -892,6 +895,7 @@ describe('One Modal B PlatformsQualityModal component', () => {
       await act(async () => {
         apply(dialog).click()
       })
+      expect(started).toBe(true)
       await rerender({ open: false, initialDestId: 'twitch', onClose })
       await rerender({ open: true, initialDestId: 'youtube', onClose })
       await act(async () => {
@@ -905,9 +909,12 @@ describe('One Modal B PlatformsQualityModal component', () => {
 
     it('keeps an edit made after reopening when an older save finishes', async () => {
       let finish: (v: unknown) => void = () => {}
+      // The request must really have started, or finishing it later proves nothing.
+      let started = false
       const request = vi.fn(async (method: string, path: string) => {
         if (method === 'PUT' && path.includes('/destinations/twitch/quality')) {
           return new Promise((resolve) => {
+            started = true
             finish = resolve
           })
         }
@@ -920,6 +927,7 @@ describe('One Modal B PlatformsQualityModal component', () => {
       await act(async () => {
         apply(dialog).click()
       })
+      expect(started).toBe(true)
       await rerender({ open: false, initialDestId: 'twitch' })
       await rerender({ open: true, initialDestId: 'twitch' })
       await setOwn(dialog)
@@ -934,9 +942,12 @@ describe('One Modal B PlatformsQualityModal component', () => {
 
     it('does not close or reset a newer add form when an older add finishes', async () => {
       let finish: (v: unknown) => void = () => {}
+      // The request must really have started, or finishing it later proves nothing.
+      let started = false
       const request = vi.fn(async (method: string, path: string) => {
         if (method === 'POST' && path.endsWith('/golive/destinations')) {
           return new Promise((resolve) => {
+            started = true
             finish = resolve
           })
         }
@@ -970,6 +981,7 @@ describe('One Modal B PlatformsQualityModal component', () => {
           .find((b) => b.textContent?.trim() === 'Add server')!
           .click()
       })
+      expect(started).toBe(true)
       // Cancel while it is pending, then open Add again.
       await act(async () =>
         Array.from(dialog.querySelectorAll<HTMLButtonElement>('button'))
@@ -1138,6 +1150,75 @@ describe('One Modal B PlatformsQualityModal component', () => {
     await new Promise((r) => setTimeout(r, 60))
     await act(async () => host!.querySelector('button')!.click())
     expect(request).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks again right after a request failed (Retry), and shows the later answer', async () => {
+    installDialogPolyfill()
+    let calls = 0
+    const request = vi.fn(async () => {
+      calls += 1
+      if (calls === 1) throw new Error('offline')
+      return OPTS_1440
+    })
+    useLive.setState({ conn: { client: { request } } as never })
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    let latest: ReturnType<typeof useQualityOptions> | null = null
+    function Probe() {
+      latest = useQualityOptions(makeView(), true, false)
+      return null
+    }
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    await act(async () => root!.render(<Probe />))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(latest!.error).toBe('offline')
+    // Straight away, well inside the old 50 ms window.
+    await act(async () => {
+      await latest!.reload()
+    })
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(latest!.error).toBeNull()
+    expect(latest!.data).not.toBeNull()
+  })
+
+  it("does not let the old Studio's answer fill the new Studio's editor", async () => {
+    installDialogPolyfill()
+    let finishA: (v: unknown) => void = () => {}
+    const clientA = {
+      request: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            finishA = resolve
+          }),
+      ),
+    }
+    const clientB = { request: vi.fn(async () => ({ ...OPTS_1440, marker: 'B' })) }
+    useLive.setState({ conn: { client: clientA } as never })
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    let latest: ReturnType<typeof useQualityOptions> | null = null
+    function Probe() {
+      latest = useQualityOptions(makeView(), true, false)
+      return null
+    }
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    await act(async () => root!.render(<Probe />))
+    expect(clientA.request).toHaveBeenCalledTimes(1)
+    // A different Studio replaces it at once, with the same view: it must ask for itself.
+    await act(async () => {
+      useLive.setState({ conn: { client: clientB } as never })
+    })
+    expect(clientB.request).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      finishA({ ...OPTS_1440, marker: 'A' })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect((latest!.data as unknown as { marker?: string } | null)?.marker).toBe('B')
   })
 
   it('asks again when the inputs change, even right after a request started', async () => {

@@ -273,17 +273,18 @@ export function useQualityOptions(
 
   const sig = qualityOptionsSig(view)
 
-  const startedAtRef = useRef(0)
-  const startedSigRef = useRef('')
+  // The request in flight, by the client and inputs it was made for. Callers asking in the same
+  // moment (a screen turning the feed on and a dialog opening) share it; once it has settled,
+  // a new ask (Retry after a failure, say) always starts a new request.
+  const pendingRef = useRef<{ client: unknown; sig: string } | null>(null)
+  const lastClientRef = useRef(client)
   const reload = useCallback(async () => {
     if (!enabled || usesObs || !client || !view) return
-    // Two callers asking in the same moment (a screen turning the feed on and a dialog opening)
-    // share one request.
-    // (Only for the same inputs: a changed signature always asks again.)
     const sigNow = qualityOptionsSig(view)
-    if (Date.now() - startedAtRef.current < 50 && startedSigRef.current === sigNow) return
-    startedAtRef.current = Date.now()
-    startedSigRef.current = sigNow
+    const pending = pendingRef.current
+    if (pending && pending.client === client && pending.sig === sigNow) return
+    const mine = { client, sig: sigNow }
+    pendingRef.current = mine
     const id = ++reqIdRef.current
     setLoading(true)
     setError(null)
@@ -297,6 +298,7 @@ export function useQualityOptions(
         setError(e instanceof Error ? e : new Error(String(e)))
       }
     } finally {
+      if (pendingRef.current === mine) pendingRef.current = null
       if (reqIdRef.current === id) {
         setLoading(false)
       }
@@ -304,6 +306,15 @@ export function useQualityOptions(
   }, [client, enabled, usesObs, view])
 
   useEffect(() => {
+    // A different Studio: what the last one answered (or is still answering) is not for this one.
+    if (lastClientRef.current !== client) {
+      lastClientRef.current = client
+      reqIdRef.current++
+      pendingRef.current = null
+      setData(null)
+      setError(null)
+      setLoading(false)
+    }
     if (!enabled || usesObs || !client || !view) return
     void reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -425,10 +436,11 @@ export function useAddDestinationState({
     ).then((d) => {
       if (!d) return
       const createdId = (d as { id?: string }).id
-      // The list refreshes either way; the form is only reset and closed if it is still the one
-      // this request was made from (not cancelled, or opened again, since).
+      // The list refreshes either way; the form is only reset and closed, and the new platform
+      // only picked, if it is still the one this request was made from (not cancelled, or opened
+      // again, since).
       if (formEpoch.current !== mineForm) {
-        onAdded(createdId)
+        onAdded()
         return
       }
       reset()
