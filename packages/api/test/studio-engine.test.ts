@@ -2322,3 +2322,35 @@ describe('simulated Studio engine in demo mode (studioEngine option)', () => {
     })
   })
 })
+
+describe('the last minute of missed frames in the demo stats', () => {
+  it('sums misses by cause, lays out seconds oldest first and forgets old ones', async () => {
+    const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+    const api = studioEngineApi(
+      new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch }),
+    )
+    try {
+      engine.studioEngine!.setStreamActive(true)
+      const calm = (await api.stats()).engine.missed_recent!
+      expect(calm.window_s).toBe(60)
+      expect(calm.per_second).toHaveLength(60)
+      expect(calm.render + calm.encode + calm.skipped).toBe(0)
+      expect(calm.upload_trouble).toBe(false)
+
+      engine.studioEngine!.injectMissed({ render: 4, resize: 4 })
+      engine.studioEngine!.injectMissed({ encode: 2, skipped: 3 }, 30)
+      engine.studioEngine!.injectMissed({ render: 50 }, 90) // older than the window
+      engine.studioEngine!.injectUploadTrouble(20)
+      const s = await api.stats()
+      const r = s.engine.missed_recent!
+      expect([r.render, r.encode, r.skipped, r.resize]).toEqual([4, 2, 3, 4])
+      expect(r.per_second[59]).toBe(4)
+      expect(r.per_second[29]).toBe(5)
+      expect(r.upload_trouble).toBe(true)
+      // Totals since the start still count all of it.
+      expect(s.engine.lagged).toBe(56)
+    } finally {
+      engine.dispose()
+    }
+  })
+})

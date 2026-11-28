@@ -36,6 +36,7 @@ import {
   type EngineTransition,
   type EngineTransitionMatrixRule,
   type LimitedBy,
+  type MissedRecent,
   type NewEngineSource,
   type RollbackTrigger,
   type StillResult,
@@ -1020,6 +1021,15 @@ export class DemoStudioEngine {
   private simDropped = 0
   private simLagged = 0
   private simSkipped = 0
+  /** Misses injected for the Stats panel's last minute, each with when it happened (ms). */
+  private simMisses: {
+    at: number
+    render: number
+    encode: number
+    skipped: number
+    resize: number
+  }[] = []
+  private simUploadTroubleAt = Number.NEGATIVE_INFINITY
   private silencedAlerts = new Set<string>()
   private benchJobSeq = 0
   private benchCancelToken = 0
@@ -1413,6 +1423,49 @@ export class DemoStudioEngine {
     this.simLagged += lagged
     this.simSkipped += skipped
     this.evaluateWatchStep()
+  }
+
+  /**
+   * Frames missed `agoS` seconds ago, by cause (Stats' last minute). Also counted in the
+   * totals since the start. `resize`: of render + encode, those missed during a resize.
+   */
+  injectMissed(
+    m: { render?: number; encode?: number; skipped?: number; resize?: number },
+    agoS = 0,
+  ): void {
+    const e = { render: 0, encode: 0, skipped: 0, resize: 0, ...m }
+    this.simMisses.push({ at: Date.now() - agoS * 1000, ...e })
+    this.simLagged += e.render + e.encode
+    this.simSkipped += e.skipped
+  }
+
+  /** The upload struggled `agoS` seconds ago. */
+  injectUploadTrouble(agoS = 0): void {
+    this.simUploadTroubleAt = Date.now() - agoS * 1000
+  }
+
+  /** The engine's `missed_recent`: the last 60 s, summed and second by second. */
+  private missedRecent(): MissedRecent {
+    const now = Date.now()
+    const r: MissedRecent = {
+      window_s: 60,
+      render: 0,
+      encode: 0,
+      skipped: 0,
+      resize: 0,
+      per_second: new Array<number>(60).fill(0),
+      upload_trouble: now - this.simUploadTroubleAt < 60_000,
+    }
+    this.simMisses = this.simMisses.filter((m) => now - m.at < 60_000)
+    for (const m of this.simMisses) {
+      r.render += m.render
+      r.encode += m.encode
+      r.skipped += m.skipped
+      r.resize += m.resize
+      const slot = 59 - Math.floor((now - m.at) / 1000)
+      r.per_second[slot] = (r.per_second[slot] ?? 0) + m.render + m.encode + m.skipped
+    }
+    return r
   }
 
   configure(next: Partial<DemoStudioEngineOptions>): void {
@@ -3504,6 +3557,7 @@ export class DemoStudioEngine {
           skipped: this.simSkipped,
           frames: 3600,
           memory_mb: 240,
+          missed_recent: this.missedRecent(),
         },
         canvas: {
           width: Number(this.studioSettingsData.width ?? CANVAS_W),

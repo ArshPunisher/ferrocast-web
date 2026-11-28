@@ -1036,6 +1036,24 @@ export interface StillResult {
   error?: string | null
 }
 
+/** The last minute of missed frames by cause (`engine.missed_recent`). */
+export interface MissedRecent {
+  /** How many seconds this covers (60). */
+  window_s: number
+  /** Frames missed because drawing fell behind. */
+  render: number
+  /** Frames missed while the encoders held the frame loop back. */
+  encode: number
+  /** Frames an encoder left out (its queue was full). */
+  skipped: number
+  /** Of `render + encode`, the frames missed while a window or divider was being resized. */
+  resize: number
+  /** Missed plus skipped frames in each of the last 60 seconds, oldest first, now last. */
+  per_second: number[]
+  /** The upload struggled at some point in the last 60 s. */
+  upload_trouble: boolean
+}
+
 export interface EngineStats {
   /** Active scene collection and profile identifiers, when reported by the engine. */
   collection_id?: string
@@ -1053,6 +1071,11 @@ export interface EngineStats {
     /** Faults the engine caught and carried on from, and sources its watchdog started again. */
     recovered?: number
     restarts?: number
+    /**
+     * Missed and skipped frames in the last 60 s by cause (`lagged` and `skipped` count since the
+     * engine started). Missing from older engines: Stats then colours itself from the totals.
+     */
+    missed_recent?: MissedRecent
   }
   /** Pictures each source has sent to the card so far, and their size: the rate between two
    * reads shows which keeps the engine busiest. */
