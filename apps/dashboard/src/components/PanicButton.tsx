@@ -25,27 +25,30 @@ export function usePanic(): [boolean, (on?: boolean) => Promise<void>] {
       try {
         const r = await conn.client.panic(next)
         setPanic(r.on)
-        notePanicToast(r.on)
-        if (r.on) {
-          const where = r.applied
-            .map((a) => a.platform[0]?.toUpperCase() + a.platform.slice(1))
-            .join(', ')
-          // Keyed: switching on, off, on shows one toast with the latest state.
-          toast({
-            key: 'panic',
-            tone: 'warn',
-            message: 'Panic mode is on.',
-            hint: where
-              ? `Locked down on ${where}. Alerts and TTS are paused.`
-              : 'Alerts and TTS are paused.',
-          })
-        } else
-          toast({
-            key: 'panic',
-            tone: 'ok',
-            message: 'Panic mode is off.',
-            hint: 'Chat and alerts are back to normal.',
-          })
+        const show = () => {
+          if (r.on) {
+            const where = r.applied
+              .map((a) => a.platform[0]?.toUpperCase() + a.platform.slice(1))
+              .join(', ')
+            // Keyed: switching on, off, on shows one toast with the latest state.
+            toast({
+              key: 'panic',
+              tone: 'warn',
+              message: 'Panic mode is on.',
+              hint: where
+                ? `Locked down on ${where}. Alerts and TTS are paused.`
+                : 'Alerts and TTS are paused.',
+            })
+          } else
+            toast({
+              key: 'panic',
+              tone: 'ok',
+              message: 'Panic mode is off.',
+              hint: 'Chat and alerts are back to normal.',
+            })
+        }
+        notePanicToast(r.on, show)
+        show()
       } catch (e) {
         setPanic(!next)
         const d = describeError(e)

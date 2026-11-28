@@ -177,7 +177,9 @@ describe('live store', () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
     try {
       toast({ key: 'panic', tone: 'warn', message: 'Panic mode is on.', hint: 'Locked down.' })
-      notePanicToast(true)
+      notePanicToast(true, () =>
+        toast({ key: 'panic', tone: 'warn', message: 'Panic mode is on.', hint: 'Locked down.' }),
+      )
       now.mockReturnValue(1_000_300)
       useLive.getState().apply([
         {
