@@ -122,6 +122,8 @@ export function Onboarding({ demo, onDone }: { demo: boolean; onDone: () => void
     if (!el || !shouldFocusRef.current) return
     shouldFocusRef.current = false
     el.focus({ preventScroll: true })
+    // A new step starts at its top, not where the last (longer) one was scrolled to.
+    window.scrollTo({ top: 0 })
   }, [])
 
   const [importChoice, setImportChoice] = useState<ImportChoice>('fresh')

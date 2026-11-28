@@ -1165,11 +1165,23 @@ export function Settings({ section }: { section?: string | undefined }) {
   // Parts that live inside an area (older links name them).
   const asked = section && ALIAS[section] ? ALIAS[section] : section
   const at: SectionId = isSection(asked) && visible(asked) ? asked : first
+  // On a phone the sections are a strip that scrolls sideways: the current one is brought into
+  // view (the strip only, not the page).
+  const navRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const nav = navRef.current
+    const cur = nav?.querySelector<HTMLElement>('[aria-current="page"]')
+    if (!nav || !cur || nav.scrollWidth <= nav.clientWidth) return
+    const left =
+      cur.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft
+    nav.scrollTo({ left: left - (nav.clientWidth - cur.offsetWidth) / 2 })
+  }, [at])
   return (
     <div>
       <PageHeader title="Settings" />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[176px_minmax(0,1fr)] xl:grid-cols-[210px_minmax(0,1fr)]">
         <nav
+          ref={navRef}
           aria-label="Settings sections"
           className="fc-focus-inset -mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-[calc(var(--fc-top,56px)+16px)] lg:mx-0 lg:max-h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-7.5rem-var(--fc-statusbar,0px))] lg:flex-col lg:gap-0.5 lg:self-start lg:overflow-y-auto lg:px-0 lg:pb-2"
         >
