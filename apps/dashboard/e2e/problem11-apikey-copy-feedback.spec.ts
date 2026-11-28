@@ -9,8 +9,12 @@ test.describe('Problem 11.6: API key Copy key button shows inline Copied feedbac
     test(`clicking Copy key updates button text to Copied (${vp.width}px)`, async ({
       page,
       context,
+      browserName,
     }) => {
-      await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+      // Playwright's WebKit has no clipboard permissions to grant (it throws on the names); a
+      // click is a user gesture, so WebKit lets the page write to the clipboard without one.
+      if (browserName !== 'webkit')
+        await context.grantPermissions(['clipboard-read', 'clipboard-write'])
       await page.setViewportSize(vp)
       await open(page, 'settings/advanced')
 

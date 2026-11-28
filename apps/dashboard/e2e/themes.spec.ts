@@ -63,6 +63,8 @@ test('arrow keys move through the themes like any radio group', async ({ page })
   await page.goto('./#/settings/appearance')
   const group = page.getByRole('radiogroup', { name: 'Theme' })
   await group.getByText('Graphite', { exact: true }).click()
+  // Safari does not focus a clicked radio, so keyboard use starts by focusing the chosen one.
+  await group.getByRole('radio', { name: /Graphite/ }).focus()
   await page.keyboard.press('ArrowRight')
   await expect.poll(() => root(page)).toBe('slate')
   await page.keyboard.press('ArrowRight')

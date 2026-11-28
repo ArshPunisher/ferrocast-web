@@ -10,6 +10,17 @@ export type Fault = {
   times?: number
 }
 
+/**
+ * The key that moves focus to the next control. macOS WebKit (Safari, WKWebView and Playwright's
+ * WebKit) sends plain Tab only to text fields and elements with a tabindex; buttons and links
+ * need Option+Tab unless the system's "Full Keyboard Access" is on.
+ */
+export function tabKey(page: Page): string {
+  return page.context().browser()?.browserType().name() === 'webkit' && process.platform === 'darwin'
+    ? 'Alt+Tab'
+    : 'Tab'
+}
+
 /** Opens a screen in demo mode. `autoplay=0` keeps the stream still so tests are stable. */
 export async function open(
   page: Page,

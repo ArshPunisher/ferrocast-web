@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
+import { tabKey } from './helpers'
 
 // The Studio's Mini Feed bar (events panel): pause, skip, mute, test alert, type filters and
 // read marks. The Studio needs the desktop app's engine, so the engine is mocked here
@@ -450,7 +451,7 @@ function suite() {
     await pause.focus()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('button', { name: 'Pause alerts' })).toBeVisible()
-    await page.keyboard.press('Tab')
+    await page.keyboard.press(tabKey(page))
     await expect(page.getByRole('button', { name: 'Skip this alert' })).toBeFocused()
   })
 }
