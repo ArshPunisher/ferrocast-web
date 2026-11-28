@@ -409,6 +409,16 @@ async function sweepScreensAtViewports(page: Page, routes: readonly string[]) {
         scrollH: document.documentElement.scrollHeight,
         innerH: window.innerHeight,
         mainText: (document.getElementById('main')?.textContent ?? '').trim().length,
+        // Which elements run past the window, so a failure names the culprit.
+        lowest: Array.from(document.body.querySelectorAll('*'))
+          .map((e) => ({ e, bottom: e.getBoundingClientRect().bottom }))
+          .filter((x) => x.bottom > window.innerHeight + 2)
+          .sort((p, q) => q.bottom - p.bottom)
+          .slice(0, 4)
+          .map(
+            (x) =>
+              `${x.e.tagName.toLowerCase()}.${String(x.e.getAttribute('class') ?? '').slice(0, 50)} to ${Math.round(x.bottom)}`,
+          ),
       }))
 
       expect(
@@ -423,7 +433,7 @@ async function sweepScreensAtViewports(page: Page, routes: readonly string[]) {
       if (fitsOuter) {
         expect(
           metrics.scrollH,
-          `${route} outer vertical overflow at ${vp.width}x${vp.height}`,
+          `${route} outer vertical overflow at ${vp.width}x${vp.height}: ${metrics.lowest.join('; ')}`,
         ).toBeLessThanOrEqual(metrics.innerH + 2)
       }
     }

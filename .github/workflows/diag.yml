@@ -29,3 +29,7 @@ jobs:
       - run: pnpm --filter @ferrocast/dashboard exec playwright test -c playwright.diag.config.ts
         env:
           CI: '1'
+      - if: always()
+        run: pnpm --filter @ferrocast/dashboard exec playwright test e2e/resize-stability.spec.ts -g "core & editor" --project=webkit --repeat-each=3 --workers=2 --reporter=list
+        env:
+          CI: '1'
