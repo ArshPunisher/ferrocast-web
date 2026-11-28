@@ -3,30 +3,15 @@ import { test } from '@playwright/test'
 
 const SHADOW: Record<string, string> = {
   control: '',
-  hide: '.fc-ov{display:none!important}',
-  allOff:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
-  allBut_anim:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{filter:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
-  allBut_filter:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
-  allBut_boxshadow:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
-  allBut_textshadow:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
-  allBut_bgimage:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
-  allBut_blend:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
-  allBut_mask:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;clip-path:none!important}',
-  allBut_clip:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important}',
-  only_boxshadow: '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{box-shadow:none!important}',
-  only_bgimage: '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{background-image:none!important}',
-  only_filter: '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{filter:none!important}',
-  only_anim:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important}',
+  allOff: '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{background-image:none!important}',
+  noPat: '.fc-pat{display:none!important}',
+  noShapeBg: '.fc-shape{background-image:none!important}',
+  noPseudoBg:
+    '.fc-w *::before,.fc-w *::after,.fc-w::before,.fc-w::after{background-image:none!important}',
+  noLayerBg: '.fc-w,.fc-w>*{background-image:none!important}',
+  zoom: '.fc-ov-canvas{transform:none!important;zoom:.2677!important}',
+  willChange: '.fc-ov-canvas{will-change:transform!important}',
+  canvasContain: '.fc-ov-canvas{contain:paint!important}',
 }
 
 for (const [name, css] of Object.entries(SHADOW)) {
@@ -75,6 +60,50 @@ for (const [name, css] of Object.entries(SHADOW)) {
     )
   })
 }
+
+test('inventory of heavy styles in the previews', async ({ page }) => {
+  await page.goto('./?autoplay=0&latency=0#/designs/themes')
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-overlay-preview]').length >= 8,
+    null,
+    {
+      timeout: 120_000,
+    },
+  )
+  const inv = await page.evaluate(() => {
+    const grad: Record<string, { n: number; area: number; sample: string }> = {}
+    const other: Record<string, number> = {}
+    document.querySelectorAll('[data-overlay-preview]').forEach((p) => {
+      const sr = p.firstElementChild?.shadowRoot
+      if (!sr) return
+      for (const e of Array.from(sr.querySelectorAll('*'))) {
+        const cs = getComputedStyle(e)
+        const r = e.getBoundingClientRect()
+        const key = (
+          e.className && typeof e.className === 'string' ? e.className : e.tagName
+        ).slice(0, 50)
+        if (/gradient/.test(cs.backgroundImage)) {
+          const g = (grad[key] ??= { n: 0, area: 0, sample: cs.backgroundImage.slice(0, 90) })
+          g.n++
+          g.area += Math.round(r.width * r.height)
+        }
+        for (const [k, v] of [
+          ['filter', cs.filter],
+          ['willChange', cs.willChange],
+          ['animName', cs.animationName],
+          ['boxShadow', cs.boxShadow],
+          ['mixBlend', cs.mixBlendMode],
+          ['mask', cs.maskImage],
+          ['backdrop', cs.backdropFilter],
+        ] as const) {
+          if (v && v !== 'none' && v !== 'auto' && v !== 'normal') other[k] = (other[k] ?? 0) + 1
+        }
+      }
+    })
+    return { grad, other }
+  })
+  console.log('DIAG inventory ' + JSON.stringify(inv))
+})
 
 test('home page frames (control)', async ({ page }) => {
   await page.addInitScript(() => {
