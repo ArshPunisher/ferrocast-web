@@ -78,14 +78,11 @@ export function DontMissLane() {
         </Button>
       }
     >
-      <ul
-        className="-mx-1 flex gap-2 overflow-x-auto pb-1"
-        aria-label="Moments you might have missed"
-      >
+      <ul className="flex flex-wrap gap-2" aria-label="Moments you might have missed">
         {lane.map((i) => (
           <li
             key={i.id}
-            className="relative flex w-64 shrink-0 flex-col gap-1 rounded-control border border-accent-line bg-accent-soft px-3 py-2.5 pr-9"
+            className="relative flex w-64 max-w-full shrink-0 flex-col gap-1 rounded-control border border-accent-line bg-accent-soft px-3 py-2.5 pr-9"
           >
             <span className="text-[13.5px] font-semibold text-accent-text">
               {KIND[i.kind] ?? 'Moment'} · {relativeTime(i.at, now)}

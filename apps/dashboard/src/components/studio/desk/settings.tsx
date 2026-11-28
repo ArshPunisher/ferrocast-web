@@ -319,7 +319,7 @@ function Settings({
         {/* The pages: a side list like the system's settings (a strip on phones). */}
         <nav
           aria-label="Settings"
-          className="flex shrink-0 gap-1 overflow-x-auto border-b border-line bg-surface-2 p-2 sm:w-[220px] sm:flex-col sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-3"
+          className="flex shrink-0 flex-wrap gap-1 border-b border-line bg-surface-2 p-2 sm:w-[220px] sm:flex-col sm:flex-nowrap sm:overflow-x-hidden sm:overflow-y-auto sm:border-r sm:border-b-0 sm:p-3"
         >
           {PAGES.map((p) => {
             const Icon = p.icon

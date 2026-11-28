@@ -1183,13 +1183,16 @@ export function Settings({ section }: { section?: string | undefined }) {
         <nav
           ref={navRef}
           aria-label="Settings sections"
-          className="fc-focus-inset -mx-4 flex gap-1 overflow-x-auto px-4 lg:sticky lg:top-[calc(var(--fc-top,56px)+16px)] lg:mx-0 lg:max-h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-7.5rem-var(--fc-statusbar,0px))] lg:flex-col lg:gap-0.5 lg:self-start lg:overflow-y-auto lg:px-0 lg:pb-2"
+          className="fc-focus-inset flex flex-wrap gap-1 lg:sticky lg:top-[calc(var(--fc-top,56px)+16px)] lg:max-h-[calc(100dvh-var(--fc-top,56px)-var(--fc-banners,0px)-7.5rem-var(--fc-statusbar,0px))] lg:flex-col lg:flex-nowrap lg:gap-0.5 lg:self-start lg:overflow-x-hidden lg:overflow-y-auto lg:pb-2"
         >
           {GROUPS.map((g, gi) => {
             const items = g.items.filter(([id]) => visible(id))
             if (items.length === 0) return null
             return (
-              <div key={g.label} className="flex shrink-0 gap-1 lg:flex-col lg:gap-0.5">
+              <div
+                key={g.label}
+                className="flex flex-wrap gap-1 lg:flex-col lg:flex-nowrap lg:gap-0.5"
+              >
                 <span
                   className={cx(
                     'hidden px-3 pb-1 text-[11.5px] font-extrabold tracking-[0.08em] text-text-3 uppercase lg:block',
