@@ -35,6 +35,14 @@ const { label, id } = Astro.props
       i.classList.remove('open')
       i.querySelector('button')?.setAttribute('aria-expanded', 'false')
     })
+  // "dismissed" beats the hover and focus rules, so Escape or a second tap really hides a tip
+  // that is still hovered or focused. A new hover or focus, or opening it again, clears it.
+  const show = (i: HTMLElement) => {
+    i.classList.remove('dismissed')
+    place(i)
+  }
+  const isShown = (i: HTMLElement) =>
+    i.classList.contains('open') || i.matches(':focus-within') || i.matches(':hover')
   for (const i of infos) {
     const b = i.querySelector('button')
     b?.addEventListener('click', (e) => {
@@ -43,13 +51,19 @@ const { label, id } = Astro.props
       closeAll()
       i.classList.toggle('open', on)
       b.setAttribute('aria-expanded', String(on))
-      if (on) place(i)
+      if (on) show(i)
+      else i.classList.add('dismissed')
     })
-    i.addEventListener('pointerenter', () => place(i))
-    b?.addEventListener('focus', () => place(i))
+    i.addEventListener('pointerenter', () => show(i))
+    b?.addEventListener('focus', () => show(i))
   }
   document.addEventListener('click', closeAll)
-  document.addEventListener('keydown', (e) => e.key === 'Escape' && closeAll())
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return
+    // focus stays on the button; only the tip goes away
+    for (const i of infos) if (isShown(i)) i.classList.add('dismissed')
+    closeAll()
+  })
 </script>
 
 <style is:global>
@@ -91,12 +105,12 @@ const { label, id } = Astro.props
     box-shadow: var(--fc-shadow-pop);
     transform: translateX(calc(-50% + var(--sx, 0px)));
   }
-  .info.open .tip,
-  .info:focus-within .tip {
+  .info.open:not(.dismissed) .tip,
+  .info:focus-within:not(.dismissed) .tip {
     display: block;
   }
   @media (hover: hover) {
-    .info:hover .tip {
+    .info:hover:not(.dismissed) .tip {
       display: block;
     }
     .info > button:hover {
