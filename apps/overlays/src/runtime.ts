@@ -50,6 +50,29 @@ export interface OverlayOptions {
 
 const MAX_WIDGETS = 50
 
+/**
+ * WebKit on Linux (WebKitGTK, the desktop app's webview there) draws in software. A preview
+ * scaled down with `transform: scale()` is still painted at the canvas's full size (1920x1080)
+ * and shrunk afterwards, so a gallery of a dozen scenes stalled the page for tens of seconds.
+ * `zoom` lays the canvas out at its final size and paints only those pixels. Kept to that one
+ * platform: transforms stay exact everywhere else (Safari, Chromium and OBS's browser).
+ */
+export function prefersZoomFit(ua: string, platform: string, supportsZoom: boolean): boolean {
+  // Check the platform too: a test browser can present a Mac user agent on Linux.
+  return (
+    supportsZoom &&
+    (/Linux/.test(ua) || /Linux/.test(platform)) &&
+    /AppleWebKit/.test(ua) &&
+    !/Chrom(e|ium)\//.test(ua)
+  )
+}
+
+const zoomFit = (): boolean =>
+  typeof navigator !== 'undefined' &&
+  typeof CSS !== 'undefined' &&
+  typeof CSS.supports === 'function' &&
+  prefersZoomFit(navigator.userAgent, navigator.platform ?? '', CSS.supports('zoom', '1'))
+
 /** Start show's countdown end (ms), or null; anything else is ignored. */
 const showEnds = (v: unknown): number | null => {
   if (!v || typeof v !== 'object') return null
@@ -172,9 +195,20 @@ export function createOverlay(root: HTMLElement, opts: OverlayOptions = {}): Ove
     if (opts.fit !== 'contain' || !overlay) return
     const r = root.getBoundingClientRect()
     const k = Math.min(r.width / overlay.width, r.height / overlay.height) || 0
+    const x = Math.max(0, (r.width - overlay.width * k) / 2)
+    const y = Math.max(0, (r.height - overlay.height * k) / 2)
+    if (k > 0 && zoomFit()) {
+      // `left` and `top` are zoomed with the element, so give them in unscaled pixels.
+      canvas.style.transform = 'none'
+      canvas.style.setProperty('zoom', String(k))
+      canvas.style.left = `${x / k}px`
+      canvas.style.top = `${y / k}px`
+      return
+    }
+    canvas.style.removeProperty('zoom')
     canvas.style.transform = `scale(${k})`
-    canvas.style.left = `${Math.max(0, (r.width - overlay.width * k) / 2)}px`
-    canvas.style.top = `${Math.max(0, (r.height - overlay.height * k) / 2)}px`
+    canvas.style.left = `${x}px`
+    canvas.style.top = `${y}px`
   }
   if (opts.fit === 'contain' && typeof ResizeObserver === 'function') {
     ro = new ResizeObserver(fit)

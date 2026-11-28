@@ -112,9 +112,13 @@ test.describe('interactive overlay widgets in Chromium', () => {
     await expect(creditsTrack).toContainText('LunaLagoon')
     await expect(creditsTrack).toContainText('mira_exe')
     const t0 = await creditsTrack.evaluate((n) => getComputedStyle(n).transform)
-    await page.waitForTimeout(250)
-    const t1 = await creditsTrack.evaluate((n) => getComputedStyle(n).transform)
-    expect(t1).not.toBe(t0)
+    // The track moves a little every animation frame; software-rendered Linux WebKit in CI
+    // draws only a few frames a second, so wait for the move instead of a fixed 250 ms.
+    await expect
+      .poll(() => creditsTrack.evaluate((n) => getComputedStyle(n).transform), {
+        timeout: 10_000,
+      })
+      .not.toBe(t0)
 
     // Verify Chat Highlight card renders and dismisses cleanly
     const hl = page.locator('.fc-w-chat-highlight')

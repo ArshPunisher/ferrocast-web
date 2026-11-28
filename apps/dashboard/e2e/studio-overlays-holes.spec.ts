@@ -247,6 +247,11 @@ test.describe('Unified Overlays & Native Preview Hole Registry', () => {
       // 4. InfoTip: open About audio tip and check visibility, <=300px cap (F4), & hole event.
       const infoBtn = page.getByRole('button', { name: 'About audio' })
       if (await infoBtn.isVisible()) {
+        // The pointer is still where the last click left it. Linux WebKit re-hovers whatever
+        // lands under a resting pointer after a layout change, which opens that control's
+        // tip over the button we click next. Park the pointer and let any such tip close.
+        await page.mouse.move(0, 0)
+        await expect(page.getByRole('tooltip')).toHaveCount(0)
         await infoBtn.click()
         const tip = page
           .locator('[data-over-preview]')

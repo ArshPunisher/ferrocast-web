@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
-import { open } from './helpers'
+import { open, settled } from './helpers'
 
 test.describe('Settings > Advanced cleanup (U6)', () => {
   test('support report, likely causes, info tiles, API keys padding/button/empty state, and section gaps are aligned', async ({
@@ -124,7 +124,7 @@ test.describe('Settings > Advanced cleanup (U6)', () => {
     const lightAxe = await new AxeBuilder({ page }).include('main').analyze()
     expect(lightAxe.violations).toEqual([])
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'slate'))
-    await page.waitForTimeout(100)
+    await settled(page)
     const darkAxe = await new AxeBuilder({ page }).include('main').analyze()
     expect(darkAxe.violations).toEqual([])
   })

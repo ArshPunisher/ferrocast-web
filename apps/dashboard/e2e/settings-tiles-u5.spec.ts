@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { open } from './helpers'
+import { open, settled } from './helpers'
 
 const SETTINGS_SECTIONS = [
   'Accounts',
@@ -137,7 +137,7 @@ test.describe('Settings tiles use themed surface background (U5)', () => {
     const lightAxe = await new AxeBuilder({ page }).include('main').analyze()
     expect(lightAxe.violations).toEqual([])
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'slate'))
-    await page.waitForTimeout(100)
+    await settled(page)
     const darkAxe = await new AxeBuilder({ page }).include('main').analyze()
     expect(darkAxe.violations).toEqual([])
   })

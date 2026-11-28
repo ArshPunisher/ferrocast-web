@@ -69,8 +69,9 @@ test.describe('auto-config encoder benchmark and rollback', () => {
     await page.keyboard.press('ArrowLeft')
     await expect(streamRadio).toHaveAttribute('aria-checked', 'true')
 
-    // Slow down steps briefly to verify Running state + Cancel mid-run reliably
-    await demo(page, '(d) => { d.studioEngine?.configure({ benchStepMs: 120 }) }')
+    // Slow the steps right down so the run is still going when Cancel is clicked, however long
+    // that click takes (on a slow CI browser the actionability checks alone take seconds).
+    await demo(page, '(d) => { d.studioEngine?.configure({ benchStepMs: 8_000 }) }')
     await dlg.getByRole('button', { name: 'Run benchmark' }).click()
     await expect(dlg.getByRole('progressbar', { name: 'Benchmark progress' })).toBeVisible()
     await dlg.getByRole('button', { name: 'Cancel test' }).click()

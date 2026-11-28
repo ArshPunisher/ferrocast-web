@@ -218,20 +218,36 @@ test.describe('Studio CSS layout and resize stability', () => {
         }),
       )
     })
-    await page.waitForTimeout(180)
-    await page.setViewportSize({ width: 1100, height: 690 })
-    await page.waitForTimeout(50)
-    const graceCheck = await page.evaluate(() => {
+    // The resize lands 180 ms into the 350 ms grace window. Fire it from the page's own clock:
+    // a Playwright round trip (waitForTimeout + setViewportSize) takes seconds on a slow CI
+    // browser and would arrive after the window, which is a different case.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          window.setTimeout(() => {
+            window.dispatchEvent(new Event('resize'))
+            resolve()
+          }, 180)
+        }),
+    )
+    // The still comes off once the live frame is placed again (a frame callback plus a short
+    // thaw timer), so wait for that instead of sampling at a fixed moment.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() =>
+            Boolean(
+              document.querySelector<HTMLElement>('[data-canvas-box]')?.style.backgroundImage,
+            ),
+          ),
+        { timeout: 5_000 },
+      )
+      .toBe(false)
+    const hiddenPuts = await page.evaluate(() => {
       const w = window as unknown as { __previewPuts?: PreviewReqLog[] }
-      const canvas = document.querySelector<HTMLElement>('[data-canvas-box]')
-      const hiddenPuts = (w.__previewPuts ?? []).filter((p) => p.rect?.opacity === 0).length
-      return {
-        hiddenPuts,
-        hasStill: Boolean(canvas?.style.backgroundImage),
-      }
+      return (w.__previewPuts ?? []).filter((p) => p.rect?.opacity === 0).length
     })
-    expect(graceCheck.hiddenPuts).toBe(0)
-    expect(graceCheck.hasStill).toBe(false)
+    expect(hiddenPuts).toBe(0)
 
     // Test fc://scale-changed triggers 1 atomic resync.
     await page.evaluate(() => {
@@ -368,7 +384,24 @@ async function sweepScreensAtViewports(page: Page, routes: readonly string[]) {
 
     for (const vp of WHOLE_APP_VIEWPORTS) {
       await page.setViewportSize(vp)
-      await page.waitForTimeout(50)
+      const fitsOuter =
+        vp.width >= 1024 &&
+        (route === 'alerts/sub' || route === 'chat' || route === 'overlays/ov-main')
+      if (fitsOuter) {
+        // The stage rescales from a ResizeObserver and a frame callback, so give the layout a
+        // moment to catch up with the new size (slow on software-rendered Linux WebKit). The
+        // assertion below still reports the real numbers if it never fits.
+        await expect
+          .poll(
+            () =>
+              page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 2),
+            { timeout: 5_000, intervals: [50, 100, 250] },
+          )
+          .toBe(true)
+          .catch(() => undefined)
+      } else {
+        await page.waitForTimeout(50)
+      }
 
       const metrics = await page.evaluate(() => ({
         scrollW: document.documentElement.scrollWidth,
@@ -376,6 +409,16 @@ async function sweepScreensAtViewports(page: Page, routes: readonly string[]) {
         scrollH: document.documentElement.scrollHeight,
         innerH: window.innerHeight,
         mainText: (document.getElementById('main')?.textContent ?? '').trim().length,
+        // Which elements run past the window, so a failure names the culprit.
+        lowest: Array.from(document.body.querySelectorAll('*'))
+          .map((e) => ({ e, bottom: e.getBoundingClientRect().bottom }))
+          .filter((x) => x.bottom > window.innerHeight + 2)
+          .sort((p, q) => q.bottom - p.bottom)
+          .slice(0, 4)
+          .map(
+            (x) =>
+              `${x.e.tagName.toLowerCase()}.${String(x.e.getAttribute('class') ?? '').slice(0, 50)} to ${Math.round(x.bottom)}`,
+          ),
       }))
 
       expect(
@@ -387,13 +430,10 @@ async function sweepScreensAtViewports(page: Page, routes: readonly string[]) {
         `${route} horizontal overflow at ${vp.width}x${vp.height}`,
       ).toBeLessThanOrEqual(metrics.innerW + 1)
 
-      if (
-        vp.width >= 1024 &&
-        (route === 'alerts/sub' || route === 'chat' || route === 'overlays/ov-main')
-      ) {
+      if (fitsOuter) {
         expect(
           metrics.scrollH,
-          `${route} outer vertical overflow at ${vp.width}x${vp.height}`,
+          `${route} outer vertical overflow at ${vp.width}x${vp.height}: ${metrics.lowest.join('; ')}`,
         ).toBeLessThanOrEqual(metrics.innerH + 2)
       }
     }

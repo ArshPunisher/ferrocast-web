@@ -41,6 +41,7 @@ test.describe('My links, real labels, and token resolution', () => {
     await group.getByRole('button', { name: 'Save links' }).click()
     await expect(page.getByText('My links saved. Overlays updated.')).toBeVisible()
 
+    await settled(page)
     expect(await seriousA11y(page)).toEqual([])
 
     // Seed an overlay with a `{socials}` text layer and real label to inspect Overlays grid & editor.
