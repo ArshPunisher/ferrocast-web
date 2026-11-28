@@ -24,12 +24,12 @@ test.describe('Start show & Your platforms tile redesign (U3)', () => {
     await expect(fixLink).toHaveAttribute('href', /#\/settings\//)
 
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await page.waitForTimeout(150)
+    await settled(page)
     const lightAxe = await new AxeBuilder({ page }).include('dialog[open]').analyze()
     expect(lightAxe.violations).toEqual([])
 
     await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'slate'))
-    await page.waitForTimeout(150)
+    await settled(page)
     const darkAxe = await new AxeBuilder({ page }).include('dialog[open]').analyze()
     expect(darkAxe.violations).toEqual([])
   })
