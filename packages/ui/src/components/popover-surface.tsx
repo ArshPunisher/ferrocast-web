@@ -567,9 +567,18 @@ export function PopoverSurface({
       ancestorScrolls.set(curScrollEl, { top: curScrollEl.scrollTop, left: curScrollEl.scrollLeft })
       curScrollEl = curScrollEl.parentElement
     }
+    const docScroll = { top: window.scrollY, left: window.scrollX }
     const onScroll = (e: Event) => {
       if (!closeOnScroll) return
       const t = e.target
+      // A scroll event arrives a frame after the scroll itself: one that began before this opened
+      // (a focus that scrolled the trigger into view) reports the same position, so it is not a move.
+      if (
+        t instanceof Document &&
+        window.scrollY === docScroll.top &&
+        window.scrollX === docScroll.left
+      )
+        return
       if (t instanceof Node && localRef.current?.contains(t)) return
       if (ignoreOutsideSelector && t instanceof Element && t.closest(ignoreOutsideSelector)) return
       if (t instanceof Element) {

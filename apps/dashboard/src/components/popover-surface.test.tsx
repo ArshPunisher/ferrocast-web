@@ -187,6 +187,63 @@ describe('PopoverSurface', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('ignores a stale page scroll event that reports the position it opened at', async () => {
+    const onClose = vi.fn()
+    function Host() {
+      const [open, setOpen] = useState(false)
+      const btn = useRef<HTMLButtonElement>(null)
+      return (
+        <div>
+          <button ref={btn} type="button" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          <PopoverSurface
+            open={open}
+            onClose={(reason) => {
+              onClose(reason)
+              setOpen(false)
+            }}
+            anchorRef={btn}
+            role="menu"
+            aria-label="Page scroll test"
+          >
+            <button type="button" role="menuitem">
+              Item
+            </button>
+          </PopoverSurface>
+        </div>
+      )
+    }
+
+    const container = document.body.appendChild(document.createElement('div'))
+    root = createRoot(container)
+    await act(async () => root!.render(<Host />))
+    const btn = container.querySelector('button')!
+    btn.getBoundingClientRect = () => rect(40, 200, 60, 28)
+    let pageY = 300
+    const spy = vi.spyOn(window, 'scrollY', 'get').mockImplementation(() => pageY)
+    try {
+      await act(async () => btn.click())
+      expect(document.body.querySelector('[role="menu"]')).toBeTruthy()
+
+      // The event of a scroll that began before it opened (WebKit delivers it a frame late).
+      await act(async () => {
+        document.dispatchEvent(new Event('scroll'))
+      })
+      expect(document.body.querySelector('[role="menu"]')).toBeTruthy()
+      expect(onClose).not.toHaveBeenCalled()
+
+      pageY = 360
+      await act(async () => {
+        document.dispatchEvent(new Event('scroll'))
+      })
+      expect(document.body.querySelector('[role="menu"]')).toBeNull()
+      expect(onClose).toHaveBeenCalledWith('scroll')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
   it('excludes dismissible=false submenus from openPopoverStack and tracks dismissible changes', async () => {
     const closeRoot = vi.fn()
     const closeSub = vi.fn()
