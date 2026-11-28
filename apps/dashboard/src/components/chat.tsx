@@ -577,8 +577,15 @@ export function ChatScroller({
   useEffect(() => {
     const el = ref.current
     if (!el || typeof ResizeObserver !== 'function') return
+    // Scrolls a frame later: changing the scroll inside the callback can resize what is being
+    // observed again, which WebKit reports as an uncaught "ResizeObserver loop" error.
+    let raf = 0
     const ro = new ResizeObserver(() => {
-      if (stuckRef.current) el.scrollTop = el.scrollHeight
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        if (stuckRef.current) el.scrollTop = el.scrollHeight
+      })
     })
     roRef.current = ro
     const first = el.firstElementChild
@@ -587,6 +594,7 @@ export function ChatScroller({
       observedChildRef.current = first
     }
     return () => {
+      if (raf) cancelAnimationFrame(raf)
       ro.disconnect()
       roRef.current = null
       observedChildRef.current = null
