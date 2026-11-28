@@ -670,7 +670,12 @@ function NamedTransitionsTab({
                     >
                       Delete transition
                     </Button>
-                    <Button size="xs" variant="ghost" onClick={() => setConfirmDelete(null)}>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      autoFocus
+                      onClick={() => setConfirmDelete(null)}
+                    >
                       Keep
                     </Button>
                   </div>

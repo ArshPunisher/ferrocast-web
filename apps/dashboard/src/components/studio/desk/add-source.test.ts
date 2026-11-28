@@ -45,6 +45,11 @@ describe('Video device in Add a source', () => {
     expect(looksLikeCaptureCard('Elgato HD60 X')).toBe(true)
     expect(looksLikeCaptureCard('USB3 Video')).toBe(true)
     expect(looksLikeCaptureCard('FaceTime HD Camera')).toBe(false)
+    // Elgato's webcam and microphone are not capture cards.
+    expect(looksLikeCaptureCard('Elgato Facecam')).toBe(false)
+    expect(looksLikeCaptureCard('Elgato Facecam MK.2')).toBe(false)
+    expect(looksLikeCaptureCard('Elgato Wave:3')).toBe(false)
+    expect(looksLikeCaptureCard('Elgato Game Capture HD60 X')).toBe(true)
     expect(looksLikeCaptureCard(null)).toBe(false)
   })
 })

@@ -552,6 +552,12 @@ describe('the Clips tab', () => {
     await click(buttonByText('Move to Trash'))
     expect(text()).toContain('Move Boss fight to the Trash?')
     expect(document.body.querySelector('[data-cancel]')).not.toBeNull()
+    // The pressed button went away: focus is on the safe answer, and returns on Keep.
+    await settle(50)
+    expect(document.activeElement).toBe(document.body.querySelector('[data-cancel]'))
+    await click(document.body.querySelector<HTMLButtonElement>('[data-cancel]'))
+    await settle(50)
+    expect(document.activeElement).toBe(buttonByText('Move to Trash'))
   })
 })
 

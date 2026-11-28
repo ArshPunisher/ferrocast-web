@@ -1,7 +1,7 @@
 // One clip, open: it plays, and below it Trim, Captions, YouTube and Details (rename, Trash).
 // Everything that makes a file starts a background job; the original is never changed.
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Trash, WarningCircle } from '@phosphor-icons/react'
 import {
   clipLength,
@@ -230,6 +230,16 @@ function DetailsSection({
   const { busy, run } = useAction()
   const [name, setName] = useState(clip.name)
   const [confirm, setConfirm] = useState(false)
+  // The button that was pressed goes away when the question opens or closes: focus goes to the
+  // safe answer when it opens, and back to the button when it is dismissed.
+  const trashBtn = useRef<HTMLButtonElement>(null)
+  const keepBtn = useRef<HTMLButtonElement>(null)
+  const focusNext = useRef<'trash' | 'keep' | null>(null)
+  useEffect(() => {
+    if (focusNext.current === 'keep') keepBtn.current?.focus()
+    else if (focusNext.current === 'trash') trashBtn.current?.focus()
+    focusNext.current = null
+  }, [confirm])
   const problem = name === clip.name ? null : clipNameProblem(name)
   const rename = async () => {
     const r = await run('rename', () => api.rename(clip.id, name), { success: 'Renamed.' })
@@ -241,6 +251,11 @@ function DetailsSection({
   const trash = async () => {
     setConfirm(false)
     const ok = await run('trash', () => api.remove(clip.id).then(() => true as const))
+    if (!ok) {
+      // It failed: the question is gone, so focus goes back to the button that asked it.
+      trashBtn.current?.focus()
+      return
+    }
     if (ok) {
       toast({
         tone: 'ok',
@@ -319,7 +334,15 @@ function DetailsSection({
               >
                 Move to Trash
               </Button>
-              <Button variant="ghost" data-cancel onClick={() => setConfirm(false)}>
+              <Button
+                ref={keepBtn}
+                variant="ghost"
+                data-cancel
+                onClick={() => {
+                  focusNext.current = 'trash'
+                  setConfirm(false)
+                }}
+              >
                 Keep
               </Button>
             </div>
@@ -327,10 +350,14 @@ function DetailsSection({
         ) : (
           <>
             <Button
+              ref={trashBtn}
               variant="danger-ghost"
               icon={<Trash size={17} aria-hidden="true" />}
               busy={busy === 'trash'}
-              onClick={() => setConfirm(true)}
+              onClick={() => {
+                focusNext.current = 'keep'
+                setConfirm(true)
+              }}
             >
               Move to Trash
             </Button>

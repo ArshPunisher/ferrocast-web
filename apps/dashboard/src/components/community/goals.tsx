@@ -203,7 +203,7 @@ function GoalRow({
               Its progress goes with it. Goal widgets showing it go blank.
             </InfoTip>
           </span>
-          <Button size="sm" variant="ghost" onClick={onKeep}>
+          <Button size="sm" variant="ghost" autoFocus onClick={onKeep}>
             Keep it
           </Button>
           <Button size="sm" variant="danger" busy={busy === 'delete'} onClick={onDelete}>

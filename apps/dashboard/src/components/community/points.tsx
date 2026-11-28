@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import {
   ArrowRight,
   CaretLeft,
@@ -198,7 +198,7 @@ function Adjust({
   onChanged,
 }: {
   editing: LeaderboardEntry | null
-  setEditing: (e: LeaderboardEntry | null) => void
+  setEditing: Dispatch<SetStateAction<LeaderboardEntry | null>>
   name: string
   onChanged: () => void
 }) {
@@ -217,6 +217,18 @@ function Adjust({
   )
 }
 
+/** The editor's entry with the new balance, but only if it is still the same person's: a change
+ *  that finishes after the editor was left or another viewer picked must not bring them back. */
+export function withNewBalance(
+  cur: LeaderboardEntry | null,
+  who: Pick<LeaderboardEntry, 'platform' | 'user_id'>,
+  points: number,
+): LeaderboardEntry | null {
+  return cur && cur.platform === who.platform && cur.user_id === who.user_id
+    ? { ...cur, points }
+    : cur
+}
+
 function WhoLine({ editing, name }: { editing: LeaderboardEntry; name: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -233,7 +245,7 @@ function AdjustBody({
   onChanged,
 }: {
   editing: LeaderboardEntry
-  setEditing: (e: LeaderboardEntry | null) => void
+  setEditing: Dispatch<SetStateAction<LeaderboardEntry | null>>
   name: string
   onChanged: () => void
 }) {
@@ -245,7 +257,9 @@ function AdjustBody({
         name={name}
         points={editing.points}
         onChange={(points) => {
-          setEditing({ ...editing, points })
+          // Only the person still being edited takes the new balance: if the editor was left, or
+          // another person picked, while the change was in flight, that stays as it is.
+          setEditing((cur) => withNewBalance(cur, editing, points))
           onChanged()
         }}
       />

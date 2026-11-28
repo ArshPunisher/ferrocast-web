@@ -123,10 +123,10 @@ const VIDEO_DEVICE = 'camera'
 
 /** A device named like a capture card brings its sound with it by default; a webcam does not. */
 export function looksLikeCaptureCard(deviceName: string | null): boolean {
-  return (
-    !!deviceName &&
-    /capture|elgato|cam ?link|avermedia|hdmi|game ?cap|usb\d? video/i.test(deviceName)
-  )
+  if (!deviceName) return false
+  // Elgato also makes webcams (Facecam) and microphones (Wave) that have no card's sound.
+  if (/facecam|webcam|wave|stream ?deck|key ?light/i.test(deviceName)) return false
+  return /capture|elgato|cam ?link|avermedia|hdmi|game ?cap|usb\d? video/i.test(deviceName)
 }
 
 /** The calm note after adding a camera or card that was already open elsewhere. */
