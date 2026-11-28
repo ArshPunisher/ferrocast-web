@@ -1,5 +1,16 @@
 # Status
 
+## 28 Nov 2026 (3.8.1: opt-in crash reports, dashboard and site, branch feat/dest-quality)
+
+- **Prompt:** after a crash, unclean exit, hang or serious error the desktop window asks once
+  ("Ferrocast closed unexpectedly"): See what's sent (plain text), Send, Don't send, Always send.
+  Never on a phone, linked browser or cloud mode; waits for any open dialog.
+- **Settings › Privacy:** new section, "Send crash reports" Ask / Always / Never with an (i) tip.
+- **Site:** privacy policy has a Crash reports section; the FAQ, features tiles and store docs no
+  longer say data never leaves the PC without the opt-in exception.
+- Needs the engine routes (`docs/API-REQUESTS.md`) and the site text live before the app release
+  that turns the prompt on.
+
 ## 28 Nov 2026 (3.8.0: platforms dialog fixes, Video device, meters)
 
 - **Platforms and quality dialog:** Match main shows what the engine will send (its own result,
