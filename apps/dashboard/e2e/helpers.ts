@@ -16,7 +16,8 @@ export type Fault = {
  * need Option+Tab unless the system's "Full Keyboard Access" is on.
  */
 export function tabKey(page: Page): string {
-  return page.context().browser()?.browserType().name() === 'webkit' && process.platform === 'darwin'
+  return page.context().browser()?.browserType().name() === 'webkit' &&
+    process.platform === 'darwin'
     ? 'Alt+Tab'
     : 'Tab'
 }
