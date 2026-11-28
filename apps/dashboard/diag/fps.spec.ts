@@ -84,7 +84,16 @@ test('home page frames (control)', async ({ page }) => {
   console.log(`DIAG home series=${series.join(' ')}`)
 })
 
-const CORE = ['home', 'studio', 'chat', 'alerts', 'alerts/sub', 'overlays', 'overlays/ov-main']
+const CORE = [
+  'home',
+  'studio/golive',
+  'studio/vertical',
+  'chat',
+  'alerts',
+  'alerts/sub',
+  'overlays',
+  'overlays/ov-main',
+]
 
 test('ov-main overflow after the core sweep', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('fc-nav-folded', '0'))
