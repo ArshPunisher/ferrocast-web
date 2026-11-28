@@ -9,7 +9,6 @@ import {
   ATTACK_MS,
   FLOOR,
   POLL_MS,
-  FROZEN_MS,
   STALE_MS,
   activeMeters,
   initialMeter,
@@ -183,22 +182,20 @@ describe('live meters', () => {
     expect(latestStatus).toBe('disconnected')
   })
 
-  it('shows a sound whose level never moves as silent and not connected, and recovers when it moves', async () => {
-    let level = -20
+  it('shows what the engine reads: a dead device at -100 is a silent bar, never a frozen one', async () => {
+    let usb = -20
     const api = {
       levels: vi.fn(async (): Promise<Record<string, EngineLevel>> => ({
-        // The unplugged USB sound repeats its last level; the other one is alive.
-        Usb: { peak: [-20, -20], magnitude: [-30, -30] },
-        Mic: {
-          peak: [level, level],
-          magnitude: [level, level],
-        },
+        Usb: { peak: [usb, usb], magnitude: [usb, usb], input_peak: [usb, usb] },
+        Mic: { peak: [-30, -30], magnitude: [-35, -35] },
       })),
     } as unknown as EngineApi
-    let lost = false
+    let lost = true
+    let status = 'connecting'
     function Probe() {
       const feed = useLevelFeed(api, ['Usb', 'Mic'])
       lost = useSourceLost(feed, 'Usb')
+      status = useLevelStatus(feed, 'Usb')
       return (
         <Meter
           feed={feed}
@@ -215,20 +212,46 @@ describe('live meters', () => {
       root!.render(<Probe />)
     })
     const cover = () => host.querySelector<HTMLElement>('.bg-inset\\/80')!
-    // Moving a little each poll: alive. (Mic moves; Usb does not.)
-    for (let i = 0; i < 20; i++) {
-      level = -40 + (i % 3)
+    // A live level that sits at exactly the same numbers for a long time is still shown, and is
+    // not called "not connected" (a quiet or very even mic is live).
+    for (let i = 0; i < 12; i++) {
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(100)
+        await vi.advanceTimersByTimeAsync(1000)
       })
     }
     expect(lost).toBe(false)
+    expect(status).toBe('connected')
     expect(cover().style.transform).not.toMatch(/translate3d\(0(\.0+)?%/)
-    // After FROZEN_MS of the same numbers the bar falls and it reads as not connected.
+    // The device is unplugged: the engine now reads it as silence, so the bar falls to nothing,
+    // and it is plain silence, not a "not connected" claim.
+    usb = -100
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(FROZEN_MS + 1500)
+      await vi.advanceTimersByTimeAsync(2000)
+    })
+    expect(cover().style.transform).toMatch(/translate3d\(0(\.0+)?%/)
+    expect(lost).toBe(false)
+    expect(status).toBe('connected')
+  })
+
+  it('still says a sound the engine does not list at all is not connected', async () => {
+    const api = {
+      levels: vi.fn(async (): Promise<Record<string, EngineLevel>> => ({
+        Mic: { peak: [-30, -30], magnitude: [-35, -35] },
+      })),
+    } as unknown as EngineApi
+    let lost = false
+    function Probe() {
+      const feed = useLevelFeed(api, ['Gone', 'Mic'])
+      lost = useSourceLost(feed, 'Gone')
+      return null
+    }
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<Probe />)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
     })
     expect(lost).toBe(true)
-    expect(cover().style.transform).toMatch(/translate3d\(0(\.0+)?%/)
   })
 })

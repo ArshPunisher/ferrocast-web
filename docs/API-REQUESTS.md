@@ -617,3 +617,11 @@ Two custom `window` events coordinate smooth desktop OS live-resize and multi-mo
     - Validates `Number.isFinite(detail.scale) && detail.scale > 0`.
     - Updates the active display scale, invalidates cached still frames captured under the prior DPI, and (unless an `fc://preview-live-resize` gesture is still `active`) schedules **one** `requestAnimationFrame` `PUT /api/v1/studio/engine/preview` sync so native placement matches the new scale cleanly.
     - **Browser demo fallback:** When neither native event is emitted, `PreviewBoxes` falls back to coalesced `window.resize` freeze/settle handling and a `window.matchMedia('(resolution: <dpr>dppx)')` scale-change listener.
+
+## Audio level: whether the device is there
+
+`POST /studio/engine/levels` reads a sound that has sent nothing for about 500 ms as silence
+(-100 in every field), so the mixer shows a plain silent bar for an unplugged device. It cannot
+say the device is missing, so the dashboard never writes "Not connected" for a quiet sound (only
+for a sound the engine does not list at all). If that word is wanted for an unplugged device,
+the levels answer needs an explicit flag, for example `connected: boolean` per sound.

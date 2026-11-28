@@ -9,19 +9,17 @@ import type { EngineApi } from './common'
 export const POLL_MS = 33
 /** Levels older than this are treated as silence (the engine stopped or stalled). */
 export const STALE_MS = 1000
-/**
- * A sound whose level has not changed at all for this long while the engine keeps answering is
- * not live: a real signal always moves a little. It is shown as silent and not connected, not as
- * a bar frozen where the device stopped (an unplugged USB sound kept its last level).
- */
-export const FROZEN_MS = 5000
+// A dead device never leaves a bar frozen: the engine reads a sound that has sent nothing for
+// about 500 ms as silence (-100 in every field), so the bar falls on its own. Nothing here guesses
+// from how steady a level is: a live but quiet or very even sound is shown as it is, and is not
+// called "not connected" (the API has no device-connected flag; plain silence is the honest state).
 
 export type LevelStatus = 'connecting' | 'connected' | 'disconnected'
 
 export interface LevelFeed {
   get(name: string): EngineLevel | undefined
   status?(name: string): LevelStatus
-  /** The engine is answering but this sound is missing or repeating one level: no live signal. */
+  /** The engine is answering but does not list this sound at all (not that it is quiet). */
   lost?(name: string): boolean
   seq?(): number
   busy?(): boolean
@@ -48,28 +46,14 @@ function startFeed(api: EngineApi, list: string[]): { feed: LevelFeed; stop: () 
   let busy = false
   let timer = 0
   const isStale = () => !hasData || performance.now() - at > STALE_MS
-  // When each sound's numbers last changed, to tell a live level from one the engine repeats.
-  const moved = new Map<string, { sig: string; since: number }>()
-  const frozen = (name: string): boolean => {
-    const m = moved.get(name)
-    const l = latest[name]
-    if (!m || !l) return false
-    // Digital silence is legitimately constant.
-    if (Math.max(l.peak[0], l.peak[1]) <= -90) return false
-    return at - m.since >= FROZEN_MS
-  }
   const feed: LevelFeed = {
-    get: (name) => (isStale() || frozen(name) ? undefined : latest[name]),
+    get: (name) => (isStale() ? undefined : latest[name]),
     status: (name) => {
       if (!settled && !hasData) return 'connecting'
       if (isStale()) return 'disconnected'
-      if (frozen(name)) return 'disconnected'
       return Object.prototype.hasOwnProperty.call(latest, name) ? 'connected' : 'disconnected'
     },
-    lost: (name) =>
-      hasData &&
-      !isStale() &&
-      (!Object.prototype.hasOwnProperty.call(latest, name) || frozen(name)),
+    lost: (name) => hasData && !isStale() && !Object.prototype.hasOwnProperty.call(latest, name),
     seq: () => seq,
     busy: () => busy,
     subscribe: (fn) => {
@@ -93,12 +77,6 @@ function startFeed(api: EngineApi, list: string[]): { feed: LevelFeed; stop: () 
         erroredWhileStale = false
         latest = v
         at = performance.now()
-        for (const [name, l] of Object.entries(v)) {
-          const sig = `${l.peak[0]},${l.peak[1]},${l.magnitude[0]},${l.magnitude[1]},${l.input_peak?.[0]},${l.input_peak?.[1]}`
-          const was = moved.get(name)
-          if (!was || was.sig !== sig) moved.set(name, { sig, since: at })
-        }
-        for (const name of [...moved.keys()]) if (!(name in v)) moved.delete(name)
         notify()
       }
     } catch {
