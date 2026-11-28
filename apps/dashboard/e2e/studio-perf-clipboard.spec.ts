@@ -407,11 +407,12 @@ function suite() {
   test('Ctrl/Cmd+C and V on the list, and a text field keeps its own keys', async ({
     page,
     isMobile,
+    browserName,
   }) => {
     test.skip(!!isMobile, 'A phone has no keyboard.')
     const { calls } = await mount(page)
-    // The desktop Chrome profile reports Windows: Ctrl.
-    const mod = 'Control'
+    // The desktop Chrome profile reports Windows (Ctrl); the Desktop Safari profile reports a Mac (Cmd).
+    const mod = browserName === 'webkit' ? 'Meta' : 'Control'
     await row(page).locator('button').first().click()
     await page.keyboard.press(`${mod}+c`)
     await expect(page.getByText(/Copied Music/)).toBeVisible()

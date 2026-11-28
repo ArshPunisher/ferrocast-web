@@ -315,12 +315,14 @@ export function SourcesDock() {
     }
   }
   // A row picked by a click can leave the focus on the page itself: the keys count then too, but
-  // never when the focus is in another panel or a field.
+  // never when the focus is in another panel or a field. Safari and WKWebView do not focus a
+  // clicked button: focus falls to the nearest focusable ancestor, the page's <main>.
   const clipKeyRef = useRef(onClipboardKey)
   clipKeyRef.current = onClipboardKey
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (document.activeElement && document.activeElement !== document.body) return
+      const active = document.activeElement
+      if (active && active !== document.body && active.tagName !== 'MAIN') return
       clipKeyRef.current(e)
     }
     window.addEventListener('keydown', onKey)
