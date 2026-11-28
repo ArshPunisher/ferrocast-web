@@ -13,6 +13,10 @@ type Recent = NonNullable<EngineStats['engine']['missed_recent']>
  *   seconds, so it is over or nearly so (a window resize, a source starting).
  * - Still happening (red): `stillFrames` or more in the last `stillSeconds` seconds.
  *
+ * - The frame rate itself: more than `fpsWarnBelow` under the canvas rate is amber, more than
+ *   `fpsBadBelow` under it is red, whatever the missed-frame count says (a loop that is slow
+ *   but never "misses" a frame still shows a low rate).
+ *
  * Old hiccups age out by themselves: a burst more than 60 s ago counts for nothing.
  */
 export const FRAME_HEALTH = {
@@ -22,6 +26,10 @@ export const FRAME_HEALTH = {
   stillSeconds: 10,
   /** This many frames inside "now" is red; fewer is a dip. */
   stillFrames: 3,
+  /** The measured frame rate under this share of the canvas rate is amber (5% short). */
+  fpsWarnBelow: 0.95,
+  /** Under this share of the canvas rate is red (15% short). */
+  fpsBadBelow: 0.85,
   /** Without `missed_recent` (an older engine): the share of all frames since the start that
    * turns the totals red, as before. */
   legacyShare: 0.01,
@@ -128,6 +136,26 @@ export const CAUSE_FIX: Record<MissCause, string> = {
   upload:
     'The connection could not carry the stream, which backed the encoder up. Lower the bitrate, or turn on Auto quality.',
   resize: 'Resizing the window or a divider holds the picture back for a moment. It passes.',
+}
+
+/** The level of the measured frame rate against the canvas rate. */
+export function fpsLevel(fps: number, target: number): FrameLevel {
+  if (!(target > 0)) return 'ok'
+  if (fps < target * FRAME_HEALTH.fpsBadBelow) return 'bad'
+  if (fps < target * FRAME_HEALTH.fpsWarnBelow) return 'warn'
+  return 'ok'
+}
+
+const ORDER: Record<FrameLevel, number> = { ok: 0, warn: 1, bad: 2 }
+
+/** The colour of the "Frame rate" box: the last minute's misses and the rate itself, the worse
+ * of the two. From an older engine (no `missed_recent`) a rate under the amber line is red, as
+ * it was before. */
+export function frameRateLevel(e: EngineStats['engine'], target: number): FrameLevel {
+  const rate = fpsLevel(e.fps, target)
+  const m = readMisses(e)
+  if (!m.recent) return rate === 'ok' ? 'ok' : 'bad'
+  return ORDER[rate] > ORDER[m.level] ? rate : m.level
 }
 
 /** The tone a box takes: its own count must be above zero, or it stays normal. */

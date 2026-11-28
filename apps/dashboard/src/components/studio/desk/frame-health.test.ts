@@ -6,6 +6,8 @@ import {
   FRAME_HEALTH,
   boxLevel,
   causesOf,
+  fpsLevel,
+  frameRateLevel,
   levelFrom,
   readMisses,
 } from './frame-health'
@@ -44,6 +46,31 @@ describe('the colour of the Frame rate panel', () => {
     expect(FRAME_HEALTH.windowSeconds).toBe(60)
     expect(FRAME_HEALTH.stillSeconds).toBe(10)
     expect(FRAME_HEALTH.stillFrames).toBe(3)
+  })
+
+  it('shows a low frame rate in amber or red even when no frame was counted as missed', () => {
+    // 60 fps canvas, nothing missed in the last minute.
+    const at60 = (fps: number) => frameRateLevel({ ...engine(calm()), fps }, 60)
+    expect(at60(60)).toBe('ok')
+    expect(at60(57.1)).toBe('ok') // 4.8% short: inside the margin
+    expect(at60(56)).toBe('warn') // 6.7% short
+    expect(at60(50)).toBe('bad') // 17% short
+    expect(fpsLevel(56, 60)).toBe('warn')
+    expect(fpsLevel(30, 0)).toBe('ok') // no canvas rate known: nothing to compare
+    expect(FRAME_HEALTH.fpsWarnBelow).toBe(0.95)
+    // The worse of the two wins: red misses stay red at a fine rate, and a low rate beats a dip.
+    expect(frameRateLevel({ ...engine({ ...calm(), per_second: at(0, 5) }), fps: 60 }, 60)).toBe(
+      'bad',
+    )
+    expect(frameRateLevel({ ...engine({ ...calm(), per_second: at(30, 5) }), fps: 50 }, 60)).toBe(
+      'bad',
+    )
+    expect(frameRateLevel({ ...engine({ ...calm(), per_second: at(30, 5) }), fps: 60 }, 60)).toBe(
+      'warn',
+    )
+    // An older engine (no last minute): a rate under the line is red, as before.
+    expect(frameRateLevel({ ...engine(), fps: 56 }, 60)).toBe('bad')
+    expect(frameRateLevel({ ...engine(), fps: 60 }, 60)).toBe('ok')
   })
 
   it('is normal when nothing was missed in the last minute', () => {

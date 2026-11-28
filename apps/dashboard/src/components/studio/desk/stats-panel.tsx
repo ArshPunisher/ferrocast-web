@@ -24,6 +24,7 @@ import {
   CAUSE_TEXT,
   FRAME_HEALTH,
   boxLevel,
+  frameRateLevel,
   readMisses,
   type FrameLevel,
 } from './frame-health'
@@ -295,7 +296,7 @@ export function StatsDialog({
   const struggling =
     !!e &&
     (slowDraw ||
-      e.fps < fps * 0.95 ||
+      e.fps < fps * FRAME_HEALTH.fpsWarnBelow ||
       (e.frames > 0 && e.lagged / e.frames > 0.01) ||
       ((e.encoded ?? 0) > 0 && (e.skipped ?? 0) / (e.encoded ?? 1) > 0.01) ||
       (!!stream?.active && stream.frames > 0 && stream.dropped / stream.frames > 0.01))
@@ -409,7 +410,7 @@ export function StatsDialog({
             <Box
               label="Frame rate"
               value={`${e.fps.toFixed(2)} / ${fps}`}
-              level={miss?.recent ? miss.level : e.fps < fps * 0.95 ? 'bad' : 'ok'}
+              level={frameRateLevel(e, fps)}
             />
             {miss?.recent ? (
               <>
