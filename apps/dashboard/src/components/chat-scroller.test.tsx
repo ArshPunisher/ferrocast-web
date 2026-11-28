@@ -79,6 +79,8 @@ describe('ChatScroller ResizeObserver attachment', () => {
       for (const inst of instances) {
         if (inst.observed.includes(listEl)) inst.cb()
       }
+      // The follow-up scroll runs in the next animation frame, not inside the observer callback.
+      await new Promise((resolve) => requestAnimationFrame(resolve))
     })
     expect(log.scrollTop).toBe(620)
   })
