@@ -1191,7 +1191,7 @@ export function AudioDock() {
           </div>
         )}
       </div>
-      <footer className="fc-dock-bar flex h-8 flex-none items-center gap-0.5 border-t border-line px-1">
+      <footer className="fc-dock-bar fc-focus-inset flex h-8 flex-none items-center gap-0.5 overflow-x-auto border-t border-line px-1 [scrollbar-width:none]">
         <Button size="xs" variant="ghost" onClick={() => setAdding('mic')}>
           <Plus size={14} weight="bold" /> Add sound
         </Button>

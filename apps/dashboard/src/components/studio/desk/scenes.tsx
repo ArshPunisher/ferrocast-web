@@ -1031,6 +1031,17 @@ export function ScenesDock() {
                                 <KindTile kind="scene" size={26} />
                               </span>
                             )}
+                            {canDrag && (
+                              // On the picture's corner, so on a touch screen its big target
+                              // does not take the room of the name below.
+                              <span
+                                aria-hidden
+                                data-drag-handle
+                                className="absolute top-0 right-0 flex touch-none items-center justify-center rounded-[4px] bg-black/35 text-white opacity-0 transition-opacity group-hover:opacity-100 cursor-grab active:cursor-grabbing [@media(pointer:coarse)]:min-h-9 [@media(pointer:coarse)]:min-w-9 [@media(pointer:coarse)]:opacity-80 size-5"
+                              >
+                                <DotsSixVertical size={13} weight="bold" />
+                              </span>
+                            )}
                             {keys[`scene:${s.name}`] && (
                               // On the picture, so the name keeps the whole line below it.
                               <kbd className="absolute right-1.5 bottom-1.5 rounded-[5px] border border-white/30 bg-black/60 px-1 py-px font-mono text-[11px] font-bold text-white">
@@ -1049,15 +1060,6 @@ export function ScenesDock() {
                             )}
                           </span>
                           <span className="flex min-w-0 items-center gap-1.5 px-1 pb-0.5">
-                            {canDrag && (
-                              <span
-                                aria-hidden
-                                data-drag-handle
-                                className="flex shrink-0 touch-none items-center justify-center rounded-[4px] text-text-3 opacity-60 transition-opacity group-hover:opacity-100 cursor-grab active:cursor-grabbing [@media(pointer:coarse)]:-my-2 [@media(pointer:coarse)]:-ml-1 [@media(pointer:coarse)]:min-h-[44px] [@media(pointer:coarse)]:min-w-[44px]"
-                              >
-                                <DotsSixVertical size={13} weight="bold" />
-                              </span>
-                            )}
                             <span className="min-w-0 flex-1 truncate" title={s.name}>
                               {s.name}
                             </span>
@@ -1124,7 +1126,7 @@ export function ScenesDock() {
           </ul>
         )}
       </div>
-      <footer className="fc-dock-bar flex h-8 flex-none items-center gap-0.5 border-t border-line px-1">
+      <footer className="fc-dock-bar fc-focus-inset flex h-8 flex-none items-center gap-0.5 overflow-x-auto border-t border-line px-1 [scrollbar-width:none]">
         <IconButton
           size="sm"
           label={`Move ${targetLabel} up`}

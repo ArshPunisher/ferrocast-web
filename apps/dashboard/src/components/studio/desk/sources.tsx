@@ -1135,59 +1135,61 @@ export function SourcesDock() {
         )}
       </div>
       <footer className="fc-dock-bar flex h-8 flex-none items-center gap-0.5 border-t border-line px-1">
-        <IconButton
-          size="sm"
-          label={picked ? `Move ${picked.name} up` : 'Move up'}
-          disabled={!picked || busy !== null}
-          onClick={() => picked && void act(picked, 'up')}
-        >
-          <CaretUp size={15} weight="bold" />
-        </IconButton>
-        <IconButton
-          size="sm"
-          label={picked ? `Move ${picked.name} down` : 'Move down'}
-          disabled={!picked || busy !== null}
-          onClick={() => picked && void act(picked, 'down')}
-        >
-          <CaretDown size={15} weight="bold" />
-        </IconButton>
-        <IconButton
-          size="sm"
-          label={picked ? `Settings of ${picked.name}` : 'Settings'}
-          disabled={!picked}
-          onClick={() => picked && edit(picked.name)}
-        >
-          <SlidersHorizontal size={15} weight="bold" />
-        </IconButton>
-        <IconButton
-          size="sm"
-          label={picked ? `Fit ${picked.name} to the screen` : 'Fit to the screen'}
-          disabled={!picked || busy !== null}
-          onClick={() => picked && void act(picked, 'fit')}
-        >
-          <FrameCorners size={15} weight="bold" />
-        </IconButton>
-        <IconButton
-          size="sm"
-          label={picked ? `Copy ${picked.name}` : 'Copy'}
-          disabled={!picked || studioClip.busy !== null}
-          onClick={() => picked && copyItem(picked)}
-        >
-          <CopySimple size={15} weight="bold" />
-        </IconButton>
-        <IconButton
-          size="sm"
-          label={
-            studioClip.clip?.kind === 'source'
-              ? `Paste ${clipLabel(studioClip.clip)} into ${scene}`
-              : 'Paste a copied source'
-          }
-          disabled={studioClip.clip?.kind !== 'source' || studioClip.busy !== null}
-          onClick={() => pasteFromClipboard()}
-        >
-          <ClipboardText size={15} weight="bold" />
-        </IconButton>
-        <span className="flex-1" />
+        {/* The tools scroll sideways in a narrow dock; Remove stays in view at the end. */}
+        <div className="fc-focus-inset flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
+          <IconButton
+            size="sm"
+            label={picked ? `Move ${picked.name} up` : 'Move up'}
+            disabled={!picked || busy !== null}
+            onClick={() => picked && void act(picked, 'up')}
+          >
+            <CaretUp size={15} weight="bold" />
+          </IconButton>
+          <IconButton
+            size="sm"
+            label={picked ? `Move ${picked.name} down` : 'Move down'}
+            disabled={!picked || busy !== null}
+            onClick={() => picked && void act(picked, 'down')}
+          >
+            <CaretDown size={15} weight="bold" />
+          </IconButton>
+          <IconButton
+            size="sm"
+            label={picked ? `Settings of ${picked.name}` : 'Settings'}
+            disabled={!picked}
+            onClick={() => picked && edit(picked.name)}
+          >
+            <SlidersHorizontal size={15} weight="bold" />
+          </IconButton>
+          <IconButton
+            size="sm"
+            label={picked ? `Fit ${picked.name} to the screen` : 'Fit to the screen'}
+            disabled={!picked || busy !== null}
+            onClick={() => picked && void act(picked, 'fit')}
+          >
+            <FrameCorners size={15} weight="bold" />
+          </IconButton>
+          <IconButton
+            size="sm"
+            label={picked ? `Copy ${picked.name}` : 'Copy'}
+            disabled={!picked || studioClip.busy !== null}
+            onClick={() => picked && copyItem(picked)}
+          >
+            <CopySimple size={15} weight="bold" />
+          </IconButton>
+          <IconButton
+            size="sm"
+            label={
+              studioClip.clip?.kind === 'source'
+                ? `Paste ${clipLabel(studioClip.clip)} into ${scene}`
+                : 'Paste a copied source'
+            }
+            disabled={studioClip.clip?.kind !== 'source' || studioClip.busy !== null}
+            onClick={() => pasteFromClipboard()}
+          >
+            <ClipboardText size={15} weight="bold" />
+          </IconButton>
+        </div>
         <IconButton
           size="sm"
           variant="ghost"

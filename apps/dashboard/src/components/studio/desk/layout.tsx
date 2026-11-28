@@ -1508,7 +1508,9 @@ export function DockHeader({
       )}
       {info}
       <span className="min-w-0 flex-1" />
-      <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
+      {/* Shrinks last (the scene chip beside the name gives way first), so a long name never
+          squeezes the Add button to a dot; only when nothing else is left does it scroll. */}
+      <div className="flex min-w-0 shrink-[0.02] items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
         {actions}
       </div>
       {!phone && <DockMenu id={id} />}
