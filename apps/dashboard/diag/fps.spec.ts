@@ -1,48 +1,7 @@
 /* eslint-disable no-console */
 import { test } from '@playwright/test'
 
-for (const dpr of [1, 2]) {
-  for (const mode of ['zoom', 'transform']) {
-    test.describe(`dpr${dpr} ${mode}`, () => {
-      test.use({ deviceScaleFactor: dpr })
-      test('themes page frames', async ({ page }) => {
-        await page.addInitScript((m) => {
-          const w = window as unknown as { __f: number }
-          w.__f = 0
-          const tick = () => {
-            w.__f++
-            requestAnimationFrame(tick)
-          }
-          requestAnimationFrame(tick)
-          if (m === 'transform') {
-            Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' })
-          }
-        }, mode)
-        await page.goto('./?autoplay=0&latency=0#/designs/themes')
-        const series: number[] = []
-        let last = 0
-        let run = 0
-        for (let i = 0; i < 40; i++) {
-          await page.waitForTimeout(1000)
-          const f = await page.evaluate(() => (window as unknown as { __f: number }).__f)
-          series.push(f - last)
-          last = f
-          run = i >= 3 && series[i]! >= 15 ? run + 1 : 0
-          if (run === 3) break
-        }
-        const zoomed = await page.evaluate(() => {
-          const c = document
-            .querySelector('[data-overlay-preview]')
-            ?.firstElementChild?.shadowRoot?.querySelector<HTMLElement>('.fc-ov-canvas')
-          return c ? `zoom=${c.style.zoom} transform=${c.style.transform}` : 'no canvas'
-        })
-        console.log(`DIAG dpr${dpr} ${mode} ${zoomed} series=${series.join(' ')}`)
-      })
-    })
-  }
-}
-
-test('inventory of heavy styles in the previews', async ({ page }) => {
+test.skip('inventory of heavy styles in the previews', async ({ page }) => {
   await page.goto('./?autoplay=0&latency=0#/designs/themes')
   await page.waitForFunction(
     () => document.querySelectorAll('[data-overlay-preview]').length >= 8,
@@ -123,4 +82,45 @@ test('home page frames (control)', async ({ page }) => {
     last = f
   }
   console.log(`DIAG home series=${series.join(' ')}`)
+})
+
+test('ov-main overflow at 1024x600', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('fc-nav-folded', '0'))
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('./?autoplay=0&latency=0&studioEngine=1#/home')
+  await page.waitForSelector('#main')
+  await page.setViewportSize({ width: 375, height: 812 })
+  await page.evaluate(() => (location.hash = '#/overlays/ov-main'))
+  await page.waitForTimeout(1500)
+  for (const vp of [
+    { width: 1280, height: 800 },
+    { width: 1024, height: 600 },
+  ]) {
+    await page.setViewportSize(vp)
+    for (let i = 0; i < 6; i++) {
+      await page.waitForTimeout(700)
+      const m = await page.evaluate(() => {
+        const de = document.documentElement
+        const offenders = Array.from(document.body.querySelectorAll('*'))
+          .map((e) => ({ e, r: e.getBoundingClientRect() }))
+          .filter((x) => x.r.bottom > window.innerHeight + 2 && x.r.height > 0)
+          .sort((a, b) => b.r.bottom - a.r.bottom)
+          .slice(0, 6)
+          .map(
+            (x) =>
+              `${x.e.tagName}.${String((x.e as HTMLElement).className).slice(0, 60)}@${Math.round(x.r.top)}-${Math.round(x.r.bottom)}`,
+          )
+        return {
+          sh: de.scrollHeight,
+          ch: de.clientHeight,
+          ih: window.innerHeight,
+          bodySh: document.body.scrollHeight,
+          vv: window.visualViewport?.height,
+          fonts: document.fonts.status,
+          offenders,
+        }
+      })
+      console.log(`DIAG ov ${vp.width}x${vp.height} t=${i} ${JSON.stringify(m)}`)
+    }
+  }
 })
