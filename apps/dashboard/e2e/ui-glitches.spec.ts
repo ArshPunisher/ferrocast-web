@@ -446,24 +446,31 @@ test.describe('Dialogs, toasts and screens', () => {
     await page.evaluate(() => {
       const log: string[] = []
       ;(window as unknown as { __topLayer: string[] }).__topLayer = log
-      const wrap = (proto: object, name: string, tag: string) => {
+      const wrap = (proto: object, name: string, tag: string, only?: string) => {
         const orig = (proto as Record<string, (...a: unknown[]) => unknown>)[name]!
-        ;(proto as Record<string, unknown>)[name] = function (this: unknown, ...a: unknown[]) {
-          log.push(tag)
+        ;(proto as Record<string, unknown>)[name] = function (this: HTMLElement, ...a: unknown[]) {
+          if (!only || this.getAttribute('aria-label') === only) log.push(tag)
           return orig.apply(this, a)
         }
       }
       wrap(HTMLDialogElement.prototype, 'showModal', 'dialog')
-      wrap(HTMLElement.prototype, 'showPopover', 'toasts')
+      // Only the notifications: it must be taken out of the top layer and put back on top, as
+      // showing one that is already open changes nothing.
+      wrap(HTMLElement.prototype, 'hidePopover', 'toasts-hide', 'Notifications')
+      wrap(HTMLElement.prototype, 'showPopover', 'toasts-show', 'Notifications')
     })
     await page.getByRole('button', { name: 'Start show' }).first().click()
     await expect(page.locator('dialog[open]')).toHaveCount(1)
     const log = await page.evaluate(
       () => (window as unknown as { __topLayer: string[] }).__topLayer,
     )
-    expect(log.indexOf('dialog')).toBeGreaterThanOrEqual(0)
-    // The toasts went into the top layer after the dialog, so they are drawn over its backdrop.
-    expect(log.lastIndexOf('toasts')).toBeGreaterThan(log.indexOf('dialog'))
+    const at = log.indexOf('dialog')
+    expect(at).toBeGreaterThanOrEqual(0)
+    // After the dialog opened: the toasts closed, then opened again, so they are drawn above
+    // its backdrop.
+    const after = log.slice(at + 1)
+    expect(after.indexOf('toasts-hide')).toBeGreaterThanOrEqual(0)
+    expect(after.indexOf('toasts-show')).toBeGreaterThan(after.indexOf('toasts-hide'))
   })
 
   test('Escape gives focus back to the button that opened a dialog', async ({ page }) => {
