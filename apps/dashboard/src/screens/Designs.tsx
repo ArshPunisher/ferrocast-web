@@ -168,7 +168,13 @@ function Tile({
           </h3>
           {design.built_in ? <BrandChip /> : <Badge tone="accent">Mine</Badge>}
         </div>
-        <p className="line-clamp-2 text-[14.5px] leading-snug text-text-3">
+        <p
+          className="line-clamp-2 text-[14.5px] leading-snug text-text-3"
+          title={
+            design.description ||
+            (design.origin.from ? `From ${design.origin.from}.` : 'Your own design.')
+          }
+        >
           {design.kind !== 'alert' && (
             <span className="font-medium text-text-2">{KIND_NAME[design.kind]}. </span>
           )}
@@ -381,7 +387,15 @@ export function Designs({ tab }: { tab: GalleryTab }) {
                 )}
               >
                 {t.label}
-                <span className="font-mono text-[13px] font-medium opacity-80">{count(t.id)}</span>
+                {/* Not a "0" while the library is still loading: it would read as empty. */}
+                <span
+                  className={cx(
+                    'font-mono text-[13px] font-medium opacity-80',
+                    !list.data && 'invisible',
+                  )}
+                >
+                  {list.data ? count(t.id) : 0}
+                </span>
               </a>
             ))}
           </nav>
@@ -457,7 +471,12 @@ export function Designs({ tab }: { tab: GalleryTab }) {
                 className={cx(railRow(style === ''), 'hidden lg:flex')}
               >
                 <span>All styles</span>
-                <span className="font-mono text-[12.5px] font-medium opacity-80">
+                <span
+                  className={cx(
+                    'font-mono text-[12.5px] font-medium opacity-80',
+                    !list.data && 'invisible',
+                  )}
+                >
                   {source.length}
                 </span>
               </button>

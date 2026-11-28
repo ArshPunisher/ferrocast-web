@@ -6,6 +6,7 @@ import { DownloadSimple, PushPin, SpeakerHigh, Trash, X } from '@phosphor-icons/
 import {
   describeError,
   relativeTime,
+  tameText,
   timecode,
   type LaneItem,
   type Marker,
@@ -89,15 +90,21 @@ export function DontMissLane() {
             <span className="text-[13.5px] font-semibold text-accent-text">
               {KIND[i.kind] ?? 'Moment'} · {relativeTime(i.at, now)}
             </span>
-            <span className="text-sm font-semibold break-words text-text">{i.title}</span>
+            {/* Viewer text: combining-mark stacks are trimmed and anything left is clipped to the card. */}
+            <span className="overflow-y-clip text-sm font-semibold break-words text-text">
+              {tameText(i.title)}
+            </span>
             {i.detail && (
-              <span className="line-clamp-2 text-[14.5px] break-words text-text-2" title={i.detail}>
-                {i.detail}
+              <span
+                className="line-clamp-2 overflow-y-clip text-[14.5px] break-words text-text-2"
+                title={tameText(i.detail)}
+              >
+                {tameText(i.detail)}
               </span>
             )}
             <IconButton
               size="sm"
-              label={`Dismiss: ${i.title}`}
+              label={`Dismiss: ${tameText(i.title)}`}
               className="absolute top-1 right-1"
               onClick={() =>
                 void run(i.id, () => studio.dismiss(i.id)).then((l) => l && setLane(l))
