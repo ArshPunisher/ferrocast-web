@@ -25,6 +25,7 @@ import {
 import {
   catalogNotPublished,
   describeError,
+  errorSentence,
   parseFerrocastStoreLink,
   safeCreatorLinkUrl,
   storeApi,
@@ -527,7 +528,7 @@ export function Store({ route }: { route: Extract<Route, { name: 'store' }> }) {
         const preview = await api.resolveLink(uri)
         if (links.current.isCurrent(gen)) setLinkPreview(preview)
       } catch (e) {
-        if (links.current.isCurrent(gen)) setLinkError(describeError(e).message)
+        if (links.current.isCurrent(gen)) setLinkError(errorSentence(e))
       } finally {
         if (links.current.isCurrent(gen)) setLinkBusy(false)
       }

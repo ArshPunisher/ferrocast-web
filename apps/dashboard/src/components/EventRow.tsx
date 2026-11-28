@@ -3,6 +3,7 @@ import { ArrowCounterClockwise, Question } from '@phosphor-icons/react'
 import {
   actorOf,
   describeError,
+  errorSentence,
   describeEvent,
   isAlertable,
   relativeTime,
@@ -152,7 +153,7 @@ export function WhyDialog({ event, onClose }: { event: FerroEvent; onClose: () =
     client
       .why(event.id)
       .then((r) => alive && setResult(r))
-      .catch((e: unknown) => alive && setError(describeError(e).message))
+      .catch((e: unknown) => alive && setError(errorSentence(e)))
     return () => {
       alive = false
     }

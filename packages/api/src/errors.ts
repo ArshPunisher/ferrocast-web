@@ -110,7 +110,11 @@ export async function errorFromResponse(res: Response): Promise<ApiError> {
     : { message: 'Something went wrong in Ferrocast.', hint: 'Try again in a moment.' }
   if (isErrorBody(body)) {
     const msg = body.error.message.trim() || fallback.message
-    const hint = body.error.hint?.trim() || fallback.hint
+    // "Check the highlighted field" only makes sense for a 400 that names a field; an action
+    // that was refused ("has no filters to copy") has nothing highlighted.
+    const namesField = /^\w+: /.test(msg)
+    const hint =
+      body.error.hint?.trim() || (res.status === 400 && !namesField ? null : fallback.hint)
     return new ApiError(res.status, body.error.code, msg, hint, retry, body)
   }
   return new ApiError(res.status, `http_${res.status}`, fallback.message, fallback.hint, retry)
@@ -134,6 +138,12 @@ export function isAbortError(err: unknown): boolean {
 export function describeError(err: unknown): { message: string; hint: string | null } {
   if (err instanceof ApiError) return { message: err.message, hint: err.hint }
   return { message: 'Something went wrong.', hint: 'Try again in a moment.' }
+}
+
+/** The message and what to do about it, as one text, for a place that prints a single line. */
+export function errorSentence(err: unknown): string {
+  const d = describeError(err)
+  return d.hint ? `${d.message} ${d.hint}` : d.message
 }
 
 /**

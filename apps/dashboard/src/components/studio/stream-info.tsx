@@ -9,6 +9,7 @@ import {
   ApiError,
   checkStreamInfo,
   describeError,
+  errorSentence,
   relativeTime,
   MAX_STREAM_DESCRIPTION,
   STREAM_INFO_PLATFORMS,
@@ -819,7 +820,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
             view.set(fresh)
             setResults(fresh.history[0]?.results ?? null)
           }
-          setErr(describeError(e).message)
+          setErr(errorSentence(e))
           throw e
         }
       },

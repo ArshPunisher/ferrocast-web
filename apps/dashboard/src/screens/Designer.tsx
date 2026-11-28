@@ -32,6 +32,7 @@ import {
   EVENT_SAMPLE,
   baseLook,
   describeError,
+  errorSentence,
   hasAmount,
   looksFor,
   previewAlert,
@@ -1187,5 +1188,5 @@ function GuidedView({
 }
 
 export function errorText(e: unknown): string {
-  return describeError(e).message
+  return errorSentence(e)
 }

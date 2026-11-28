@@ -6,6 +6,7 @@ import { ArrowsClockwise, Broadcast, Play, Stop } from '@phosphor-icons/react'
 import {
   AT_ZERO_DEFAULT,
   describeError,
+  errorSentence,
   fieldError,
   type AtZero,
   type CheckStatus,
@@ -418,7 +419,7 @@ export function StartShowDialog({ open, onClose }: { open: boolean; onClose: () 
     studio
       .preflight()
       .then(setPf)
-      .catch((e: unknown) => setErr(describeError(e).message))
+      .catch((e: unknown) => setErr(errorSentence(e)))
   }, [open, studio])
   const start = (force: boolean) =>
     void run('start', () => studio.startShow(force), {

@@ -3,7 +3,7 @@
 // password is made then, shown once and kept only as a hash.
 
 import { useCallback, useEffect, useState } from 'react'
-import { describeError, type RemoteControl } from '@ferrocast/api'
+import { describeError, errorSentence, type RemoteControl } from '@ferrocast/api'
 import { Button, InfoTip, Input, Switch, copyText, toast } from '@ferrocast/ui'
 import { useDesk } from './common'
 
@@ -25,7 +25,7 @@ export function RemoteControlSection() {
       setPort((p) => (p === '' ? String(v.port) : p))
       setFailed(null)
     } catch (e) {
-      setFailed(describeError(e).message)
+      setFailed(errorSentence(e))
     }
   }, [api])
 

@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FerroClient } from '../src/client'
-import { ApiError, STATUS_COPY, describeError, isAbortError, parseRetryAfter } from '../src/errors'
+import {
+  ApiError,
+  STATUS_COPY,
+  describeError,
+  errorFromResponse,
+  errorSentence,
+  isAbortError,
+  parseRetryAfter,
+} from '../src/errors'
 
 type Call = { url: string; init: RequestInit | undefined }
 
@@ -212,6 +220,21 @@ describe('errors', () => {
     expect(parseRetryAfter(null)).toBeNull()
     expect(parseRetryAfter('soon')).toBeNull()
     expect(parseRetryAfter(new Date(10_000).toUTCString(), 0)).toBe(10)
+  })
+  it('only says "check the highlighted field" for a 400 that names a field', async () => {
+    const res = (message: string) =>
+      new Response(JSON.stringify({ error: { code: 'bad_request', message } }), { status: 400 })
+    // An action that was refused has no field to point at.
+    const refused = await errorFromResponse(res('"Webcam" has no filters to copy.'))
+    expect(refused.hint).toBeNull()
+    const field = await errorFromResponse(res('options: give 2 to 5 answers.'))
+    expect(field.hint).toBe('Check the highlighted field.')
+  })
+  it('puts the hint after the message when one line is all there is room for', () => {
+    expect(errorSentence(new ApiError(404, 'x', 'That is gone.', 'Reload the page.'))).toBe(
+      'That is gone. Reload the page.',
+    )
+    expect(errorSentence(new ApiError(409, 'x', 'Taken', null))).toBe('Taken')
   })
   it('describes unknown throwables without leaking them', () => {
     expect(describeError(new Error('stack trace stuff')).message).toBe('Something went wrong.')
