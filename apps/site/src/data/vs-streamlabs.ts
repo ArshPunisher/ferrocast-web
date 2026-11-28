@@ -1,7 +1,7 @@
 // Ferrocast against Streamlabs, feature by feature. No prices: the page is about what each
 // one does. Streamlabs facts were read from streamlabs.com on 27 November 2026.
 
-export type Mark = 'yes' | 'no'
+export type Mark = 'yes' | 'no' | 'partial'
 export interface VsCell {
   mark: Mark
   text: string
@@ -18,6 +18,7 @@ export interface VsGroup {
 
 const y = (text: string): VsCell => ({ mark: 'yes', text })
 const n = (text: string): VsCell => ({ mark: 'no', text })
+const part = (text: string): VsCell => ({ mark: 'partial', text })
 
 export const VS_CHECKED = '27 November 2026'
 
@@ -86,7 +87,11 @@ export const VS_GROUPS: VsGroup[] = [
     title: 'Earn and own',
     rows: [
       { feature: 'Tip fees', streamlabs: y('No fee.'), ferrocast: y('No cut.') },
-      { feature: 'Open source', streamlabs: n('No.'), ferrocast: y('Yes. GPL-3.0.') },
+      {
+        feature: 'Open source',
+        streamlabs: part('Streamlabs Desktop is GPL-3.0. Widgets, Cloudbot and tips are not.'),
+        ferrocast: y('Yes. GPL-3.0.'),
+      },
       {
         feature: 'Where it runs',
         streamlabs: y('In their cloud and a desktop app.'),

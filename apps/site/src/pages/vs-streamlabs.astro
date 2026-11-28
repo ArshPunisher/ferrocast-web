@@ -11,6 +11,7 @@ import { webPage } from '../data/schema'
 import { VS_CHECKED, VS_GROUPS, VS_WINS } from '../data/vs-streamlabs'
 
 const page = PAGES.vs
+const MARK_WORD = { yes: 'yes', no: 'no', partial: 'partly' } as const
 ---
 
 <Base
@@ -75,7 +76,7 @@ const page = PAGES.vs
                     class={r.streamlabs.mark === 'yes' ? 'mk-y' : 'mk-n'}
                   />
                   <span>
-                    <span class="sr-only">{r.streamlabs.mark === 'yes' ? 'Yes: ' : 'No: '}</span>
+                    <span class="sr-only">Streamlabs, {MARK_WORD[r.streamlabs.mark]}: </span>
                     {r.streamlabs.text}
                   </span>
                 </div>
@@ -87,7 +88,7 @@ const page = PAGES.vs
                     class={r.ferrocast.mark === 'yes' ? 'mk-y' : 'mk-n'}
                   />
                   <span>
-                    <span class="sr-only">{r.ferrocast.mark === 'yes' ? 'Yes: ' : 'No: '}</span>
+                    <span class="sr-only">Ferrocast, {MARK_WORD[r.ferrocast.mark]}: </span>
                     {r.ferrocast.text}
                   </span>
                 </div>
@@ -258,6 +259,7 @@ const page = PAGES.vs
   }
   .cell::before {
     content: attr(data-l);
+    content: attr(data-l) / '';
     grid-column: 1 / -1;
     color: var(--fc-text-3);
     font-size: 0.75rem;
