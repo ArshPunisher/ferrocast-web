@@ -13,6 +13,7 @@ import {
   formatEditorHeaderStatus,
   initialDraftFromModel,
   mapQualityApiError,
+  sameQuality,
   toDestinationQualityPayload,
 } from './quality-modal-model'
 
@@ -1351,5 +1352,153 @@ describe('quality-modal-model: limits before the options arrive, and new error c
     }
     expect(mapQualityApiError('conflict', '', null).kind).toBe('busy')
     expect(mapQualityApiError('golive_needs_new_encode', '', null).kind).toBe('restart')
+  })
+})
+
+describe('quality-modal-model: review fixes', () => {
+  it('counts a destination leaving the main stream’s own encode as a new session', () => {
+    // 2 of 2 sessions: the main encode and Twitch's own. YouTube shares the main encode, so
+    // moving it to a picture of its own needs a third.
+    const yt = makeDest({
+      id: 'youtube',
+      kind: 'youtube',
+      name: 'YouTube',
+      quality: { mode: 'same_as_main' },
+      resolved_quality: resolvedQ({ separate_encode: false, group_id: 'main' }),
+    })
+    const twitch = makeDest({
+      id: 'twitch',
+      quality: { mode: 'custom', width: 1280, height: 720, fps: 30, kbps: 3000, codec: null },
+      resolved_quality: resolvedQ({
+        width: 1280,
+        height: 720,
+        fps: 30,
+        kbps: 3000,
+        group_id: 'g-tw',
+        separate_encode: true,
+      }),
+    })
+    const response: GoLiveQualityOptionsResponse = {
+      ...RESPONSE_BASE,
+      main: { width: 1920, height: 1080, fps: 60, kbps: 6000, codec: 'h264', audio_kbps: 160 },
+      budget: { ...RESPONSE_BASE.budget, used_sessions: 2, max_sessions: 2 },
+    }
+    const model = buildModalModel({
+      dest: yt,
+      destOpts: makeOpts({
+        id: 'youtube',
+        current: yt.quality!,
+        resolved: yt.resolved_quality!,
+        options: [sameOption({ width: 1920, height: 1080, fps: 60, kbps: 6000 })],
+        custom_limits: OPTS_FREE,
+      }),
+      response,
+    })
+    const ev = evaluateModalDraft(
+      model,
+      { matchMain: false, width: 960, height: 540, fps: 30, kbps: 2000, codec: 'h264' },
+      { dest: yt, allDestinations: [yt, twitch], live: false },
+    )
+    expect(ev.budgetExceeded).not.toBeNull()
+    expect(ev.budgetExceeded?.usedSessions).toBe(3)
+    expect(ev.canApply).toBe(false)
+  })
+
+  it('does not offer a peer whose encode the engine refused for this destination', () => {
+    const build = (allowed: boolean) => {
+      const yt = makeDest({
+        id: 'youtube',
+        kind: 'youtube',
+        name: 'YouTube',
+        quality: { mode: 'same_as_main' },
+        resolved_quality: resolvedQ({ separate_encode: true, group_id: 'g-yt' }),
+      })
+      // Kick sits on exactly what Match main would send for YouTube.
+      const kick = makeDest({
+        id: 'kick',
+        kind: 'kick',
+        name: 'Kick',
+        quality: { mode: 'same_as_main' },
+        resolved_quality: resolvedQ({ separate_encode: true, group_id: 'g-k' }),
+      })
+      const model = buildModalModel({
+        dest: yt,
+        destOpts: makeOpts({
+          id: 'youtube',
+          current: yt.quality!,
+          resolved: yt.resolved_quality!,
+          options: [
+            sameOption(
+              { width: 1920, height: 1080, fps: 60, kbps: 6000 },
+              allowed ? {} : { allowed: false, disabled_reason: 'Your PC cannot run it.' },
+            ),
+          ],
+          custom_limits: OPTS_FREE,
+        }),
+        response: RESPONSE_BASE,
+      })
+      return evaluateModalDraft(
+        model,
+        { matchMain: false, width: 1280, height: 720, fps: 30, kbps: 3000, codec: null },
+        { dest: yt, allDestinations: [yt, kick], live: false },
+      )
+    }
+    expect(build(true).peerCandidate?.id).toBe('kick')
+    expect(build(false).peerCandidate).toBeNull()
+  })
+
+  it('does not call the platform’s own aspect-ratio fit a cut by the PC', () => {
+    // A 2560x1080 picture under Kick's 1920x1080 limit is fitted to 1920x810 by Kick alone.
+    const kick = makeDest({
+      id: 'kick',
+      kind: 'kick',
+      name: 'Kick',
+      quality: { mode: 'same_as_main' },
+      resolved_quality: resolvedQ({ width: 1920, height: 810, kbps: 8000, auto_fitted: true }),
+    })
+    const response: GoLiveQualityOptionsResponse = {
+      ...RESPONSE_BASE,
+      main: { width: 2560, height: 1080, fps: 60, kbps: 8000, codec: 'h264', audio_kbps: 160 },
+    }
+    const model = buildModalModel({
+      dest: kick,
+      destOpts: makeOpts({
+        id: 'kick',
+        resolved: kick.resolved_quality!,
+        options: [sameOption({ width: 1920, height: 810, fps: 60, kbps: 8000 })],
+        custom_limits: {
+          max_width: 1920,
+          max_height: 1080,
+          min_kbps: 500,
+          max_kbps: 8000,
+          fps_choices: [30, 60],
+          codecs: ['h264'],
+          recommended_width: 1920,
+          recommended_height: 1080,
+          recommended_fps: 60,
+          recommended_kbps: 8000,
+        },
+      }),
+      response,
+    })
+    const cmp = buildMatchMainComparison(model)
+    expect(cmp.reasons.join(' ')).not.toMatch(/PC’s encoder/)
+    expect(cmp.reasons).toContain('Size lowered to 810p, Kick’s limit.')
+  })
+
+  it('compares saved qualities by value, not by field order', () => {
+    expect(
+      sameQuality(
+        { mode: 'custom', width: 1280, height: 720, fps: 30, kbps: 3000, codec: 'h264' },
+        { mode: 'custom', codec: 'h264', kbps: 3000, fps: 30, height: 720, width: 1280 },
+      ),
+    ).toBe(true)
+    expect(
+      sameQuality(
+        { mode: 'custom', width: 1280, height: 720, fps: 30, kbps: 3000, codec: null },
+        { mode: 'custom', width: 1280, height: 720, fps: 30, kbps: 3500, codec: null },
+      ),
+    ).toBe(false)
+    expect(sameQuality({ mode: 'same_as_main' }, { mode: 'same_as_main' })).toBe(true)
   })
 })

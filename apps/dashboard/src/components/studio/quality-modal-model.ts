@@ -767,13 +767,6 @@ export function evaluateModalDraft(
   // A peer's encode this destination could join. Found on its own, so it is also on offer when the
   // engine refuses a change for a reason the estimate below cannot see (for example Mpx/s).
   const ownGroup = ctx.dest.resolved_quality?.group_id ?? null
-  const compatiblePeer = peerTuples.find(
-    ({ dest: other, resolved }) =>
-      draftFitsLimits(model.limits, resolved) &&
-      keyOf(resolved) !== draftKey &&
-      // Rejoining the encode it is already in changes nothing, unless an edit moved it away.
-      !(!isDirty && ownGroup && other.resolved_quality?.group_id === ownGroup),
-  )
   const matchesSameAsMain = (r: NonNullable<DestinationView['resolved_quality']>) =>
     model.sameAsMainResolved !== null &&
     r.width === model.sameAsMainResolved.width &&
@@ -781,24 +774,37 @@ export function evaluateModalDraft(
     r.fps === model.sameAsMainResolved.fps &&
     r.kbps === model.sameAsMainResolved.kbps &&
     r.codec === model.sameAsMainResolved.codec
+  // What choosing a peer's encode would send for this destination.
+  const peerQuality = (
+    other: DestinationView,
+    r: NonNullable<DestinationView['resolved_quality']>,
+  ): DestinationQuality =>
+    other.quality?.mode === 'same_as_main' && matchesSameAsMain(r)
+      ? { mode: 'same_as_main' }
+      : {
+          mode: 'custom',
+          width: r.width,
+          height: r.height,
+          fps: r.fps,
+          kbps: r.kbps,
+          // Always explicit: a null codec would follow the main stream and could miss the peer.
+          codec: r.codec,
+        }
+  const compatiblePeer = peerTuples.find(
+    ({ dest: other, resolved }) =>
+      draftFitsLimits(model.limits, resolved) &&
+      keyOf(resolved) !== draftKey &&
+      // Rejoining the encode it is already in changes nothing, unless an edit moved it away.
+      !(!isDirty && ownGroup && other.resolved_quality?.group_id === ownGroup) &&
+      // An encode the engine already refused for this destination is not a way out.
+      !refusedByEngine(model.destOpts, peerQuality(other, resolved)),
+  )
   const peerCandidate: ModalPeerCandidate | null = compatiblePeer
     ? {
         id: compatiblePeer.dest.id,
         name: compatiblePeer.dest.name,
         label: `${formatModalResFps(compatiblePeer.resolved.width, compatiblePeer.resolved.height, compatiblePeer.resolved.fps)} · ${formatModalRate(compatiblePeer.resolved.kbps)}`,
-        quality:
-          compatiblePeer.dest.quality?.mode === 'same_as_main' &&
-          matchesSameAsMain(compatiblePeer.resolved)
-            ? { mode: 'same_as_main' }
-            : {
-                mode: 'custom',
-                width: compatiblePeer.resolved.width,
-                height: compatiblePeer.resolved.height,
-                fps: compatiblePeer.resolved.fps,
-                kbps: compatiblePeer.resolved.kbps,
-                // Always explicit: a null codec would follow the main stream and could miss the peer.
-                codec: compatiblePeer.resolved.codec,
-              },
+        quality: peerQuality(compatiblePeer.dest, compatiblePeer.resolved),
       }
     : null
 
@@ -824,7 +830,8 @@ export function evaluateModalDraft(
       : (model.destOpts?.resolved ?? ctx.dest.resolved_quality)
     const currentKey = currentResolved ? keyOf(currentResolved) : draftKey
 
-    const wasShared = ctx.dest.enabled && otherKeys.has(currentKey)
+    // On the main stream's own encode counts as shared too: leaving it starts a new session.
+    const wasShared = ctx.dest.enabled && (otherKeys.has(currentKey) || currentKey === mainKey)
     const willShare = ctx.dest.enabled && (otherKeys.has(draftKey) || draftKey === mainKey)
     const deltaSessions = ctx.dest.enabled ? (wasShared ? 1 : 0) - (willShare ? 1 : 0) : 0
     const estimatedSessions = Math.max(1, (activeBudget.used_sessions ?? 1) + deltaSessions)
@@ -927,6 +934,28 @@ export function toDestinationQualityPayload(draft: ModalDraft): DestinationQuali
   }
 }
 
+/** The engine simulated this exact choice for the destination and refused it. */
+export function refusedByEngine(
+  destOpts: DestinationQualityOptions | null,
+  quality: DestinationQuality,
+): boolean {
+  const option = destOpts?.options.find((o) => sameQuality(o.quality, quality))
+  return option?.allowed === false
+}
+
+/** Two saved qualities are the same choice: compared by value, not by how the JSON was ordered. */
+export function sameQuality(a: DestinationQuality, b: DestinationQuality): boolean {
+  if (a.mode !== b.mode) return false
+  if (a.mode !== 'custom' || b.mode !== 'custom') return true
+  return (
+    a.width === b.width &&
+    a.height === b.height &&
+    a.fps === b.fps &&
+    a.kbps === b.kbps &&
+    (a.codec ?? null) === (b.codec ?? null)
+  )
+}
+
 /** Mirrors the engine's wording for a PC that cannot run another separate encode. */
 function sharedCapText(maxSessions: number | null): string {
   if (maxSessions === null) {
@@ -988,15 +1017,23 @@ export function buildMatchMainComparison(
   const sharesText = sharesWith.join(' & ')
 
   // How far the platform's own limits alone would have lowered each value.
-  const platformW = Math.min(base.width, model.limits.max_width)
-  const platformH = Math.min(base.height, model.limits.max_height)
+  // Resolution keeps the picture's shape: a 2560x1080 source under a 1920x1080 limit is fitted
+  // to 1920x810 by the platform alone, so that is the baseline, not 1920x1080.
+  const fitScale = Math.min(
+    1,
+    model.limits.max_width / base.width,
+    model.limits.max_height / base.height,
+  )
+  const platformW = Math.floor(base.width * fitScale)
+  const platformH = Math.floor(base.height * fitScale)
+  // One pixel of slack: the engine rounds to even sizes.
+  const resBelowPlatform = fitted.width < platformW - 1 || fitted.height < platformH - 1
   const allowedFps = model.limits.fps_choices.filter((f) => f <= base.fps)
   const platformFps = allowedFps.length > 0 ? Math.max(...allowedFps) : base.fps
   const platformKbps = Math.min(base.kbps, model.bitrateHardMaxKbps)
   const pcCut =
     !ignoreServiceLimits &&
-    (fitted.width < platformW ||
-      fitted.height < platformH ||
+    (resBelowPlatform ||
       fitted.fps < platformFps ||
       fitted.kbps < platformKbps)
 
@@ -1039,7 +1076,7 @@ export function buildMatchMainComparison(
   } else if (!changed) {
     reasons.push('Exactly the same picture, no extra work for your PC.')
   } else {
-    if (resCut && !(pcCut && (fitted.width < platformW || fitted.height < platformH))) {
+    if (resCut && !(pcCut && resBelowPlatform)) {
       reasons.push(`Size lowered to ${Math.min(fitted.width, fitted.height)}p, ${name}’s limit.`)
     }
     if (fpsCut && !(pcCut && fitted.fps < platformFps)) {

@@ -66,6 +66,8 @@ import {
   initialDraftFromModel,
   MAX_CUSTOM_KBPS,
   mapQualityApiError,
+  refusedByEngine,
+  sameQuality,
   toDestinationQualityPayload,
   type ApiQualityErrorInfo,
   type ModalDraft,
@@ -196,6 +198,7 @@ export function PlatformsQualityModal({
     mode: 'editor' | 'add'
   }>({ open: false, destId: initialDestId, mode: initialMode })
 
+  const resetAddRef = useRef<() => void>(() => undefined)
   const onReloadOptionsRef = useRef(onReloadOptions)
   onReloadOptionsRef.current = onReloadOptions
 
@@ -210,6 +213,8 @@ export function PlatformsQualityModal({
       // Closing ends the session: a question still waiting and any late result are dropped.
       sessionRef.current += 1
       dismissAskRef.current()
+      // The next time it opens, the add form starts empty and no older add can act on it.
+      resetAddRef.current()
     }
     if (becameOpen) {
       sessionRef.current += 1
@@ -275,7 +280,7 @@ export function PlatformsQualityModal({
       const next = { ...prev }
       for (const [id, q] of Object.entries(prev)) {
         const cur = optionsResponse?.destinations?.[id]?.current
-        if (cur && JSON.stringify(cur) === JSON.stringify(q)) {
+        if (cur && sameQuality(cur, q)) {
           delete next[id]
           changed = true
         }
@@ -484,6 +489,8 @@ export function PlatformsQualityModal({
     },
   })
 
+  resetAddRef.current = addState.reset
+
   const ffmpegDownloading =
     selectedDest?.canvas === 'vertical' &&
     view.cut.source === 'cut' &&
@@ -515,10 +522,16 @@ export function PlatformsQualityModal({
     }
   }
 
+  // The bitrate box was cleared or holds no real number: the draft still has the last good value,
+  // which is not what the field shows, so nothing is sent until a number is typed.
+  const bitrateBoxInvalid = kbpsText !== null && !(kbpsText.trim() !== '' && Number(kbpsText) > 0)
   const handleApply = async (overrideQuality?: DestinationQuality) => {
     if (!selectedDest || !evalResult || !model || submitting || selectedDest.switching_quality) {
       return
     }
+    if (!overrideQuality && bitrateBoxInvalid) return
+    // A recovery choice is checked like a typed one: not sent if the engine has refused it.
+    if (overrideQuality && refusedByEngine(selectedDestOpts, overrideQuality)) return
     if (activeLockedReason) return
     const destId = selectedDest.id
     const destName = selectedDest.name
@@ -553,7 +566,8 @@ export function PlatformsQualityModal({
       // Clean up the draft only for the session that made the save.
       if (mine) delete draftsRef.current[destId]
       if (mine && selectedIdRef.current === destId) userEditedRef.current = false
-      if (mine && initialDestId) {
+      // Closed only if the editor still showing is the one this save came from.
+      if (mine && initialDestId && selectedIdRef.current === destId) {
         onClose()
       } else if (mine && selectedIdRef.current === destId) {
         setAppliedNotice(
@@ -1738,12 +1752,18 @@ export function PlatformsQualityModal({
                                       type="range"
                                       aria-label="Bitrate slider in Mbps"
                                       aria-valuetext={formatModalRate(
-                                        Math.min(draft.kbps, model.bitrateRangeMaxKbps),
+                                        Math.max(
+                                          model.bitrateMinKbps,
+                                          Math.min(draft.kbps, model.bitrateRangeMaxKbps),
+                                        ),
                                       )}
                                       min={model.bitrateMinKbps}
                                       max={model.bitrateRangeMaxKbps}
                                       step={250}
-                                      value={Math.min(draft.kbps, model.bitrateRangeMaxKbps)}
+                                      value={Math.max(
+                                        model.bitrateMinKbps,
+                                        Math.min(draft.kbps, model.bitrateRangeMaxKbps),
+                                      )}
                                       onChange={(e) => {
                                         const raw = Number(e.target.value)
                                         if (
@@ -1820,6 +1840,7 @@ export function PlatformsQualityModal({
                           busy={isSelectedBusy}
                           disabled={
                             !evalResult.canApply ||
+                            bitrateBoxInvalid ||
                             Boolean(activeLockedReason) ||
                             (loading && !optionsResponse)
                           }
