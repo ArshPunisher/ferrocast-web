@@ -876,43 +876,37 @@ const CRASH_NAME: Record<CrashReportsSetting, string> = {
 
 /** Privacy: whether a crash report may be sent. One line; what it holds is behind the (i). */
 function Privacy({ settings, save }: { settings: SettingsData; save: (s: SettingsData) => void }) {
-  const value = settings.crash_reports
+  // An engine that doesn't send the setting asks first, like the default.
+  const value = settings.crash_reports ?? 'ask'
   return (
     <Section id="privacy" title="Privacy" description="You decide what leaves this computer.">
       <Group title="Crash reports">
-        {value === undefined ? (
-          <Row
-            label="Send crash reports"
-            description="This version of Ferrocast doesn’t send crash reports."
-          />
-        ) : (
-          <Row
-            label={
-              <span className="inline-flex items-center gap-1">
-                Send crash reports
-                <InfoTip label="About crash reports">
-                  After a crash, Ferrocast can send a report to ClearCraft Labs’ Ferrocast server so
-                  the problem can be fixed. It has error details, the crash trace and recent logs,
-                  with stream keys, passwords, emails and IP addresses removed. Never a memory dump.
-                  Ask: you see exactly what would be sent and choose each time. Always: sent without
-                  asking. Never: nothing is sent. Reports are kept for 90 days.
-                </InfoTip>
-              </span>
-            }
-            description="Nothing is sent unless you say yes."
-            control={
-              <Segmented
-                label="Send crash reports"
-                value={value}
-                onChange={(crash_reports) => save({ ...settings, crash_reports })}
-                options={(['ask', 'always', 'never'] as const).map((v) => ({
-                  value: v,
-                  label: CRASH_NAME[v],
-                }))}
-              />
-            }
-          />
-        )}
+        <Row
+          label={
+            <span className="inline-flex items-center gap-1">
+              Send crash reports
+              <InfoTip label="About crash reports">
+                After a crash, Ferrocast can send a report to ClearCraft Labs’ Ferrocast server so
+                the problem can be fixed. It has error details, the crash trace and recent logs,
+                with stream keys, passwords, emails and IP addresses removed. Never a memory dump.
+                Ask: you see exactly what would be sent and choose each time. Always: sent without
+                asking. Never: nothing is sent. Reports are kept for 90 days.
+              </InfoTip>
+            </span>
+          }
+          description="Nothing is sent unless you say yes."
+          control={
+            <Segmented
+              label="Send crash reports"
+              value={value}
+              onChange={(crash_reports) => save({ ...settings, crash_reports })}
+              options={(['ask', 'always', 'never'] as const).map((v) => ({
+                value: v,
+                label: CRASH_NAME[v],
+              }))}
+            />
+          }
+        />
       </Group>
     </Section>
   )
