@@ -14,7 +14,13 @@ test.describe('privacy policy: crash reports', () => {
     const body = text.slice(from, text.indexOf('Tip pages', from))
     expect(body).toMatch(/Nothing is sent unless you say yes/)
     expect(body).toMatch(/error details, the crash trace and recent logs/i)
-    expect(body).toMatch(/never in one: stream keys, passwords, email addresses or memory dumps/i)
+    expect(body).toMatch(
+      /we strip stream keys, passwords, tokens and email addresses before it is sent/i,
+    )
+    expect(body).toMatch(/memory dumps are never sent/i)
+    expect(body).not.toMatch(/never in one/i)
+    expect(body).not.toMatch(/stops responding/i)
+    expect(body).toMatch(/backups of the relay’s database can hold that summary for up to 30 days/i)
     expect(body).toMatch(/ClearCraft Labs’ Ferrocast server/)
     expect(body).toMatch(/deleted after 90 days/)
     expect(body).toMatch(/up to 1 year/)

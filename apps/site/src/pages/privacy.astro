@@ -122,9 +122,9 @@ import { COMPANY } from '../data/company'
 
   <h2 id="crash-reports">Crash reports</h2>
   <p>
-    If Ferrocast crashes, stops responding or closes unexpectedly, it asks the next time you open it
-    whether to send a report so the problem can be fixed. Nothing is sent unless you say yes, or you
-    chose Always. You can read the exact text first, under “See what’s sent”.
+    If Ferrocast crashes or closes unexpectedly, it asks the next time you open it whether to send a
+    report so the problem can be fixed. Nothing is sent unless you say yes, or you chose Always. You
+    can read the exact text first, under “See what’s sent”.
   </p>
   <ul>
     <li>
@@ -133,8 +133,10 @@ import { COMPANY } from '../data/company'
       first. It also names your app version and your system (operating system and chip).
     </li>
     <li>
-      <strong>What is never in one:</strong> stream keys, passwords, email addresses or memory
-      dumps. The crash dump files Windows makes stay on your PC.
+      <strong>What we remove first:</strong> we strip stream keys, passwords, tokens and email
+      addresses before it is sent. That cleaning is automatic, so an unusual format could be missed:
+      read the text under “See what’s sent” before you say yes. Memory dumps are never sent; the
+      crash dump files Windows makes stay on your PC.
     </li>
     <li>
       <strong>Where it goes:</strong> to ClearCraft Labs’ Ferrocast server (our relay). It is
@@ -144,7 +146,8 @@ import { COMPANY } from '../data/company'
     <li>
       <strong>How long:</strong> the report is deleted after 90 days. A short summary of it (the
       kind of problem, the error message, the app version, your system and how often it happened) is
-      kept for up to 1 year.
+      kept for up to 1 year. Our own backups of the relay’s database can hold that summary for up to
+      30 days after it is deleted. The reports themselves are not in our backups.
     </li>
     <li>
       <strong>Turn it off:</strong> in Settings → Privacy, set “Send crash reports” to Never. Then
