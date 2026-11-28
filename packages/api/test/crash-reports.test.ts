@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { crashReportTitle, crashReportsApi, isCrashReportsSetting } from '../src/crash-reports'
 import { OWNER_HIDDEN_SETTINGS, remoteAllowed } from '../src/remote'
 import { DemoEngine, DEMO_TOKEN } from '../src/demo'
@@ -58,11 +58,18 @@ describe('crash reports in the demo', () => {
 
   it('shows the report only after a while, like the engine building it after start', async () => {
     const { engine, api } = setup()
-    engine.setCrashReport({ pending: 'crash', appearsAfterMs: 60 })
-    expect((await api.pending()).pending).toBe(false)
-    await new Promise((r) => setTimeout(r, 90))
-    expect((await api.pending()).pending).toBe(true)
-    expect(engine.crashReports.looks).toBe(2)
+    const real = Date.now()
+    let now = real
+    const spy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    try {
+      engine.setCrashReport({ pending: 'crash', appearsAfterMs: 60_000 })
+      expect((await api.pending()).pending).toBe(false)
+      now = real + 61_000
+      expect((await api.pending()).pending).toBe(true)
+      expect(engine.crashReports.looks).toBe(2)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('sends the created_ms in the body, and refuses another report with a 409', async () => {
@@ -71,7 +78,7 @@ describe('crash reports in the demo', () => {
     await expect(api.send(4000)).rejects.toMatchObject({ status: 409, code: 'conflict' })
     expect(engine.crashReports.sends).toBe(0)
     expect(engine.crashReports.waiting).toBe(true)
-    // Naming none sends whatever waits (the engine's own rule).
+    // Naming none sends whatever waits (the engine's own rule), with a body or without one.
     expect(await api.send()).toEqual({ sent: true })
     expect(engine.crashReports.lastSendCreatedMs).toBeNull()
   })
@@ -96,6 +103,15 @@ describe('crash reports in the demo', () => {
     engine.setCrashReport({ send: 'other' })
     expect(await api.send()).toEqual({ sent: false, reason: 'relay_unavailable' })
     expect((await api.pending()).pending).toBe(true)
+  })
+
+  it('a send with no body at all sends whatever waits', async () => {
+    const { engine, c } = setup()
+    engine.setCrashReport({ pending: 'crash' })
+    expect(await c.request('POST', '/api/v1/diagnostics/pending-report/send')).toEqual({
+      sent: true,
+    })
+    expect(engine.crashReports.lastSendCreatedMs).toBeNull()
   })
 
   it('Delete removes it; Send with nothing waiting is a 404', async () => {

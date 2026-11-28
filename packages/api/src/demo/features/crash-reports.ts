@@ -82,7 +82,7 @@ export class DemoCrashReports implements DemoFeature {
 
   private send(body: unknown): SendReportResult {
     if (!this.kind) throw new HttpError(404, 'no_pending_report', 'No crash report is waiting.')
-    const named = body === undefined || body === null ? {} : requireObj(body).created_ms
+    const named = body === undefined || body === null ? undefined : requireObj(body).created_ms
     if (named !== undefined && named !== null && typeof named !== 'number')
       throw new HttpError(400, 'invalid', 'created_ms: use a number.')
     if (typeof named === 'number' && named !== this.created)
