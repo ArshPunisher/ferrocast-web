@@ -1,53 +1,45 @@
 /* eslint-disable no-console */
 import { test } from '@playwright/test'
 
-const SHADOW: Record<string, string> = { control: '', hide: '.fc-ov{display:none!important}' }
-
-for (const [name, css] of Object.entries(SHADOW)) {
-  test(`themes page frames: ${name}`, async ({ page }) => {
-    await page.addInitScript((sheet) => {
-      const w = window as unknown as { __f: number }
-      w.__f = 0
-      const tick = () => {
-        w.__f++
-        requestAnimationFrame(tick)
-      }
-      requestAnimationFrame(tick)
-      const orig = Element.prototype.attachShadow
-      Element.prototype.attachShadow = function (o: ShadowRootInit) {
-        const sr = orig.call(this, o)
-        if (sheet) {
-          const sh = new CSSStyleSheet()
-          sh.replaceSync(sheet)
-          sr.adoptedStyleSheets = [sh]
+for (const dpr of [1, 2]) {
+  for (const mode of ['zoom', 'transform']) {
+    test.describe(`dpr${dpr} ${mode}`, () => {
+      test.use({ deviceScaleFactor: dpr })
+      test('themes page frames', async ({ page }) => {
+        await page.addInitScript((m) => {
+          const w = window as unknown as { __f: number }
+          w.__f = 0
+          const tick = () => {
+            w.__f++
+            requestAnimationFrame(tick)
+          }
+          requestAnimationFrame(tick)
+          if (m === 'transform') {
+            Object.defineProperty(navigator, 'platform', { get: () => 'MacIntel' })
+          }
+        }, mode)
+        await page.goto('./?autoplay=0&latency=0#/designs/themes')
+        const series: number[] = []
+        let last = 0
+        let run = 0
+        for (let i = 0; i < 40; i++) {
+          await page.waitForTimeout(1000)
+          const f = await page.evaluate(() => (window as unknown as { __f: number }).__f)
+          series.push(f - last)
+          last = f
+          run = i >= 3 && series[i]! >= 15 ? run + 1 : 0
+          if (run === 3) break
         }
-        return sr
-      }
-    }, css)
-    const t0 = Date.now()
-    await page.goto('./?autoplay=0&latency=0#/designs/themes')
-    const series: number[] = []
-    let last = 0
-    let firstFast = -1
-    let run = 0
-    for (let i = 0; i < 40; i++) {
-      await page.waitForTimeout(1000)
-      const f = await page.evaluate(() => (window as unknown as { __f: number }).__f)
-      series.push(f - last)
-      last = f
-      run = i >= 3 && series[i]! >= 15 ? run + 1 : 0
-      if (run === 3) {
-        firstFast = i - 1
-        break
-      }
-    }
-    const previews = await page.evaluate(
-      () => document.querySelectorAll('[data-overlay-preview]').length,
-    )
-    console.log(
-      `DIAG ${name.padEnd(18)} firstFastSec=${firstFast} previews=${previews} series=${series.join(' ')} total=${Date.now() - t0}ms`,
-    )
-  })
+        const zoomed = await page.evaluate(() => {
+          const c = document
+            .querySelector('[data-overlay-preview]')
+            ?.firstElementChild?.shadowRoot?.querySelector<HTMLElement>('.fc-ov-canvas')
+          return c ? `zoom=${c.style.zoom} transform=${c.style.transform}` : 'no canvas'
+        })
+        console.log(`DIAG dpr${dpr} ${mode} ${zoomed} series=${series.join(' ')}`)
+      })
+    })
+  }
 }
 
 test('inventory of heavy styles in the previews', async ({ page }) => {

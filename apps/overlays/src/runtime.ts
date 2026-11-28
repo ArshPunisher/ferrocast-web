@@ -57,15 +57,21 @@ const MAX_WIDGETS = 50
  * `zoom` lays the canvas out at its final size and paints only those pixels. Kept to that one
  * platform: transforms stay exact everywhere else (Safari, Chromium and OBS's browser).
  */
-export function prefersZoomFit(ua: string, supportsZoom: boolean): boolean {
-  return supportsZoom && /Linux/.test(ua) && /AppleWebKit/.test(ua) && !/Chrom(e|ium)\//.test(ua)
+export function prefersZoomFit(ua: string, platform: string, supportsZoom: boolean): boolean {
+  // Check the platform too: a test browser can present a Mac user agent on Linux.
+  return (
+    supportsZoom &&
+    (/Linux/.test(ua) || /Linux/.test(platform)) &&
+    /AppleWebKit/.test(ua) &&
+    !/Chrom(e|ium)\//.test(ua)
+  )
 }
 
 const zoomFit = (): boolean =>
   typeof navigator !== 'undefined' &&
   typeof CSS !== 'undefined' &&
   typeof CSS.supports === 'function' &&
-  prefersZoomFit(navigator.userAgent, CSS.supports('zoom', '1'))
+  prefersZoomFit(navigator.userAgent, navigator.platform ?? '', CSS.supports('zoom', '1'))
 
 /** Start show's countdown end (ms), or null; anything else is ignored. */
 const showEnds = (v: unknown): number | null => {

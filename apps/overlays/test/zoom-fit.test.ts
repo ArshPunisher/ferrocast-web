@@ -12,14 +12,17 @@ const ANDROID_CHROME =
 
 describe('prefersZoomFit', () => {
   it('is on for WebKit on Linux that supports zoom', () => {
-    expect(prefersZoomFit(WEBKIT_LINUX, true)).toBe(true)
+    expect(prefersZoomFit(WEBKIT_LINUX, 'Linux x86_64', true)).toBe(true)
   })
   it('is off without zoom support', () => {
-    expect(prefersZoomFit(WEBKIT_LINUX, false)).toBe(false)
+    expect(prefersZoomFit(WEBKIT_LINUX, 'Linux x86_64', false)).toBe(false)
+  })
+  it('follows the platform when a Mac user agent runs on Linux (test browsers)', () => {
+    expect(prefersZoomFit(MAC_SAFARI, 'Linux x86_64', true)).toBe(true)
   })
   it('stays on transforms for Safari, Chromium and Android', () => {
-    expect(prefersZoomFit(MAC_SAFARI, true)).toBe(false)
-    expect(prefersZoomFit(CHROME_LINUX, true)).toBe(false)
-    expect(prefersZoomFit(ANDROID_CHROME, true)).toBe(false)
+    expect(prefersZoomFit(MAC_SAFARI, 'MacIntel', true)).toBe(false)
+    expect(prefersZoomFit(CHROME_LINUX, 'Linux x86_64', true)).toBe(false)
+    expect(prefersZoomFit(ANDROID_CHROME, 'Linux armv81', true)).toBe(false)
   })
 })
