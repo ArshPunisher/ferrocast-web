@@ -1033,9 +1033,7 @@ export function buildMatchMainComparison(
   const platformKbps = Math.min(base.kbps, model.bitrateHardMaxKbps)
   const pcCut =
     !ignoreServiceLimits &&
-    (resBelowPlatform ||
-      fitted.fps < platformFps ||
-      fitted.kbps < platformKbps)
+    (resBelowPlatform || fitted.fps < platformFps || fitted.kbps < platformKbps)
 
   // When the saved choice is already Match main, the engine's own note for it is authoritative.
   const capped = model.saved.mode === 'same_as_main' ? (model.dest.capped ?? null) : null
