@@ -1,18 +1,7 @@
 /* eslint-disable no-console */
 import { test } from '@playwright/test'
 
-const SHADOW: Record<string, string> = {
-  control: '',
-  allOff: '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{background-image:none!important}',
-  noPat: '.fc-pat{display:none!important}',
-  noShapeBg: '.fc-shape{background-image:none!important}',
-  noPseudoBg:
-    '.fc-w *::before,.fc-w *::after,.fc-w::before,.fc-w::after{background-image:none!important}',
-  noLayerBg: '.fc-w,.fc-w>*{background-image:none!important}',
-  zoom: '.fc-ov-canvas{transform:none!important;zoom:.2677!important}',
-  willChange: '.fc-ov-canvas{will-change:transform!important}',
-  canvasContain: '.fc-ov-canvas{contain:paint!important}',
-}
+const SHADOW: Record<string, string> = { control: '', hide: '.fc-ov{display:none!important}' }
 
 for (const [name, css] of Object.entries(SHADOW)) {
   test(`themes page frames: ${name}`, async ({ page }) => {
