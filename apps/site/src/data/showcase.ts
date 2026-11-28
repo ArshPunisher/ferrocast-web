@@ -315,7 +315,7 @@ export const SMALL: SmallFeature[] = [
     group: 'chat',
     icon: 'house-line',
     name: 'Your data stays yours',
-    one: 'Your chat, events and keys stay on your PC.',
+    one: 'Your chat, events and keys stay on your PC. A crash report goes only if you say yes.',
   },
 ]
 
@@ -328,7 +328,11 @@ export const WHY: { icon: string; big: string; small: string }[] = [
     small: 'Open source. No ads, no cut of your tips.',
   },
   { icon: 'cpu', big: '7% CPU', small: 'A 1440p screen and two cameras, on an M4 Mac.' },
-  { icon: 'lock-key', big: 'On your PC', small: 'Your keys and chat never leave it.' },
+  {
+    icon: 'lock-key',
+    big: 'On your PC',
+    small: 'Your keys and chat stay on it. A crash report goes only if you say yes.',
+  },
   {
     icon: 'plugs-connected',
     big: 'No OBS',

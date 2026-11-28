@@ -31,6 +31,11 @@ import { COMPANY } from '../data/company'
     </li>
     <li>Payment details stay with the payment provider. We never see card or UPI details.</li>
     <li>
+      Crash reports are opt-in. If Ferrocast closes unexpectedly it asks first, and sends nothing
+      unless you say yes or choose Always.{' '}
+      <a href="#crash-reports">What one holds and how long we keep it</a>.
+    </li>
+    <li>
       Everything we keep is encrypted in transit and at rest.{' '}
       <a href="#protection">How we protect your data</a>.
     </li>
@@ -47,7 +52,8 @@ import { COMPANY } from '../data/company'
   <p>
     The app runs on your computer. Everything it stores (settings, overlays, alert rules, media,
     commands, the event log, viewer notes and tip history) is saved in a database on your own disk.
-    We cannot see it. You can export it or delete it at any time.
+    We cannot see it, apart from a <a href="#crash-reports">crash report</a> you choose to send. You
+    can export it or delete it at any time.
   </p>
   <p>
     When you connect Twitch, YouTube or Kick, you sign in on the platform’s own website. The access
@@ -97,6 +103,10 @@ import { COMPANY } from '../data/company'
     </li>
   </ul>
   <p>
+    It also receives <a href="#crash-reports">crash reports</a>, but only the ones you choose to
+    send.
+  </p>
+  <p>
     The relay runs on Oracle Cloud in Mumbai, India (region ap-mumbai-1), so the data it keeps is
     stored in India.
   </p>
@@ -108,6 +118,42 @@ import { COMPANY } from '../data/company'
     The relay also keeps short technical logs (time, request type, an account id, IP address and
     errors) for up to 14 days to keep the service working and safe. These logs never contain chat
     text, tip messages or a tipper’s contact details.
+  </p>
+
+  <h2 id="crash-reports">Crash reports</h2>
+  <p>
+    If Ferrocast crashes, stops responding or closes unexpectedly, it asks the next time you open it
+    whether to send a report so the problem can be fixed. Nothing is sent unless you say yes, or you
+    chose Always. You can read the exact text first, under “See what’s sent”.
+  </p>
+  <ul>
+    <li>
+      <strong>What is in one:</strong> error details, the crash trace and recent logs, with stream
+      keys, tokens, passwords, email addresses, IP addresses and your username in file paths removed
+      first. It also names your app version and your system (operating system and chip).
+    </li>
+    <li>
+      <strong>What is never in one:</strong> stream keys, passwords, email addresses or memory
+      dumps. The crash dump files Windows makes stay on your PC.
+    </li>
+    <li>
+      <strong>Where it goes:</strong> to ClearCraft Labs’ Ferrocast server (our relay). It is
+      labelled with a random install id, not your name or email, and only ClearCraft Labs can read
+      it. We never sell it or use it for ads.
+    </li>
+    <li>
+      <strong>How long:</strong> the report is deleted after 90 days. A short summary of it (the
+      kind of problem, the error message, the app version, your system and how often it happened) is
+      kept for up to 1 year.
+    </li>
+    <li>
+      <strong>Turn it off:</strong> in Settings → Privacy, set “Send crash reports” to Never. Then
+      nothing is sent and Ferrocast does not ask. Ask is the default.
+    </li>
+  </ul>
+  <p>
+    You can also save a support report to a file in Settings → Advanced and send it to us yourself,
+    or not at all. That file stays on your PC unless you send it yourself.
   </p>
 
   <h2>Tip pages</h2>
@@ -513,6 +559,10 @@ import { COMPANY } from '../data/company'
     We use the data above only to run the features you choose: the relay, tip pages and Pro. For
     streamers, we rely on your consent, which you give by turning a feature on or subscribing. For
     Pro, we also use billing records to take payment and to keep the records the law requires.
+  </p>
+  <p>
+    A crash report is used only to find and fix the problem it shows. You consent by saying yes to
+    it, or by choosing Always, and you can withdraw that in Settings → Privacy.
   </p>
   <p>
     Viewers who send a tip give their name, message and amount themselves, for that tip, and we use
