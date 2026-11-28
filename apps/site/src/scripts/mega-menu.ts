@@ -37,6 +37,13 @@ export function initMegaMenu(root: HTMLElement) {
     clearTimeout(tOut)
     if (openKey) setOpen(null, null)
   }
+  // a panel that holds keyboard focus stays open when the mouse drifts away; closing it would
+  // make the focused link inert and drop focus. Escape, or moving focus away, still closes it.
+  const closeUnlessFocused = () => {
+    const panel = openKey ? views.get(openKey) : undefined
+    if (panel?.contains(document.activeElement)) return
+    close()
+  }
 
   for (const t of triggers) {
     const key = t.dataset.mmTrigger ?? ''
@@ -81,14 +88,14 @@ export function initMegaMenu(root: HTMLElement) {
   zone.addEventListener('pointerleave', (e) => {
     if (e.pointerType !== 'mouse') return
     clearTimeout(tIn)
-    tOut = window.setTimeout(close, 220)
+    tOut = window.setTimeout(closeUnlessFocused, 220)
   })
   // the logo and the buttons on the right are outside the menu: pointing at them closes it
   root.querySelectorAll<HTMLElement>('[data-mm-close-on-hover]').forEach((el) => {
     el.addEventListener('pointerenter', (e) => {
       if (e.pointerType !== 'mouse' || !openKey) return
       clearTimeout(tOut)
-      tOut = window.setTimeout(close, 140)
+      tOut = window.setTimeout(closeUnlessFocused, 140)
     })
     el.addEventListener('focusin', () => {
       if (openKey && !restoring) close()
