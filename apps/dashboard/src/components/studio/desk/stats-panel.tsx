@@ -19,6 +19,14 @@ import { Dialog, InfoTip, cx } from '@ferrocast/ui'
 import { type EngineReading } from '../../../lib/engine-stats'
 import { hasSizeSetting, loadHint, sourceRates, type SourceRate } from './source-load'
 import { KindTile, useEngine } from './common'
+import {
+  CAUSE_FIX,
+  CAUSE_TEXT,
+  FRAME_HEALTH,
+  boxLevel,
+  readMisses,
+  type FrameLevel,
+} from './frame-health'
 
 /** Kbps between two byte counts `ms` apart (0 when it went back: a new stream or file). */
 export function kbpsBetween(before: number, after: number, ms: number): number {
@@ -132,6 +140,7 @@ function Graph({
   points,
   max,
   tone,
+  className,
 }: {
   label: string
   value: string
@@ -139,7 +148,8 @@ function Graph({
   points: number[]
   /** The top of the scale. */
   max: number
-  tone: 'arc' | 'ok' | 'warn'
+  tone: 'arc' | 'ok' | 'warn' | 'bad'
+  className?: string
 }) {
   const w = 300
   const h = 64
@@ -149,16 +159,25 @@ function Graph({
     const y = h - 3 - (Math.min(v, max) / max) * (h - 6)
     return `${x.toFixed(1)},${y.toFixed(1)}`
   })
-  const stroke =
-    tone === 'ok' ? 'var(--fc-ok)' : tone === 'warn' ? 'var(--fc-warn)' : 'var(--fc-arc)'
-  const fill =
-    tone === 'ok'
-      ? 'var(--fc-ok-soft)'
-      : tone === 'warn'
-        ? 'var(--fc-warn-soft)'
-        : 'var(--fc-accent-soft)'
+  const stroke = {
+    ok: 'var(--fc-ok)',
+    warn: 'var(--fc-warn)',
+    bad: 'var(--fc-danger)',
+    arc: 'var(--fc-arc)',
+  }[tone]
+  const fill = {
+    ok: 'var(--fc-ok-soft)',
+    warn: 'var(--fc-warn-soft)',
+    bad: 'var(--fc-danger-soft)',
+    arc: 'var(--fc-accent-soft)',
+  }[tone]
   return (
-    <figure className="m-0 rounded-[14px] border border-line bg-surface-2 px-3 pt-2.5 pb-2">
+    <figure
+      className={cx(
+        'm-0 rounded-[14px] border border-line bg-surface-2 px-3 pt-2.5 pb-2',
+        className,
+      )}
+    >
       <figcaption className="flex items-baseline justify-between gap-2 text-[14px] font-bold text-text-2">
         {label}
         <span className="font-mono text-[15px] text-text tabular-nums">{value}</span>
@@ -192,18 +211,30 @@ function Graph({
   )
 }
 
-function Box({ label, value, bad }: { label: string; value: string; bad?: boolean }) {
+function Box({
+  label,
+  value,
+  sub,
+  level = 'ok',
+}: {
+  label: string
+  value: string
+  /** Smaller text under the value (the total since the start). */
+  sub?: string
+  level?: FrameLevel
+}) {
   return (
     <div className="rounded-[10px] border border-line bg-surface-2 px-2.5 py-2">
       <span className="block text-[12.5px] font-semibold text-text-3">{label}</span>
       <b
         className={cx(
           'font-mono text-[15px] font-bold tabular-nums',
-          bad ? 'text-danger' : 'text-text',
+          level === 'bad' ? 'text-danger' : level === 'warn' ? 'text-warn' : 'text-text',
         )}
       >
         {value}
       </b>
+      {sub && <span className="block font-mono text-[11.5px] text-text-3 tabular-nums">{sub}</span>}
     </div>
   )
 }
@@ -258,6 +289,8 @@ export function StatsDialog({
   const lasts = recRate ? lastsFor(free, recRate) : null
   const budget = 1000 / fps
   const slowDraw = !!e && e.frame_ms > budget * 0.8
+  // The last 60 s of missed frames: their colour, their numbers and why (frame-health.ts).
+  const miss = e ? readMisses(e) : null
   // Only then is a heavy source worth a word: the Studio keeping up is fine, however big.
   const struggling =
     !!e &&
@@ -359,35 +392,112 @@ export function StatsDialog({
               max={budget}
               tone={slowDraw ? 'warn' : 'ok'}
             />
+            {miss?.recent && (
+              <Graph
+                label="Missed frames"
+                className="sm:col-span-2"
+                value={(miss.missed + miss.skipped).toLocaleString()}
+                note="last 60 s"
+                points={miss.perSecond}
+                // Room above the line, at least five frames a second.
+                max={Math.max(5, ...miss.perSecond)}
+                tone={miss.level === 'ok' ? 'ok' : miss.level}
+              />
+            )}
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             <Box
               label="Frame rate"
               value={`${e.fps.toFixed(2)} / ${fps}`}
-              bad={e.fps < fps * 0.95}
+              level={miss?.recent ? miss.level : e.fps < fps * 0.95 ? 'bad' : 'ok'}
             />
-            <Box
-              label="Missed"
-              value={share(e.lagged, e.frames)}
-              bad={e.frames > 0 && e.lagged / e.frames > 0.01}
-            />
-            <Box
-              label="Skipped"
-              value={share(e.skipped ?? 0, e.encoded ?? 0)}
-              bad={(e.encoded ?? 0) > 0 && (e.skipped ?? 0) / (e.encoded ?? 1) > 0.01}
-            />
+            {miss?.recent ? (
+              <>
+                <Box
+                  label="Missed, 60 s"
+                  value={miss.missed.toLocaleString()}
+                  sub={`${share(e.lagged, e.frames)} total`}
+                  level={boxLevel(miss.level, miss.missed)}
+                />
+                <Box
+                  label="Skipped, 60 s"
+                  value={miss.skipped.toLocaleString()}
+                  sub={`${share(e.skipped ?? 0, e.encoded ?? 0)} total`}
+                  level={boxLevel(miss.level, miss.skipped)}
+                />
+              </>
+            ) : (
+              <>
+                <Box
+                  label="Missed"
+                  value={share(e.lagged, e.frames)}
+                  level={
+                    e.frames > 0 && e.lagged / e.frames > FRAME_HEALTH.legacyShare ? 'bad' : 'ok'
+                  }
+                />
+                <Box
+                  label="Skipped"
+                  value={share(e.skipped ?? 0, e.encoded ?? 0)}
+                  level={
+                    (e.encoded ?? 0) > 0 &&
+                    (e.skipped ?? 0) / (e.encoded ?? 1) > FRAME_HEALTH.legacyShare
+                      ? 'bad'
+                      : 'ok'
+                  }
+                />
+              </>
+            )}
             <Box label="Memory" value={sizeText(e.memory_mb)} />
           </div>
+          {miss?.recent && (
+            <p role="status" className="m-0 flex flex-wrap items-center gap-1 text-[13.5px]">
+              {miss.cause ? (
+                <>
+                  <span
+                    className={cx(
+                      'font-semibold',
+                      miss.level === 'bad' ? 'text-danger' : 'text-warn',
+                    )}
+                  >
+                    {CAUSE_TEXT[miss.cause]}
+                  </span>
+                  <span className="text-text-3">
+                    {miss.level === 'bad' ? 'still happening' : 'short dip'}
+                  </span>
+                </>
+              ) : (
+                <span className="text-text-3">Steady for the last minute</span>
+              )}
+              <InfoTip label="About missed and skipped frames">
+                Missed: frames drawn late, or held back by the encoder. Skipped: frames the encoder
+                left out. The big numbers count the last 60 s; the small ones, since the Studio
+                started.
+                {miss.cause && (
+                  <>
+                    {' '}
+                    {CAUSE_FIX[miss.cause]}
+                    {miss.causes.length > 1 &&
+                      ` Also in the last minute: ${miss.causes
+                        .slice(1)
+                        .map((c) => `${CAUSE_TEXT[c.cause].toLowerCase()} (${c.frames})`)
+                        .join(', ')}.`}
+                  </>
+                )}
+              </InfoTip>
+            </p>
+          )}
           <p className="m-0 flex flex-wrap items-center gap-1 text-[13.5px] text-text-2">
             <HardDrives size={15} aria-hidden className="text-text-3" />
             <span className={cx('font-mono tabular-nums', free < 2048 && 'text-danger')}>
               {sizeText(free)}
             </span>
             free{lasts ? `: recording fits ${lasts} more` : ''}
-            <InfoTip label="About missed and skipped frames">
-              Missed: the computer drew a frame late (too much on screen). Skipped: the encoder fell
-              behind (lower the quality or use the hardware encoder).
-            </InfoTip>
+            {!miss?.recent && (
+              <InfoTip label="About missed and skipped frames">
+                Missed: the computer drew a frame late (too much on screen). Skipped: the encoder
+                fell behind (lower the quality or use the hardware encoder).
+              </InfoTip>
+            )}
           </p>
           {(e.restarts ?? 0) + (e.recovered ?? 0) > 0 && (
             <p className="m-0 flex flex-wrap items-center gap-1 text-[13.5px] text-text-2">
