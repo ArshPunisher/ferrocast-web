@@ -857,6 +857,8 @@ export function DockWorkspace({
             noLayoutContain ? 'fc-contain-style' : 'fc-contain-dock',
             'flex min-h-0 min-w-0 flex-col overflow-hidden',
             compact && !phone && 'min-h-[200px] sm:min-w-0 sm:flex-1',
+            // A stacked dock keeps its header and a row or two; past that the column scrolls.
+            !compact && vertical && 'min-h-[96px]',
             phone && 'min-h-[320px] flex-1',
             drag?.id === activeOf(layout, id) && 'opacity-40',
           )}
@@ -890,7 +892,7 @@ export function DockWorkspace({
                 ? 'order-3 w-full flex-col divide-y divide-line border-t border-line sm:flex-row sm:divide-x sm:divide-y-0'
                 : 'w-full flex-col divide-y divide-line border-t border-line sm:flex-row sm:divide-x sm:divide-y-0'
             : vertical
-              ? 'flex-col'
+              ? 'flex-col overflow-y-auto'
               : 'flex-row',
           region === 'right' && 'relative',
           phone && hasFloatingReady && 'pb-14',
