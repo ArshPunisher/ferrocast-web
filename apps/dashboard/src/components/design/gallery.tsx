@@ -151,7 +151,7 @@ function FeaturedCard({
         tabIndex={-1}
         aria-hidden="true"
       >
-        <ScenePreview design={theme} live={seen && !paused} />
+        <ScenePreview design={theme} live={seen && !paused} lazy />
       </button>
       {/* Under the picture, not on it: every scene has its own text near the bottom. */}
       <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center">
