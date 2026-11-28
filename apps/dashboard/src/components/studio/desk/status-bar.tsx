@@ -490,7 +490,9 @@ export function StudioStatusBar() {
         title={note && 'detail' in note && note.detail ? `${note.text} ${note.detail}` : note?.text}
         className={cx('flex min-w-0 flex-1 items-center px-3 font-semibold', note?.tone)}
       >
-        <span className="min-w-0 truncate">{note?.text}</span>
+        <span className="min-w-0 truncate" title={note?.text}>
+          {note?.text}
+        </span>
       </span>
       {/* Only for the strain warnings (not reconnecting, errors or remuxing). */}
       {!strain && capture?.problem === 'permission' && note?.text === captureWords(capture) && (

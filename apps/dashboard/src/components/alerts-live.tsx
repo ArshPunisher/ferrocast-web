@@ -201,11 +201,17 @@ export function QueuePanel({ className }: { className?: string }) {
                 <PlatformMark platform={playing.alert.platform} size={12} />
                 {playing.alert.test && <span className="text-text-3">test</span>}
               </div>
-              <p className="mt-1.5 line-clamp-2 font-display text-[18px] font-semibold tracking-tight break-words text-text">
+              <p
+                className="mt-1.5 line-clamp-2 font-display text-[18px] font-semibold tracking-tight break-words text-text"
+                title={playing.alert.title}
+              >
                 {playing.alert.title}
               </p>
               {playing.alert.body && (
-                <p className="mt-0.5 line-clamp-2 text-[14px] break-words text-text-2">
+                <p
+                  className="mt-0.5 line-clamp-2 text-[14px] break-words text-text-2"
+                  title={playing.alert.body}
+                >
                   {playing.alert.body}
                 </p>
               )}

@@ -276,7 +276,9 @@ export function TokenChipField({
               >
                 <Plus size={11} weight="bold" aria-hidden="true" className="shrink-0 text-text-3" />
                 <span className="font-mono text-[13px] font-semibold text-text">{`{${opt.key}}`}</span>
-                <span className="ml-auto truncate text-[13px] text-text-3">{opt.label}</span>
+                <span className="ml-auto truncate text-[13px] text-text-3" title={opt.label}>
+                  {opt.label}
+                </span>
               </button>
             ))}
           </PopoverSurface>

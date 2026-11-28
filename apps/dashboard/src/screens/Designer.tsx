@@ -1127,7 +1127,9 @@ function GuidedView({
                       <b className="font-display text-[18px] font-bold tracking-tight text-text">
                         {s.label}
                       </b>
-                      <span className="truncate text-[14.5px] text-text-3">{s.sub}</span>
+                      <span className="truncate text-[14.5px] text-text-3" title={s.sub}>
+                        {s.sub}
+                      </span>
                     </span>
                   </button>
                 </h3>

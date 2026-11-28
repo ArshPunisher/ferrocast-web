@@ -1950,7 +1950,10 @@ export function LayoutEditor({
                 const Icon = iconFor(sel)
                 return <Icon size={18} className="shrink-0 text-accent-text" aria-hidden="true" />
               })()}
-              <h2 className="min-w-0 flex-1 truncate font-display text-[18px] font-extrabold">
+              <h2
+                className="min-w-0 flex-1 truncate font-display text-[18px] font-extrabold"
+                title={layerName(sel)}
+              >
                 {layerName(sel)}
               </h2>
               {!lockedSel && (

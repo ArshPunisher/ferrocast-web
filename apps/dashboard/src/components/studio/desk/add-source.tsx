@@ -310,7 +310,9 @@ function AddSource({ start, onDone }: { start: string; onDone: () => void }) {
                       )}
                     >
                       <KindTile icon={c.entry.icon} tone={c.tone} size={20} />
-                      <span className="truncate">{c.entry.label}</span>
+                      <span className="truncate" title={c.entry.label}>
+                        {c.entry.label}
+                      </span>
                     </button>
                   )
                 })}
@@ -955,7 +957,9 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                 >
                   <KindTile icon={Icon} tone={c.tone} size={34} />
                   <span className="min-w-0">
-                    <b className="block truncate text-[13px] text-text">{o.name}</b>
+                    <b className="block truncate text-[13px] text-text" title={o.name}>
+                      {o.name}
+                    </b>
                     <span className="block font-mono text-[13px] text-text-3 tabular-nums">
                       {o.width}×{o.height}
                     </span>
@@ -987,8 +991,12 @@ function Pick({ c, scene, onDone }: { c: Choice; scene: string; onDone: () => vo
                     <KindTile icon={Icon} tone={c.tone} size={34} />
                   )}
                   <span className="min-w-0">
-                    <b className="block truncate text-[13px] text-text">{r.name}</b>
-                    <span className="block truncate text-[13px] text-text-3">{r.where}</span>
+                    <b className="block truncate text-[13px] text-text" title={r.name}>
+                      {r.name}
+                    </b>
+                    <span className="block truncate text-[13px] text-text-3" title={r.where}>
+                      {r.where}
+                    </span>
                   </span>
                 </button>
               )

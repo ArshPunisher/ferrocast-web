@@ -488,7 +488,9 @@ function OptionField({
           <fieldset className="m-0 flex flex-col border-0 p-0">
             <legend className="contents">
               <span className="flex h-[30px] items-center gap-2 border-b border-line bg-surface-2 pr-2.5 pl-3 text-[11px] font-bold tracking-[0.07em] text-text-2 uppercase">
-                <span className="min-w-0 flex-1 truncate">{label}</span>
+                <span className="min-w-0 flex-1 truncate" title={label}>
+                  {label}
+                </span>
                 {o.checkable && (
                   <Switch label={label} hideLabel checked={on} onChange={set} disabled={off} />
                 )}

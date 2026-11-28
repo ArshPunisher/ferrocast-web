@@ -396,7 +396,11 @@ function Results({ poll }: { poll: PollView }) {
             <span className="relative w-5 shrink-0 font-mono text-[14.5px] font-bold text-[var(--fc-twitch)]">
               {i + 1}
             </span>
-            <span dir="auto" className="relative min-w-0 flex-1 truncate font-bold text-text">
+            <span
+              dir="auto"
+              className="relative min-w-0 flex-1 truncate font-bold text-text"
+              title={tameText(o.text)}
+            >
               {tameText(o.text)}
             </span>
             {lead && (

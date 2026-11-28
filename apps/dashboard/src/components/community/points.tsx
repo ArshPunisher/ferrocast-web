@@ -177,7 +177,11 @@ function Row({ e, onPick, name }: { e: LeaderboardEntry; onPick: () => void; nam
           >
             {letter}
           </span>
-          <span dir="auto" className="truncate font-bold text-text">
+          <span
+            dir="auto"
+            className="truncate font-bold text-text"
+            title={tameText(e.display_name)}
+          >
             {tameText(e.display_name)}
           </span>
         </span>

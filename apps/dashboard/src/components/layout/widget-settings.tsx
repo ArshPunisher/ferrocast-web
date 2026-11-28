@@ -1063,7 +1063,9 @@ function EndCreditsFields({
                       onChange={() => toggleSection(sec)}
                       className="size-4 accent-[var(--fc-accent)]"
                     />
-                    <span className="truncate">{CREDITS_SECTION_LABEL[sec]}</span>
+                    <span className="truncate" title={CREDITS_SECTION_LABEL[sec]}>
+                      {CREDITS_SECTION_LABEL[sec]}
+                    </span>
                   </label>
                   {checked && (
                     <div className="flex items-center gap-0.5">

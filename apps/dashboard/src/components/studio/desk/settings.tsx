@@ -1639,7 +1639,9 @@ function Privacy() {
                     aria-hidden
                   />
                 )}
-                <span className="truncate">{n}</span>
+                <span className="truncate" title={n}>
+                  {n}
+                </span>
               </button>
             )
           })}

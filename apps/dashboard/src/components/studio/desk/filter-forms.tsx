@@ -312,7 +312,9 @@ export function CaptureForm({ opts, values, onChange, name }: FormIn & { name?: 
                       <Monitor size={22} weight={on ? 'fill' : 'regular'} aria-hidden />
                       <ScreenStill id={display.values[i]} label={name} />
                     </span>
-                    <span className="truncate text-[11.5px] font-semibold text-text">{name}</span>
+                    <span className="truncate text-[11.5px] font-semibold text-text" title={name}>
+                      {name}
+                    </span>
                     {px && (
                       <span className="font-mono text-[10.5px] text-text-3 tabular-nums">
                         {px[1]}×{px[2]}
@@ -445,7 +447,9 @@ export function CaptureForm({ opts, values, onChange, name }: FormIn & { name?: 
                   )}
                 >
                   <Icon size={20} weight={on ? 'fill' : 'regular'} aria-hidden />
-                  <span className="truncate">{m.label}</span>
+                  <span className="truncate" title={m.label}>
+                    {m.label}
+                  </span>
                 </button>
               )
             })}
@@ -793,7 +797,9 @@ function KeyForm({
                   className="size-2.5 shrink-0 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]"
                   style={{ background: KEY_DOTS[v] ?? '#888' }}
                 />
-                <span className="truncate">{names(v)}</span>
+                <span className="truncate" title={names(v)}>
+                  {names(v)}
+                </span>
               </button>
             ))}
             {key && (

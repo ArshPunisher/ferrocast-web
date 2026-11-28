@@ -583,7 +583,11 @@ export function ScenesDock() {
         )}
       >
         <ArrowsLeftRight size={11} weight="bold" aria-hidden />
-        {!compactGrid && <span className="max-w-20 truncate">{label}</span>}
+        {!compactGrid && (
+          <span className="max-w-20 truncate" title={label}>
+            {label}
+          </span>
+        )}
       </span>
     )
   }
@@ -778,7 +782,9 @@ export function ScenesDock() {
           style={{ left: ghost.x + 14, top: ghost.y - 18 }}
         >
           <KindTile kind="scene" size={20} />
-          <span className="truncate">{dragging}</span>
+          <span className="truncate" title={dragging}>
+            {dragging}
+          </span>
         </div>
       )}
       <p role="status" aria-live="polite" className="sr-only">

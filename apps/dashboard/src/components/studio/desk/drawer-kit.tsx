@@ -47,7 +47,12 @@ export function Band({
   return (
     <div className="flex h-[30px] flex-none items-center gap-2 border-b border-line bg-dock-head pr-2 pl-3 text-[11px] font-bold tracking-[0.07em] text-text-2 uppercase">
       <Icon size={13} weight="bold" aria-hidden style={{ color: tone }} />
-      <span className="min-w-0 flex-1 truncate">{title}</span>
+      <span
+        className="min-w-0 flex-1 truncate"
+        title={typeof title === 'string' ? title : undefined}
+      >
+        {title}
+      </span>
       {children && (
         <span className="flex items-center gap-1.5 tracking-normal normal-case">{children}</span>
       )}
@@ -127,7 +132,12 @@ export function Seg<T extends string | number>({
               on ? 'fc-picked' : 'text-text-2 hover:bg-surface-3 hover:text-text',
             )}
           >
-            <span className="min-w-0 truncate">{o.label}</span>
+            <span
+              className="min-w-0 truncate"
+              title={typeof o.label === 'string' ? o.label : undefined}
+            >
+              {o.label}
+            </span>
           </button>
         )
       })}

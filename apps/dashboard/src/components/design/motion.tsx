@@ -249,6 +249,7 @@ function Section({
               'max-w-[130px] truncate font-mono text-[13.5px]',
               open ? 'text-accent-text' : 'text-text-3',
             )}
+            title={value}
           >
             {value}
           </span>

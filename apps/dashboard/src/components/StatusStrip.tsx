@@ -481,7 +481,9 @@ export function StatusStrip({
                     className="flex min-w-0 items-center gap-2 font-semibold text-text"
                   >
                     <ConnectorIcon name={it.name} size={14} />
-                    <span className="truncate">{it.label}</span>
+                    <span className="truncate" title={it.label}>
+                      {it.label}
+                    </span>
                   </span>
                   <span aria-hidden="true" className="shrink-0">
                     <Badge tone={badgeTone}>

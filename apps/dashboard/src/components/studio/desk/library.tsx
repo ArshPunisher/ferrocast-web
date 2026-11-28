@@ -455,6 +455,7 @@ export function LibraryBar({ compact = false }: { compact?: boolean } = {}) {
                 'min-w-0 truncate',
                 isRetry ? 'inline text-danger' : cx('hidden', compact ? '2xl:inline' : 'xl:inline'),
               )}
+              title={name}
             >
               {name}
             </span>

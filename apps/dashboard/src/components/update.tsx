@@ -143,10 +143,16 @@ export function UpdateNavItem({
               className={cx('shrink-0', s.phase === 'failed' ? 'text-warn' : 'text-accent-text')}
             />
             <span className="min-w-0">
-              <b className="block truncate text-[14.5px] leading-tight font-semibold text-text">
+              <b
+                className="block truncate text-[14.5px] leading-tight font-semibold text-text"
+                title={title}
+              >
                 {title}
               </b>
-              <small className="block truncate font-mono text-[13px] text-text-2 tabular-nums">
+              <small
+                className="block truncate font-mono text-[13px] text-text-2 tabular-nums"
+                title={detail}
+              >
                 {detail}
               </small>
             </span>

@@ -104,6 +104,7 @@ const SceneTab = memo(function SceneTab({
           'truncate text-[14.5px] font-semibold',
           selected ? 'text-accent-text' : 'text-text-2',
         )}
+        title={scene.name || SCENE_LABEL[scene.key] || scene.key}
       >
         {scene.name || SCENE_LABEL[scene.key] || scene.key}
       </span>

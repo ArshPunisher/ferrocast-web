@@ -262,7 +262,10 @@ function BanList() {
                     </span>
                     {b.everywhere && <Badge tone="accent">Every platform</Badge>}
                   </p>
-                  <p className="mt-0.5 truncate text-[14.5px] text-text-3">
+                  <p
+                    className="mt-0.5 truncate text-[14.5px] text-text-3"
+                    title={b.reason ?? 'No reason given'}
+                  >
                     {b.reason ?? 'No reason given'} ·{' '}
                     {new Date(b.banned_at).toLocaleDateString(undefined, {
                       day: 'numeric',
