@@ -8,7 +8,7 @@ import { FloppyDisk, ImageSquare, PaperPlaneTilt, UploadSimple, X } from '@phosp
 import {
   ApiError,
   checkStreamInfo,
-  errorSentence,
+  describeError,
   relativeTime,
   MAX_STREAM_DESCRIPTION,
   STREAM_INFO_PLATFORMS,
@@ -819,7 +819,7 @@ export function StreamInfoEditor({ view }: { view: Resource<StreamInfoView> }) {
             view.set(fresh)
             setResults(fresh.history[0]?.results ?? null)
           }
-          setErr(errorSentence(e))
+          setErr(describeError(e).message)
           throw e
         }
       },
