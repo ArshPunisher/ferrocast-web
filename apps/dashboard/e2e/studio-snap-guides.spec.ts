@@ -395,7 +395,9 @@ async function dragBetween(
     x: from.x + ((to.x - from.x) * k) / steps,
     y: from.y + ((to.y - from.y) * k) / steps,
   })
-  if (touch) {
+  // Only Chromium can inject touch events (CDP); Playwright's WebKit has no touch drag, so there
+  // the phone layout is driven by the mouse, which sends the same pointer events.
+  if (touch && page.context().browser()?.browserType().name() === 'chromium') {
     const cdp = await page.context().newCDPSession(page)
     const send = (
       type: 'touchStart' | 'touchMove' | 'touchEnd',
