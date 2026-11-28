@@ -247,11 +247,18 @@ export function ReadyCheck({
     const updated = await run(c.id, () => studio.preflightFix(c.fix!.href), { success: 'Fixed.' })
     const latest = getReadyCheckState()
     if (!updated || !latest || latest.sessionId !== sessionId) return
-    // Check live focus ownership immediately before applying the result, while a focused Fix
-    // button is still in the DOM (before removing its row drops focus).
+    // Check live focus ownership immediately before applying the result, while the Fix button
+    // is still in the DOM (before removing its row drops focus). Fix is only reachable from the card, so the card owned focus unless it has since moved to a
+    // control elsewhere. Safari and WKWebView do not focus a clicked button: focus falls to the
+    // body or to the nearest focusable ancestor (the main region), which is not a move away.
     const active = document.activeElement
     const ownsFocusNow = Boolean(
-      cardRef.current && active instanceof Node && cardRef.current.contains(active),
+      cardRef.current &&
+      (!(active instanceof HTMLElement) ||
+        cardRef.current.contains(active) ||
+        !active.matches(
+          'a[href], button, input, select, textarea, summary, [contenteditable="true"], [tabindex]:not([tabindex="-1"])',
+        )),
     )
     const ours = (latest.found?.checks ?? []).filter((x) => /^(silent|capture):/.test(x.id))
     const nextChecks = [...studioProblems(updated.checks), ...ours]
