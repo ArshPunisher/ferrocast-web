@@ -109,6 +109,26 @@ export async function mountStudioWithOverlayDemo(page: Page) {
     localStorage.setItem('fc-golive-picture', 'ferrocast')
   }, DEMO_TOKEN)
 
+  // Playwright's WebKit hands a routed request only the multipart framing of a FormData body, not
+  // the file parts (a real WebKit sends them). Serialise the form to bytes before it goes out so
+  // the mock sees the whole upload.
+  if (page.context().browser()?.browserType().name() === 'webkit') {
+    await page.addInitScript(() => {
+      const real = window.fetch.bind(window)
+      window.fetch = async (input, init) => {
+        if (init?.body instanceof FormData) {
+          const packed = new Response(init.body)
+          const type = packed.headers.get('content-type')
+          const bytes = await packed.arrayBuffer()
+          const headers = new Headers(init.headers)
+          if (type) headers.set('content-type', type)
+          return real(input, { ...init, body: bytes, headers })
+        }
+        return real(input, init)
+      }
+    })
+  }
+
   await page.routeWebSocket('**/api/v1/live**', (ws) => {
     void ws
   })
