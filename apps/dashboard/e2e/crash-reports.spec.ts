@@ -36,6 +36,56 @@ test.describe('crash report prompt', () => {
     await expect(dialog(page)).toBeHidden()
   })
 
+  test('looks again for a report the engine builds a few seconds after start', async ({ page }) => {
+    await open(page, 'home', `${Q}&crash=crash&crash_after=3000`)
+    // Nothing yet at first look...
+    await expect(page.locator('#main')).toBeVisible()
+    await expect(dialog(page)).toHaveCount(0)
+    expect(await page.evaluate(() => window.__ferrocastDemo!.crashReports.looks)).toBeGreaterThan(0)
+    // ...then the next looks (every 2 s) find it.
+    await expect(dialog(page)).toBeVisible({ timeout: 9000 })
+    const looks = await page.evaluate(() => window.__ferrocastDemo!.crashReports.looks)
+    expect(looks).toBeGreaterThanOrEqual(2)
+    expect(looks).toBeLessThanOrEqual(5)
+    // It stops looking once it found one.
+    await page.waitForTimeout(4500)
+    expect(await page.evaluate(() => window.__ferrocastDemo!.crashReports.looks)).toBe(looks)
+  })
+
+  test('Send names the report that was shown (created_ms)', async ({ page }) => {
+    await open(page, 'home', `${Q}&crash=crash`)
+    await dialog(page).getByRole('button', { name: 'Send', exact: true }).click()
+    await expect(page.getByText('Report sent. Thank you.')).toBeVisible()
+    expect(await page.evaluate(() => window.__ferrocastDemo!.crashReports.lastSendCreatedMs)).toBe(
+      1_700_000_000_000,
+    )
+  })
+
+  test('a different report waiting at Send is answered quietly, and that one is asked about', async ({
+    page,
+  }) => {
+    await open(page, 'home', `${Q}&crash=crash`)
+    await expect(dialog(page)).toBeVisible()
+    // The engine now holds a newer report (the shown one was replaced).
+    await page.evaluate(() =>
+      window.__ferrocastDemo!.setCrashReport({ pending: 'hang', createdMs: 1_700_000_005_000 }),
+    )
+    await dialog(page).getByRole('button', { name: 'Send', exact: true }).click()
+    await expect(page.getByRole('dialog', { name: 'Ferrocast stopped responding' })).toBeVisible()
+    // Nothing was sent, and no message about it.
+    expect(await page.evaluate(() => window.__ferrocastDemo!.crashReports.sends)).toBe(0)
+    await expect(page.getByText('The report stays on this PC.')).toHaveCount(0)
+    await expect(page.getByText('Report sent')).toHaveCount(0)
+    await page
+      .getByRole('dialog', { name: 'Ferrocast stopped responding' })
+      .getByRole('button', { name: 'Send', exact: true })
+      .click()
+    await expect(page.getByText('Report sent. Thank you.')).toBeVisible()
+    expect(await page.evaluate(() => window.__ferrocastDemo!.crashReports.lastSendCreatedMs)).toBe(
+      1_700_000_005_000,
+    )
+  })
+
   test('the words follow what happened', async ({ page }) => {
     await open(page, 'home', `${Q}&crash=hang`)
     await expect(page.getByRole('dialog', { name: 'Ferrocast stopped responding' })).toBeVisible()

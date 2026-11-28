@@ -2,18 +2,50 @@
 // The prompt shows once for one waiting report, only on the PC's own window, only while the
 // setting is "ask".
 
-import type { CrashReportsSetting, PendingReport, SendReportResult } from '@ferrocast/api'
+import { ApiError } from '@ferrocast/api'
+import type {
+  CrashReportsSetting,
+  PendingReport,
+  SendReportResult,
+  WaitingReport,
+} from '@ferrocast/api'
 import type { ToastTone } from '@ferrocast/ui'
 import type { Connection } from './boot'
 
 const SEEN_KEY = 'fc-crash-prompt-seen'
+
+/**
+ * The engine builds the report in the background a few seconds after it starts, so one look at
+ * start-up can find nothing. The prompt looks again every `CRASH_POLL_MS`, at most
+ * `CRASH_POLL_RETRIES` more times (30 s in all), and only while the window is visible (a
+ * hidden window pauses, it doesn't use up the time). It stops at the first report it finds.
+ */
+export const CRASH_POLL_MS = 2000
+export const CRASH_POLL_RETRIES = 15
+
+/** An engine without the routes (404), or one that won't let this window use them (403): no
+ * prompt, and no point looking again. */
+export function reportsUnavailable(e: unknown): boolean {
+  return e instanceof ApiError && (e.status === 404 || e.status === 403)
+}
+
+/** A send that found a different report waiting than the one shown (409 `conflict`): nothing
+ * was sent, so ask about the one that is there now. */
+export function sendConflict(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 409
+}
+
+/** A send when nothing waits any more (404 `no_pending_report`: another path sent or removed it). */
+export function nothingToSend(e: unknown): boolean {
+  return e instanceof ApiError && e.status === 404
+}
 
 /** Sent on `window` after the prompt saved "Always", so an open Settings page reloads and
  * doesn't write the old choice back on its next save. */
 export const CRASH_REPORTS_EVENT = 'fc-crash-reports-change'
 
 /** Names one waiting report: the same report never asks twice, a new crash asks again. */
-export function reportId(r: Pick<PendingReport, 'kind' | 'created_ms'>): string {
+export function reportId(r: Pick<WaitingReport, 'kind' | 'created_ms'>): string {
   return `${r.kind}:${r.created_ms}`
 }
 
@@ -53,7 +85,7 @@ export function shouldAsk(
   report: PendingReport | null,
   setting: CrashReportsSetting | undefined,
   alreadyShown: (id: string) => boolean = wasShown,
-): report is PendingReport {
+): report is WaitingReport {
   if (!report || report.pending !== true) return false
   if (effectiveSetting(setting) !== 'ask') return false
   return !alreadyShown(reportId(report))

@@ -46,17 +46,44 @@ describe('crash reports in the demo', () => {
 
   it('has nothing waiting at first, and the setting is ask', async () => {
     const { c, api } = setup()
-    expect((await api.pending()).pending).toBe(false)
+    // The engine's answer when nothing waits: 200 with nulls, never a 404.
+    expect(await api.pending()).toEqual({
+      pending: false,
+      kind: null,
+      created_ms: null,
+      preview_text: null,
+    })
     expect((await c.settings()).crash_reports).toBe('ask')
+  })
+
+  it('shows the report only after a while, like the engine building it after start', async () => {
+    const { engine, api } = setup()
+    engine.setCrashReport({ pending: 'crash', appearsAfterMs: 60 })
+    expect((await api.pending()).pending).toBe(false)
+    await new Promise((r) => setTimeout(r, 90))
+    expect((await api.pending()).pending).toBe(true)
+    expect(engine.crashReports.looks).toBe(2)
+  })
+
+  it('sends the created_ms in the body, and refuses another report with a 409', async () => {
+    const { engine, api } = setup()
+    engine.setCrashReport({ pending: 'crash', createdMs: 5000 })
+    await expect(api.send(4000)).rejects.toMatchObject({ status: 409, code: 'conflict' })
+    expect(engine.crashReports.sends).toBe(0)
+    expect(engine.crashReports.waiting).toBe(true)
+    // Naming none sends whatever waits (the engine's own rule).
+    expect(await api.send()).toEqual({ sent: true })
+    expect(engine.crashReports.lastSendCreatedMs).toBeNull()
   })
 
   it('shows the waiting report, and Send clears it', async () => {
     const { engine, api } = setup()
     engine.setCrashReport({ pending: 'crash' })
     const p = await api.pending()
-    expect(p).toMatchObject({ pending: true, kind: 'crash' })
-    expect(p.preview_text.length).toBeGreaterThan(20)
-    expect(await api.send()).toEqual({ sent: true })
+    expect(p).toMatchObject({ pending: true, kind: 'crash', created_ms: 1_700_000_000_000 })
+    expect(p.preview_text?.length).toBeGreaterThan(20)
+    expect(await api.send(1_700_000_000_000)).toEqual({ sent: true })
+    expect(engine.crashReports.lastSendCreatedMs).toBe(1_700_000_000_000)
     expect((await api.pending()).pending).toBe(false)
   })
 
@@ -66,6 +93,8 @@ describe('crash reports in the demo', () => {
     expect(await api.send()).toEqual({ sent: false, reason: 'relay_too_old' })
     engine.setCrashReport({ send: 'limited' })
     expect(await api.send()).toEqual({ sent: false, reason: 'rate_limited' })
+    engine.setCrashReport({ send: 'other' })
+    expect(await api.send()).toEqual({ sent: false, reason: 'relay_unavailable' })
     expect((await api.pending()).pending).toBe(true)
   })
 
@@ -74,7 +103,10 @@ describe('crash reports in the demo', () => {
     engine.setCrashReport({ pending: 'hang' })
     await api.discard()
     expect((await api.pending()).pending).toBe(false)
-    await expect(api.send()).rejects.toMatchObject({ status: 404 } satisfies Partial<ApiError>)
+    await expect(api.send(1)).rejects.toMatchObject({
+      status: 404,
+      code: 'no_pending_report',
+    } satisfies Partial<ApiError>)
   })
 
   it('saves the setting and refuses a value it doesn’t know', async () => {

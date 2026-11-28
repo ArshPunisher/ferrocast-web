@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { ApiError, type PendingReport, type SendReportResult } from '@ferrocast/api'
+import {
+  ApiError,
+  type NoReport,
+  type PendingReport,
+  type SendReportResult,
+  type WaitingReport,
+} from '@ferrocast/api'
 import { Toaster, currentToasts, dismissToast } from '@ferrocast/ui'
 import { useLive } from '../lib/store'
 import { CrashReportPrompt } from './crash-report-prompt'
@@ -9,7 +15,8 @@ import { CrashReportPrompt } from './crash-report-prompt'
 let root: Root | null = null
 
 const XSS = '<img src=x onerror=alert(1)>'
-const waiting: PendingReport = {
+const none: NoReport = { pending: false, kind: null, created_ms: null, preview_text: null }
+const waiting: WaitingReport = {
   pending: true,
   kind: 'crash',
   created_ms: 1_700_000_000_000,
@@ -37,11 +44,13 @@ afterEach(async () => {
   document.body.innerHTML = ''
   localStorage.clear()
   useLive.setState({ conn: null })
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
 interface Setup {
-  pending?: PendingReport | Error
+  /** One answer for every look, or a list: the nth look gets the nth (the last repeats). */
+  pending?: PendingReport | Error | (PendingReport | Error)[]
   setting?: 'ask' | 'always' | 'never' | undefined
   send?: SendReportResult | Error
   mode?: string
@@ -49,17 +58,22 @@ interface Setup {
 
 async function mount(o: Setup = {}) {
   const calls: string[] = []
+  const bodies: unknown[] = []
   const saved: unknown[] = []
+  let looks = 0
   const client = {
-    request: vi.fn(async (method: string, path: string) => {
+    request: vi.fn(async (method: string, path: string, body?: unknown) => {
       calls.push(`${method} ${path}`)
       if (path.endsWith('/send')) {
+        bodies.push(body)
         const r = o.send ?? { sent: true }
         if (r instanceof Error) throw r
         return r
       }
       if (method === 'DELETE') return undefined
-      const p = o.pending ?? waiting
+      const seq = Array.isArray(o.pending) ? o.pending : [o.pending ?? waiting]
+      const p = seq[Math.min(looks, seq.length - 1)]!
+      looks += 1
       if (p instanceof Error) throw p
       return p
     }),
@@ -85,9 +99,10 @@ async function mount(o: Setup = {}) {
   })
   // The check runs in a microtask chain.
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 0))
+    if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(0)
+    else await new Promise((r) => setTimeout(r, 0))
   })
-  return { el, client, calls, saved }
+  return { el, client, calls, bodies, saved, looks: () => looks }
 }
 
 const dialog = () => document.querySelector('dialog[open]')
@@ -131,7 +146,7 @@ describe('CrashReportPrompt', () => {
   })
 
   it('shows nothing when no report waits, or the setting is always or never', async () => {
-    await mount({ pending: { ...waiting, pending: false } })
+    await mount({ pending: none })
     expect(dialog()).toBeNull()
     await act(async () => root!.unmount())
     root = null
@@ -183,6 +198,120 @@ describe('CrashReportPrompt', () => {
     expect(calls).toContain('POST /api/v1/diagnostics/pending-report/send')
     expect(dialog()).toBeNull()
     expect(currentToasts().map((t) => t.message)).toContain('Report sent. Thank you.')
+  })
+
+  it('sends the created_ms of the report that was shown', async () => {
+    const { bodies } = await mount()
+    await click(button('Send'))
+    expect(bodies).toEqual([{ created_ms: waiting.created_ms }])
+  })
+
+  it('a 409 (another report waits now) is quiet and asks about the newer report', async () => {
+    const newer: WaitingReport = { ...waiting, kind: 'hang', created_ms: waiting.created_ms + 9000 }
+    const { bodies, looks } = await mount({
+      pending: [waiting, newer],
+      send: new ApiError(409, 'conflict', 'A different crash report is waiting now.'),
+    })
+    await click(button('Send'))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    // Nothing said, nothing stays "on this PC": the person is asked about the newer one.
+    expect(currentToasts()).toEqual([])
+    expect(bodies).toEqual([{ created_ms: waiting.created_ms }])
+    expect(looks()).toBe(2)
+    expect(dialog()?.textContent).toContain('Ferrocast stopped responding')
+  })
+
+  it('a send with nothing waiting any more (404) closes without a word', async () => {
+    await mount({ send: new ApiError(404, 'no_pending_report', 'No crash report is waiting.') })
+    await click(button('Send'))
+    expect(dialog()).toBeNull()
+    expect(currentToasts()).toEqual([])
+  })
+
+  it('looks again when the engine has not built the report yet', async () => {
+    const { looks } = await mount({ pending: [none, waiting] })
+    expect(dialog()).toBeNull()
+    expect(looks()).toBe(1)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 2100))
+    })
+    expect(looks()).toBe(2)
+    expect(dialog()?.textContent).toContain('Ferrocast closed unexpectedly')
+  })
+
+  describe('the short look-again window', () => {
+    const tick = (ms: number) =>
+      act(async () => {
+        await vi.advanceTimersByTimeAsync(ms)
+      })
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    })
+    const setHidden = (hidden: boolean) => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
+    }
+    afterEach(() => {
+      Reflect.deleteProperty(document, 'hidden')
+    })
+
+    it('looks every 2 s for 30 s, one look at a time, then stops', async () => {
+      const { looks } = await mount({ pending: none })
+      expect(looks()).toBe(1)
+      await tick(1999)
+      expect(looks()).toBe(1)
+      await tick(1)
+      expect(looks()).toBe(2)
+      await tick(60_000)
+      expect(looks()).toBe(16)
+      await tick(60_000)
+      expect(looks()).toBe(16)
+      expect(dialog()).toBeNull()
+    })
+
+    it('stops at the first report it finds', async () => {
+      const { looks } = await mount({ pending: [none, none, waiting] })
+      await tick(4000)
+      expect(looks()).toBe(3)
+      expect(dialog()).not.toBeNull()
+      await tick(30_000)
+      expect(looks()).toBe(3)
+    })
+
+    it('keeps looking through a failed look, and stops for good on 404 or 403', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const flaky = await mount({
+        pending: [new ApiError(503, 'unavailable', 'Starting.'), waiting],
+      })
+      await tick(2000)
+      expect(flaky.looks()).toBe(2)
+      expect(dialog()).not.toBeNull()
+      expect(warn).toHaveBeenCalledTimes(1)
+      await act(async () => root!.unmount())
+      root = null
+      document.body.innerHTML = ''
+      localStorage.clear()
+      const gone = await mount({ pending: new ApiError(403, 'forbidden', 'No.') })
+      await tick(20_000)
+      expect(gone.looks()).toBe(1)
+    })
+
+    it('does not look while the window is hidden, and looks as soon as it is shown', async () => {
+      setHidden(true)
+      const { looks } = await mount({ pending: [none, waiting] })
+      await tick(20_000)
+      expect(looks()).toBe(0)
+      setHidden(false)
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(looks()).toBe(1)
+      await tick(2000)
+      expect(looks()).toBe(2)
+      expect(dialog()).not.toBeNull()
+    })
   })
 
   it.each(['relay_too_old', 'rate_limited', 'offline'])(

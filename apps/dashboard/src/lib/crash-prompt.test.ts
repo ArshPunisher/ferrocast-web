@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { PendingReport } from '@ferrocast/api'
+import type { NoReport, WaitingReport } from '@ferrocast/api'
 import type { Connection } from './boot'
 import {
   crashPromptAllowed,
@@ -11,7 +11,8 @@ import {
   wasShown,
 } from './crash-prompt'
 
-const waiting: PendingReport = {
+const none: NoReport = { pending: false, kind: null, created_ms: null, preview_text: null }
+const waiting: WaitingReport = {
   pending: true,
   kind: 'crash',
   created_ms: 1_700_000_000_000,
@@ -28,7 +29,7 @@ describe('shouldAsk', () => {
   it('never asks for always, never, or nothing waiting', () => {
     expect(shouldAsk(waiting, 'always')).toBe(false)
     expect(shouldAsk(waiting, 'never')).toBe(false)
-    expect(shouldAsk({ ...waiting, pending: false }, 'ask')).toBe(false)
+    expect(shouldAsk(none, 'ask')).toBe(false)
     expect(shouldAsk(null, 'ask')).toBe(false)
   })
   it('asks once per report, again for a newer one', () => {

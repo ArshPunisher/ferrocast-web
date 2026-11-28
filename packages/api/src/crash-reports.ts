@@ -8,27 +8,51 @@ import type { CrashReportsSetting } from './types'
 
 export type CrashReportKind = 'crash' | 'error' | 'unclean_exit' | 'hang'
 
-/** `GET /api/v1/diagnostics/pending-report`. The other fields are only there when `pending`. */
-export interface PendingReport {
-  pending: boolean
+/** A report is waiting on this PC. */
+export interface WaitingReport {
+  pending: true
   kind: CrashReportKind
-  /** When the report was made (ms since 1970). Together with `kind` it names the report. */
+  /** When the report was made (ms since 1970). Together with `kind` it names the report, and
+   * the send must name it back so a newer one is never sent by mistake. */
   created_ms: number
   /** The exact text that would be sent, already redacted. Plain text: never render it as HTML. */
   preview_text: string
 }
 
-/** `POST /api/v1/diagnostics/pending-report/send`. */
+/** Nothing is waiting: the engine answers 200 with nulls (not a 404). */
+export interface NoReport {
+  pending: false
+  kind: null
+  created_ms: null
+  preview_text: null
+}
+
+/** `GET /api/v1/diagnostics/pending-report`. The engine builds the report a few seconds after
+ * it starts, so an early answer can be `pending: false`: ask again for a short while. */
+export type PendingReport = WaitingReport | NoReport
+
+/** Why a send stayed on this PC (the report is never lost): `relay_too_old` (silent),
+ * `rate_limited`, `too_large`, `rejected`, `relay_unavailable`. */
+export type SendReportReason =
+  'relay_too_old' | 'rate_limited' | 'too_large' | 'rejected' | 'relay_unavailable'
+
+/** `POST /api/v1/diagnostics/pending-report/send` `{ created_ms }`. 404 `no_pending_report` when
+ * nothing waits, 409 `conflict` when a different report waits now (nothing was sent). */
 export interface SendReportResult {
   sent: boolean
-  /** Why it stayed on this PC: `relay_too_old`, `rate_limited`, or another short code. */
-  reason?: 'relay_too_old' | 'rate_limited' | (string & {})
+  reason?: SendReportReason | (string & {})
 }
 
 export function crashReportsApi(c: FerroClient) {
   return {
     pending: () => c.request<PendingReport>('GET', '/api/v1/diagnostics/pending-report'),
-    send: () => c.request<SendReportResult>('POST', '/api/v1/diagnostics/pending-report/send'),
+    /** `createdMs`: the `created_ms` of the report the person was shown. */
+    send: (createdMs?: number) =>
+      c.request<SendReportResult>(
+        'POST',
+        '/api/v1/diagnostics/pending-report/send',
+        createdMs === undefined ? {} : { created_ms: createdMs },
+      ),
     discard: () => c.request<void>('DELETE', '/api/v1/diagnostics/pending-report'),
   }
 }

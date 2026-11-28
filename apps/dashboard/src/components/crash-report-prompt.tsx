@@ -3,16 +3,21 @@
 // report's text is shown exactly as it would be sent, as plain text.
 
 import { useEffect, useId, useState } from 'react'
-import { ApiError, crashReportTitle, crashReportsApi, describeError } from '@ferrocast/api'
-import type { PendingReport } from '@ferrocast/api'
+import { crashReportTitle, crashReportsApi, describeError } from '@ferrocast/api'
+import type { PendingReport, WaitingReport } from '@ferrocast/api'
 import { Button, Dialog, toast } from '@ferrocast/ui'
 import { useLive } from '../lib/store'
 import {
   CRASH_REPORTS_EVENT,
   crashPromptAllowed,
+  CRASH_POLL_MS,
+  CRASH_POLL_RETRIES,
   markShown,
+  nothingToSend,
   otherDialogOpen,
   reportId,
+  reportsUnavailable,
+  sendConflict,
   sendNotice,
   shouldAsk,
 } from '../lib/crash-prompt'
@@ -24,41 +29,76 @@ export function CrashReportPrompt() {
   const conn = useLive((s) => s.conn)
   const allowed = crashPromptAllowed(conn)
   const client = conn?.client
-  const [report, setReport] = useState<PendingReport | null>(null)
+  const [report, setReport] = useState<WaitingReport | null>(null)
   const [open, setOpen] = useState(false)
   const [always, setAlways] = useState(false)
   const [busy, setBusy] = useState<'send' | 'discard' | null>(null)
+  // Bumped to look for a waiting report again (a send found a different one waiting).
+  const [round, setRound] = useState(0)
   const textId = useId()
 
-  // Once per start: is a report waiting, and does the setting say ask?
+  // Is a report waiting, and does the setting say ask? The engine builds the report a few
+  // seconds after start, so this looks again every 2 s for up to 30 s (visible time only) and
+  // stops at the first report it finds, or on a "no reports here" answer. One look at a time.
   useEffect(() => {
     if (!allowed || !client) return
     let alive = true
-    void (async () => {
-      let pending: PendingReport
+    let finished = false
+    let busy = false
+    let warned = false
+    let looks = 0
+    let timer: number | undefined
+    const api = crashReportsApi(client)
+
+    const look = async () => {
+      timer = undefined
+      // A hidden window pauses; coming back (below) looks again.
+      if (!alive || finished || busy || document.hidden) return
+      busy = true
+      looks += 1
       try {
-        pending = await crashReportsApi(client).pending()
-      } catch (e) {
-        // An engine without reports (404) or one that can't answer: no prompt, not an error.
-        if (!(e instanceof ApiError && (e.status === 404 || e.status === 403)))
-          console.warn('Crash report check failed', describeError(e).message)
-        return
+        let pending: PendingReport | null = null
+        try {
+          pending = await api.pending()
+        } catch (e) {
+          // An engine without reports, or one that can't answer yet: no prompt, not an error.
+          if (reportsUnavailable(e)) {
+            finished = true
+            return
+          }
+          if (!warned) console.warn('Crash report check failed', describeError(e).message)
+          warned = true
+        }
+        if (!alive) return
+        if (pending?.pending) {
+          finished = true
+          let setting
+          try {
+            setting = (await client.settings()).crash_reports
+          } catch (e) {
+            console.warn('Crash report setting could not be read', describeError(e).message)
+            return
+          }
+          if (alive && shouldAsk(pending, setting)) setReport(pending)
+          return
+        }
+        if (looks > CRASH_POLL_RETRIES) finished = true
+      } finally {
+        busy = false
+        if (alive && !finished && !document.hidden) timer = window.setTimeout(look, CRASH_POLL_MS)
       }
-      if (!alive || !pending.pending) return
-      let setting
-      try {
-        setting = (await client.settings()).crash_reports
-      } catch (e) {
-        console.warn('Crash report setting could not be read', describeError(e).message)
-        return
-      }
-      if (!alive || !shouldAsk(pending, setting)) return
-      setReport(pending)
-    })()
+    }
+    const back = () => {
+      if (!document.hidden && !finished && !busy && timer === undefined) void look()
+    }
+    document.addEventListener('visibilitychange', back)
+    void look()
     return () => {
       alive = false
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', back)
     }
-  }, [allowed, client])
+  }, [allowed, client, round])
 
   // Waits for any other dialog to close (never one over another), then opens, and remembers
   // at once that it was shown, so a reload doesn't ask again.
@@ -109,9 +149,21 @@ export function CrashReportPrompt() {
       }
     }
     try {
-      const result = await crashReportsApi(client).send()
+      // Names the report that was shown: the engine refuses it if another one waits now.
+      const result = await crashReportsApi(client).send(report.created_ms)
       toast(sendNotice(result))
     } catch (e) {
+      if (sendConflict(e)) {
+        // A newer report is waiting and nothing was sent: quietly ask about that one instead.
+        finish()
+        setRound((n) => n + 1)
+        return
+      }
+      // Nothing waits any more (it went out or was removed another way): nothing to say.
+      if (nothingToSend(e)) {
+        finish()
+        return
+      }
       const d = describeError(e)
       toast({
         tone: 'info',
