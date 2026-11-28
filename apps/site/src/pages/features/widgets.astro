@@ -204,19 +204,26 @@ const facts = [
 <script>
   const buttons = [...document.querySelectorAll<HTMLButtonElement>('.chips button')]
   const tiles = [...document.querySelectorAll<HTMLElement>('.wt')]
+  // Each pick bumps a per-tile counter; the delayed callbacks only act if theirs is still the
+  // latest, so an older hide can never undo a newer "show".
+  const pick = new WeakMap<HTMLElement, number>()
   for (const b of buttons)
     b.addEventListener('click', () => {
       const f = b.dataset.f
       for (const x of buttons) x.setAttribute('aria-pressed', String(x === b))
       for (const t of tiles) {
         const show = f === 'all' || t.dataset.k === f
+        const id = (pick.get(t) ?? 0) + 1
+        pick.set(t, id)
         if (show) {
           t.hidden = false
-          requestAnimationFrame(() => t.classList.remove('fade'))
+          requestAnimationFrame(() => {
+            if (pick.get(t) === id) t.classList.remove('fade')
+          })
         } else {
           t.classList.add('fade')
           window.setTimeout(() => {
-            if (t.classList.contains('fade')) t.hidden = true
+            if (pick.get(t) === id) t.hidden = true
           }, 300)
         }
       }
