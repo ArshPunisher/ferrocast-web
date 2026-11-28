@@ -39,24 +39,41 @@ async function fitsSideways(el: Locator): Promise<{ over: number; offenders: str
       if (r.width === 0 || r.height === 0) continue
       const cs = getComputedStyle(n)
       if (cs.position === 'fixed' || cs.visibility === 'hidden' || cs.display === 'none') continue
-      // Inside a scroller the content may be wider on purpose.
-      let scroller = false
+      // Content inside a real scroller may be wider on purpose. A box that only clips
+      // (overflow hidden or clip) hides what spills out, so the control must fit that box.
+      let scrolls = false
+      let clippedByAncestor = false
       for (let p = n.parentElement; p && p !== root; p = p.parentElement) {
         const ox = getComputedStyle(p).overflowX
-        if (ox === 'auto' || ox === 'scroll' || ox === 'hidden' || ox === 'clip') {
-          scroller = true
+        if (ox === 'auto' || ox === 'scroll') {
+          scrolls = true
           break
         }
+        if (ox === 'hidden' || ox === 'clip') {
+          const pr = p.getBoundingClientRect()
+          if (r.right > pr.right + 1.5 || r.left < pr.left - 1.5) clippedByAncestor = true
+        }
       }
-      if (scroller) continue
+      if (scrolls) continue
+      if (clippedByAncestor) {
+        offenders.push(`clipped ${n.tagName}.${String(n.className).slice(0, 60)}`)
+        continue
+      }
       if (r.right > box.right + 1.5 || r.left < box.left - 1.5) {
         offenders.push(`${n.tagName}.${String(n.className).slice(0, 60)}`)
       }
     }
-    return {
-      over: Math.max(0, root.scrollWidth - root.clientWidth),
-      offenders: offenders.slice(0, 5),
+    // The box and any scroll area inside it must not need a sideways scrollbar: a dialog body
+    // with overflow-y:auto is also overflow-x:auto, so a too-wide table would scroll silently.
+    let over = Math.max(0, root.scrollWidth - root.clientWidth)
+    for (const n of root.querySelectorAll('*')) {
+      const ox = getComputedStyle(n).overflowX
+      if ((ox === 'auto' || ox === 'scroll') && n.scrollWidth - n.clientWidth > 1) {
+        over = Math.max(over, n.scrollWidth - n.clientWidth)
+        offenders.push(`scrolls sideways ${n.tagName}.${String(n.className).slice(0, 60)}`)
+      }
     }
+    return { over, offenders: offenders.slice(0, 5) }
   })
 }
 
