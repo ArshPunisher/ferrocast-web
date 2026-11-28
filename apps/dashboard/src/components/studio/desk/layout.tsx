@@ -1494,7 +1494,7 @@ export function DockHeader({
               aria-selected={d === id}
               onClick={() => setLayout((l) => ({ ...l, on: { ...l.on, [host]: d } }))}
               className={cx(
-                '-mb-px shrink-0 border-b-2 px-2 font-display text-[13.5px] font-bold tracking-tight outline-none focus-visible:shadow-[var(--fc-focus)]',
+                '-mb-px min-w-0 shrink truncate border-b-2 px-2 font-display text-[13.5px] font-bold tracking-tight outline-none focus-visible:shadow-[var(--fc-focus)]',
                 d === id
                   ? 'border-text text-text'
                   : 'border-transparent text-text-3 hover:text-text',
