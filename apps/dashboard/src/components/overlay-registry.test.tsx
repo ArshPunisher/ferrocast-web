@@ -467,3 +467,96 @@ describe('Dynamic overlay resize holes, opacity-only entrance, and InfoTip bound
     vi.useRealTimers()
   })
 })
+
+describe('Dialog focus and toasts (shared lifecycle)', () => {
+  it('gives focus back to the button that opened it, by Escape or a button, and when removed', async () => {
+    function Host({ mounted = true }: { mounted?: boolean }) {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button id="opener" onClick={() => setOpen(true)}>
+            Open
+          </button>
+          {mounted && (
+            <Dialog open={open} onClose={() => setOpen(false)} title="Box">
+              <input data-autofocus aria-label="Name" />
+            </Dialog>
+          )}
+        </>
+      )
+    }
+    const host = document.body.appendChild(document.createElement('div'))
+    root = createRoot(host)
+    await act(async () => root!.render(<Host />))
+    const opener = document.getElementById('opener') as HTMLButtonElement
+    opener.focus()
+    await act(async () => opener.click())
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Name')
+    // Escape asks the dialog to cancel; the dialog is closed by its owner.
+    await act(async () => {
+      document
+        .querySelector('dialog[open]')!
+        .dispatchEvent(new Event('cancel', { cancelable: true }))
+    })
+    expect(document.activeElement).toBe(opener)
+    // Opened again and removed from the page while open: focus still comes back.
+    await act(async () => opener.click())
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Name')
+    await act(async () => root!.render(<Host mounted={false} />))
+    expect(document.activeElement).toBe(opener)
+  })
+
+  it('puts the notifications above a dialog that opens while a toast is showing', async () => {
+    const shown = vi.fn()
+    const hidden = vi.fn()
+    const proto = HTMLElement.prototype as unknown as Record<string, unknown>
+    const prev = { show: proto.showPopover, hide: proto.hidePopover }
+    proto.showPopover = function (this: HTMLElement) {
+      shown()
+      this.setAttribute('data-popover-open', '')
+    }
+    proto.hidePopover = function (this: HTMLElement) {
+      hidden()
+      this.removeAttribute('data-popover-open')
+    }
+    const realMatches = Element.prototype.matches
+    vi.spyOn(Element.prototype, 'matches').mockImplementation(function (
+      this: Element,
+      sel: string,
+    ) {
+      return sel === ':popover-open'
+        ? this.hasAttribute('data-popover-open')
+        : realMatches.call(this, sel)
+    })
+    try {
+      function Host() {
+        const [open, setOpen] = useState(false)
+        return (
+          <>
+            <Toaster />
+            <button id="o" onClick={() => setOpen(true)}>
+              Open
+            </button>
+            <Dialog open={open} onClose={() => setOpen(false)} title="Box">
+              <p>Hi</p>
+            </Dialog>
+          </>
+        )
+      }
+      const host = document.body.appendChild(document.createElement('div'))
+      root = createRoot(host)
+      await act(async () => root!.render(<Host />))
+      await act(async () => {
+        toast({ tone: 'ok', message: 'Panic mode is on' })
+      })
+      const before = shown.mock.calls.length
+      await act(async () => document.getElementById('o')!.click())
+      // The toasts were hidden and shown again after the dialog's backdrop went up.
+      expect(shown.mock.calls.length).toBeGreaterThan(before)
+      expect(hidden).toHaveBeenCalled()
+    } finally {
+      proto.showPopover = prev.show
+      proto.hidePopover = prev.hide
+    }
+  })
+})

@@ -6,6 +6,7 @@ import {
   useState,
   useSyncExternalStore,
   type ReactNode,
+  type RefObject,
 } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { X, CheckCircle, WarningCircle, Info } from '@phosphor-icons/react'
@@ -36,6 +37,55 @@ export interface DialogProps {
 let scrollLocks = 0
 
 /** Stops the page behind a dialog scrolling (wheel and touch scroll chain to it otherwise). */
+const RAISE_TOASTS = 'fc:raise-toasts'
+
+/**
+ * Opens and closes a native modal for `open`, and keeps what the page expects of one:
+ * - focus goes where `focusInside` says, and comes back to whatever had it before the dialog
+ *   opened when it closes (by Escape, a button or being removed), not to the page's start;
+ * - the notifications are put above the new backdrop, so a toast already showing is not left
+ *   dimmed and unclickable behind it.
+ */
+function useModalLifecycle(
+  ref: RefObject<HTMLDialogElement | null>,
+  open: boolean,
+  focusInside: (d: HTMLDialogElement) => void,
+) {
+  const opener = useRef<HTMLElement | null>(null)
+  const shown = useRef(false)
+  const restore = () => {
+    const o = opener.current
+    opener.current = null
+    shown.current = false
+    if (o && o.isConnected) o.focus({ preventScroll: true })
+  }
+  useEffect(() => {
+    const d = ref.current
+    if (!d) return
+    if (open && !d.open) {
+      const a = document.activeElement
+      opener.current = a instanceof HTMLElement && a !== document.body ? a : null
+      shown.current = true
+      d.showModal()
+      window.dispatchEvent(new Event(RAISE_TOASTS))
+      focusInside(d)
+    }
+    if (!open && d.open) {
+      d.close()
+      restore()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+  // Removed while open (a parent that stops rendering it): the same way back.
+  useEffect(
+    () => () => {
+      if (shown.current) restore()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  )
+}
+
 export function lockPageScroll(): () => void {
   const root = document.documentElement
   if (scrollLocks++ === 0) {
@@ -74,21 +124,15 @@ export function Dialog({
   const panel = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
   usePreviewHole(panel, { active: open, deps: [size, compact] })
-  useEffect(() => {
-    const d = ref.current
-    if (!d) return
-    if (open && !d.open) {
-      d.showModal()
-      // Opening a dialog moves focus to its first button, which then shows a focus ring on
-      // Close though nothing was typed. A field marked for it gets focus (React's autoFocus
-      // runs while the dialog is still closed, so it can't); else the panel itself, so Tab
-      // starts at the top and nothing is ringed.
-      const field = d.querySelector<HTMLElement>('[data-autofocus]')
-      if (field) field.focus()
-      else panel.current?.focus({ preventScroll: true })
-    }
-    if (!open && d.open) d.close()
-  }, [open])
+  // Opening a dialog moves focus to its first button, which then shows a focus ring on Close
+  // though nothing was typed. A field marked for it gets focus (React's autoFocus runs while the
+  // dialog is still closed, so it can't); else the panel itself, so Tab starts at the top and
+  // nothing is ringed.
+  useModalLifecycle(ref, open, (d) => {
+    const field = d.querySelector<HTMLElement>('[data-autofocus]')
+    if (field) field.focus()
+    else panel.current?.focus({ preventScroll: true })
+  })
   useEffect(() => (open ? lockPageScroll() : undefined), [open])
   useEffect(() => {
     const d = ref.current
@@ -262,16 +306,8 @@ export function ConfirmDialog({
   const reduce = useReducedMotion()
   const titleId = useId()
   usePreviewHole(panel, open)
-  useEffect(() => {
-    const d = ref.current
-    if (!d) return
-    if (open && !d.open) {
-      d.showModal()
-      // The safe button first: Enter keeps it, as a slip shouldn't remove anything.
-      d.querySelector<HTMLButtonElement>('[data-cancel]')?.focus()
-    }
-    if (!open && d.open) d.close()
-  }, [open])
+  // The safe button first: Enter keeps it, as a slip shouldn't remove anything.
+  useModalLifecycle(ref, open, (d) => d.querySelector<HTMLButtonElement>('[data-cancel]')?.focus())
   useEffect(() => (open ? lockPageScroll() : undefined), [open])
   useEffect(() => {
     const d = ref.current
@@ -367,18 +403,12 @@ export function Sheet({ open, onClose, title, tools, children, footer }: SheetPr
   const reduce = useReducedMotion()
   usePreviewHole(panel, open)
   useEffect(() => (open ? lockPageScroll() : undefined), [open])
-  useEffect(() => {
-    const d = ref.current
-    if (!d) return
-    if (open && !d.open) {
-      d.showModal()
-      // As Dialog: a marked field, else the panel (no ring on its first button).
-      const field = d.querySelector<HTMLElement>('[data-autofocus]')
-      if (field) field.focus()
-      else panel.current?.focus({ preventScroll: true })
-    }
-    if (!open && d.open) d.close()
-  }, [open])
+  // As Dialog: a marked field, else the panel (no ring on its first button).
+  useModalLifecycle(ref, open, (d) => {
+    const field = d.querySelector<HTMLElement>('[data-autofocus]')
+    if (field) field.focus()
+    else panel.current?.focus({ preventScroll: true })
+  })
   useEffect(() => {
     const d = ref.current
     if (!d) return
@@ -632,6 +662,22 @@ export function Toaster() {
       // Not supported here: it stays a fixed layer under dialogs, as before.
     }
   }, [list])
+  // A dialog opened while a toast shows would sit above it: bring the toasts back on top.
+  useEffect(() => {
+    const raise = () => {
+      const el = ref.current
+      if (!el || typeof el.showPopover !== 'function') return
+      try {
+        if (el.childElementCount === 0) return
+        if (el.matches(':popover-open')) el.hidePopover()
+        el.showPopover()
+      } catch {
+        // Not supported here.
+      }
+    }
+    window.addEventListener(RAISE_TOASTS, raise)
+    return () => window.removeEventListener(RAISE_TOASTS, raise)
+  }, [])
   return (
     <section
       ref={ref}
