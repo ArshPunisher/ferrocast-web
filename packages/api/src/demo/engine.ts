@@ -120,6 +120,7 @@ import type { LiveAlert } from '../studio'
 import { DemoTipBrand } from './features/tip-brand'
 import { DemoTtsVoices } from './features/tts-voices'
 import { DemoTipDomain, type DemoTipDomainState } from './features/tip-domain'
+import { DemoCrashReports, type DemoCrashReportState } from './features/crash-reports'
 import { DemoWeeklyEmail, type DemoWeeklyEmailState } from './features/weekly-email'
 import { DemoAutoReplies } from './features/autoreplies'
 import { DemoApiKeys } from './features/api-keys'
@@ -528,6 +529,8 @@ export class DemoEngine {
     () => this.pro.route('GET', ['pro'], undefined) as ProView,
     () => this.tips,
   )
+  /** The one crash report that may be waiting to be sent (Settings › Privacy, the prompt). */
+  readonly crashReports = new DemoCrashReports()
   /** Pro's weekly email: the double opt-in, the address only as a hint. */
   readonly weeklyEmail = new DemoWeeklyEmail(
     () => this.pro.route('GET', ['pro'], undefined) as ProView,
@@ -958,6 +961,16 @@ export class DemoEngine {
     const { confirm, ...rest } = state
     this.weeklyEmail.setState(rest)
     if (confirm) this.weeklyEmail.confirm()
+  }
+
+  /** A crash report waiting to be sent (or none), and what Send does. */
+  setCrashReport(state: DemoCrashReportState): void {
+    this.crashReports.setState(state)
+  }
+
+  /** Starts with the crash-report setting on this value (the dashboard's `?crash_setting=`). */
+  setCrashReportsSetting(value: 'ask' | 'always' | 'never'): void {
+    this.settings = { ...this.settings, crash_reports: value }
   }
 
   /** Pro's own tip address: one added already, its status, today's changes. */
@@ -1832,6 +1845,15 @@ export class DemoEngine {
           'The settings aren’t valid: youtube_privacy: use one of public, unlisted, private.',
         )
       if (
+        patch.crash_reports !== undefined &&
+        !['ask', 'always', 'never'].includes(patch.crash_reports)
+      )
+        throw new HttpError(
+          400,
+          'invalid',
+          'The settings aren’t valid: crash_reports: use one of ask, always, never.',
+        )
+      if (
         patch.theme !== undefined &&
         !['system', 'dark', 'light', ...THEME_IDS].includes(patch.theme)
       )
@@ -2035,6 +2057,7 @@ export class DemoEngine {
       this.apiKeys,
       this.weeklyEmail,
       this.tipDomain,
+      this.crashReports,
     ]
   }
 

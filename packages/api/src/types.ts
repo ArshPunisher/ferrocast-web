@@ -1448,9 +1448,18 @@ export interface Settings {
    * chosen. Missing from an older engine, which makes them all public.
    */
   youtube_privacy?: YoutubePrivacy
+  /**
+   * Whether Ferrocast may send a redacted crash report: `ask` (default) shows a prompt after a
+   * crash, `always` sends without asking, `never` keeps reports on this PC. Missing from an
+   * older engine, which has no reports.
+   */
+  crash_reports?: CrashReportsSetting
 }
 
 export type YoutubePrivacy = 'public' | 'unlisted' | 'private'
+
+/** `Settings.crash_reports`: ask before sending (default), send without asking, or never. */
+export type CrashReportsSetting = 'ask' | 'always' | 'never'
 
 /** Why a backup was taken (API.md §4 Settings and data). `restore`: the data a restore replaced. */
 export type BackupReason =

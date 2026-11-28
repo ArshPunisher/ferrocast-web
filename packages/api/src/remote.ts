@@ -314,6 +314,8 @@ export const OWNER_HIDDEN_SETTINGS: readonly string[] = [
   'obs',
   'discord',
   'data',
+  // Crash reports are about the PC's own app; the routes refuse a phone too.
+  'privacy',
   'pro',
   // Plugins bring code: added and managed on the PC only (the routes refuse a phone too).
   'plugins',

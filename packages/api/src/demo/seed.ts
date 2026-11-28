@@ -454,4 +454,5 @@ export const SETTINGS: Settings = {
   language: 'en',
   currency: 'INR',
   youtube_privacy: 'public',
+  crash_reports: 'ask',
 }
