@@ -3,18 +3,29 @@ import { test } from '@playwright/test'
 const SHADOW: Record<string, string> = {
   control: '',
   hide: '.fc-ov{display:none!important}',
-  filterOff: '.fc-w,.fc-w *{filter:none!important}',
-  animOff:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important}',
-  gradOff: '.fc-w *{background-image:none!important}',
-  blendMaskOff:
-    '.fc-w,.fc-w *{mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
-  containStrict: '.fc-w{contain:strict!important}',
-  zoomNotTransform: '.fc-ov-canvas{transform:none!important;zoom:.2677!important}',
-  fontsOff: '.fc-w,.fc-w *{font-family:sans-serif!important}',
-  textOff: '.fc-w,.fc-w *{color:transparent!important;text-shadow:none!important}',
   allOff:
-    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;clip-path:none!important}',
+    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
+  allBut_anim:
+    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{filter:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
+  allBut_filter:
+    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
+  allBut_boxshadow:
+    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
+  allBut_textshadow:
+    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
+  allBut_bgimage:
+    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
+  allBut_blend:
+    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mask:none!important;-webkit-mask:none!important;clip-path:none!important}',
+  allBut_mask:
+    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;clip-path:none!important}',
+  allBut_clip:
+    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important;filter:none!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;mix-blend-mode:normal!important;mask:none!important;-webkit-mask:none!important}',
+  only_boxshadow: '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{box-shadow:none!important}',
+  only_bgimage: '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{background-image:none!important}',
+  only_filter: '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{filter:none!important}',
+  only_anim:
+    '.fc-w,.fc-w *,.fc-w *::before,.fc-w *::after{animation:none!important;transition:none!important}',
 }
 
 for (const [name, css] of Object.entries(SHADOW)) {
@@ -43,13 +54,17 @@ for (const [name, css] of Object.entries(SHADOW)) {
     const series: number[] = []
     let last = 0
     let firstFast = -1
+    let run = 0
     for (let i = 0; i < 40; i++) {
       await page.waitForTimeout(1000)
       const f = await page.evaluate(() => (window as unknown as { __f: number }).__f)
       series.push(f - last)
-      if (firstFast < 0 && f - last >= 15) firstFast = i + 1
       last = f
-      if (firstFast >= 0 && i >= firstFast + 2) break
+      run = i >= 3 && series[i]! >= 15 ? run + 1 : 0
+      if (run === 3) {
+        firstFast = i - 1
+        break
+      }
     }
     const previews = await page.evaluate(
       () => document.querySelectorAll('[data-overlay-preview]').length,
