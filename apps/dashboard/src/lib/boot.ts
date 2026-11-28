@@ -520,6 +520,22 @@ export async function demo(opts: { setupDone?: boolean } = {}): Promise<Connecti
     designs: BUILTINS,
   })
   window.__ferrocastDemo = engine
+  // `?crash=crash|error|unclean_exit|hang`: a crash report is waiting to be sent (the prompt);
+  // `&crash_send=old|limited|other|fail`: Send keeps it on this PC, or fails.
+  const crash = params.get('crash')
+  if (crash === 'crash' || crash === 'error' || crash === 'unclean_exit' || crash === 'hang') {
+    const send = params.get('crash_send')
+    engine.setCrashReport({
+      pending: crash,
+      ...(send === 'old' || send === 'limited' || send === 'other' || send === 'fail'
+        ? { send }
+        : {}),
+    })
+  }
+  // `?crash_setting=always|never`: Settings › Privacy starts on that (it starts on ask).
+  const crashSetting = params.get('crash_setting')
+  if (crashSetting === 'always' || crashSetting === 'never')
+    engine.setCrashReportsSetting(crashSetting)
   // `?pro=active` is a PC that was already Pro, so the one-time unlock doesn't cover the
   // screen under test; `&unlock=1` plays it.
   if (params.get('pro') === 'active' && params.get('unlock') !== '1')

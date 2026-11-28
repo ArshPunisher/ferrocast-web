@@ -12,6 +12,7 @@ import {
   PaintBrush,
   PuzzlePiece,
   Lightning,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkle,
   SpeakerHigh,
@@ -26,6 +27,7 @@ import {
   type ObsState,
   type PairLink,
   type PackImportReport,
+  type CrashReportsSetting,
   type Settings as SettingsData,
   type TtsSettings,
 } from '@ferrocast/api'
@@ -34,7 +36,9 @@ import {
   Button,
   Dialog,
   Field,
+  InfoTip,
   Input,
+  Segmented,
   Select,
   Skeleton,
   copyText,
@@ -77,6 +81,7 @@ import { PluginsSettings } from '../components/plugins-settings'
 import { SupportReportSection } from '../components/support-report'
 import { ApiKeysSection } from '../components/api-keys'
 import { useLive } from '../lib/store'
+import { CRASH_REPORTS_EVENT } from '../lib/crash-prompt'
 import { useWidePage } from '../lib/wide'
 import { OWNER_HIDDEN_SETTINGS } from '@ferrocast/api'
 
@@ -106,6 +111,7 @@ const GROUPS = [
     items: [
       ['appearance', 'Appearance', PaintBrush],
       ['data', 'Your data', Database],
+      ['privacy', 'Privacy', ShieldCheck],
       ['updates', 'Updates', ArrowsClockwise],
       ['pro', 'Pro', Sparkle],
       ['plugins', 'Plugins', PuzzlePiece],
@@ -134,6 +140,7 @@ const TONE: Record<SectionId, string> = {
   discord: '#5865f2',
   appearance: '#c2417a',
   data: '#0a8f5c',
+  privacy: '#3b6fb0',
   updates: '#1f7f86',
   pro: '#b35900',
   automations: '#7a4fd0',
@@ -861,6 +868,56 @@ function Data() {
   )
 }
 
+const CRASH_NAME: Record<CrashReportsSetting, string> = {
+  ask: 'Ask',
+  always: 'Always',
+  never: 'Never',
+}
+
+/** Privacy: whether a crash report may be sent. One line; what it holds is behind the (i). */
+function Privacy({ settings, save }: { settings: SettingsData; save: (s: SettingsData) => void }) {
+  const value = settings.crash_reports
+  return (
+    <Section id="privacy" title="Privacy" description="You decide what leaves this computer.">
+      <Group title="Crash reports">
+        {value === undefined ? (
+          <Row
+            label="Send crash reports"
+            description="This version of Ferrocast doesn’t send crash reports."
+          />
+        ) : (
+          <Row
+            label={
+              <span className="inline-flex items-center gap-1">
+                Send crash reports
+                <InfoTip label="About crash reports">
+                  After a crash, Ferrocast can send a report to ClearCraft Labs’ Ferrocast server so
+                  the problem can be fixed. It has error details, the crash trace and recent logs,
+                  with stream keys, passwords, emails and IP addresses removed. Never a memory dump.
+                  Ask: you see exactly what would be sent and choose each time. Always: sent without
+                  asking. Never: nothing is sent. Reports are kept for 90 days.
+                </InfoTip>
+              </span>
+            }
+            description="Nothing is sent unless you say yes."
+            control={
+              <Segmented
+                label="Send crash reports"
+                value={value}
+                onChange={(crash_reports) => save({ ...settings, crash_reports })}
+                options={(['ask', 'always', 'never'] as const).map((v) => ({
+                  value: v,
+                  label: CRASH_NAME[v],
+                }))}
+              />
+            }
+          />
+        )}
+      </Group>
+    </Section>
+  )
+}
+
 function Updates({ settings, save }: { settings: SettingsData; save: (s: SettingsData) => void }) {
   const u = useLive((s) => s.update)
   const loadError = useLive((s) => s.updateLoadError)
@@ -1154,7 +1211,12 @@ export function Settings({ section }: { section?: string | undefined }) {
   const reload = res.reload
   useEffect(() => {
     window.addEventListener(THEME_EVENT, reload)
-    return () => window.removeEventListener(THEME_EVENT, reload)
+    // The crash-report prompt saved "Always": don't keep (and write back) the old choice.
+    window.addEventListener(CRASH_REPORTS_EVENT, reload)
+    return () => {
+      window.removeEventListener(THEME_EVENT, reload)
+      window.removeEventListener(CRASH_REPORTS_EVENT, reload)
+    }
   }, [reload])
   // On a phone through Ferrocast's servers, the sections that need the PC itself are hidden.
   const remote = useLive((s) => s.remote)
@@ -1279,7 +1341,7 @@ export function Settings({ section }: { section?: string | undefined }) {
               <DiscordPro />
             </>
           )}
-          {['appearance', 'data', 'updates', 'pro', 'advanced'].includes(at) &&
+          {['appearance', 'data', 'privacy', 'updates', 'pro', 'advanced'].includes(at) &&
             (res.error ? (
               <LoadError error={res.error} onRetry={res.reload} />
             ) : !res.data ? (
@@ -1295,6 +1357,7 @@ export function Settings({ section }: { section?: string | undefined }) {
                     </div>
                   </>
                 )}
+                {at === 'privacy' && <Privacy settings={res.data} save={save} />}
                 {at === 'updates' && <Updates settings={res.data} save={save} />}
                 {at === 'pro' && (
                   <Section

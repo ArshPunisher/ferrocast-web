@@ -51,6 +51,7 @@ import { StudioGlobal } from './components/studio/moments'
 import { LiveAlertToasts } from './components/studio/live-alerts'
 import { RemoteGate } from './components/remote'
 import { SafeModeScreen } from './components/safe-mode'
+import { CrashReportPrompt } from './components/crash-report-prompt'
 
 // Home is in the first bundle; other screens load when first opened.
 const Chat = lazy(() => import('./screens/Chat').then((m) => ({ default: m.Chat })))
@@ -469,6 +470,7 @@ export function App() {
       </Shell>
       <StudioGlobal />
       <LiveAlertToasts />
+      <CrashReportPrompt />
       <Toaster />
     </>
   )

@@ -625,3 +625,26 @@ Two custom `window` events coordinate smooth desktop OS live-resize and multi-mo
 say the device is missing, so the dashboard never writes "Not connected" for a quiet sound (only
 for a sound the engine does not list at all). If that word is wanted for an unplugged device,
 the levels answer needs an explicit flag, for example `connected: boolean` per sound.
+
+## Opt-in crash reports (3.8.1)
+
+Built against `ferrocast/notes/q38/CRASH-REPORTS-SPEC.md`. All three routes are PC only (a phone
+and an API key can never reach them), and the demo engine implements them.
+
+- `GET /api/v1/diagnostics/pending-report` →
+  `{ pending: boolean, kind: "crash"|"error"|"unclean_exit"|"hang", created_ms: number, preview_text: string }`.
+  At most one report waits. `preview_text` is the exact redacted text that would be sent; the
+  dashboard shows it as plain text only. `kind` + `created_ms` name the report, so the dashboard asks
+  once per report.
+- `POST /api/v1/diagnostics/pending-report/send` → `{ sent: boolean, reason?: "relay_too_old"|"rate_limited"|string }`.
+  `sent: false` keeps the local copy (Settings › Advanced › support report still works). A 404 when
+  nothing waits.
+- `DELETE /api/v1/diagnostics/pending-report` → 204. "Don't send".
+- Setting `crash_reports: "ask" | "always" | "never"` in `GET/PUT /api/v1/settings` (missing from an
+  older engine: the dashboard treats it as `ask` and shows no Privacy choice). Only `ask` makes the
+  dashboard prompt; with `always` the engine sends by itself, with `never` it sends nothing.
+- Dashboard: the prompt shows only in the desktop window (not a linked browser, a phone or cloud
+  mode), after the safe-mode screen and first-run setup, once per report, and waits while another
+  dialog is open. Settings › Privacy holds the choice.
+- Demo: `?crash=crash|error|unclean_exit|hang` leaves a report waiting, `&crash_send=old|limited|other|fail`
+  sets what Send does, `?crash_setting=always|never` starts the setting there.
