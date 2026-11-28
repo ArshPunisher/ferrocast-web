@@ -1074,7 +1074,7 @@ export function planEncodes(input: {
             kbps: s.kbps,
             resolution: [s.width, s.height],
             fps: s.fps,
-            separate_encode: false,
+            separate_encode: resolved.separate_encode,
             summary: `Shared cap: ${resFps} · ${rateLabel}`,
             detail: sharedCapText(budgetConfig.max_sessions ?? null),
           }

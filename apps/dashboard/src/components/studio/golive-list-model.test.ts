@@ -705,6 +705,41 @@ describe('golive-list-model (List 3b API state mapping)', () => {
     expect(vm.footer.mode === 'summary' ? vm.footer.problems.length : -1).toBe(1)
   })
 
+  it('does not say nothing is sending while an unticked backup is delivering', () => {
+    const failed = {
+      state: 'failed' as const,
+      attempts: 3,
+      reason: "Couldn't connect",
+      kbps: 0,
+      dropped: 0,
+      since_ms: 1000,
+    }
+    const view = makeView({
+      live: true,
+      destinations: [
+        makeDest({ health: failed }),
+        // A backup that took over, though it is not ticked.
+        makeDest({
+          id: 'youtube',
+          kind: 'youtube',
+          name: 'YouTube',
+          enabled: false,
+          health: { state: 'live', kbps: 6000, dropped: 0, since_ms: 1000 },
+        }),
+      ],
+    })
+    const vm = buildGoLiveDockVM(view, { usesObs: false, qualityOptionsById: {} })
+    expect(vm.footer).not.toMatchObject({ text: 'Nothing is sending' })
+    // And with the backup not delivering either, the retry stays.
+    const none = makeView({
+      live: true,
+      destinations: [makeDest({ health: failed })],
+    })
+    expect(
+      buildGoLiveDockVM(none, { usesObs: false, qualityOptionsById: {} }).footer,
+    ).toMatchObject({ text: 'Nothing is sending', action: { kind: 'retry_all' } })
+  })
+
   it('shows LIVE only for destinations whose own push is delivering', () => {
     const view = makeView({
       live: true,

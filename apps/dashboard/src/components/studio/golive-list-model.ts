@@ -839,12 +839,16 @@ export function buildGoLiveDockVM(view: GoLiveView, ctx: BuildDockContext): GoLi
 
   const enabledRows = allRows.filter((r) => r.dest.enabled)
   const mainAllFailed = !ctx.usesObs && Boolean(allDestinationsFailed(view.destinations, 'main'))
+  // Anything delivering on either canvas, an unticked backup that took over included, means
+  // the stream is still going.
+  const anyDelivering = allRows.some((r) => r.dest.health?.state === 'live')
   const allLiveFailed =
-    mainAllFailed ||
-    (view.live &&
-      enabledRows.length > 0 &&
-      // A quality problem is not a stopped push: a row still delivering keeps the stream going.
-      enabledRows.every((r) => r.tagKind === 'error' && r.dest.health?.state !== 'live'))
+    !anyDelivering &&
+    (mainAllFailed ||
+      (view.live &&
+        enabledRows.length > 0 &&
+        // A quality problem is not a stopped push: a row still delivering keeps the stream going.
+        enabledRows.every((r) => r.tagKind === 'error' && r.dest.health?.state !== 'live')))
   if (allLiveFailed) {
     const retryIds = enabledRows
       .filter((r) => r.dest.health?.state === 'failed' || r.dest.health?.state === 'paused')

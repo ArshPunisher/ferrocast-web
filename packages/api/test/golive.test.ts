@@ -1204,6 +1204,51 @@ describe('DemoGoLive per-destination quality parity', () => {
     }
   })
 
+  it('says a shared cap runs as a separate encode when its anchor is a custom choice', async () => {
+    const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
+    try {
+      const client = new FerroClient({ base: engine.base, token: DEMO_TOKEN, fetch: engine.fetch })
+      const api = goliveApi(client)
+      const studioEng = studioEngineApi(client)
+      const s = await studioEng.studioSettings()
+      await studioEng.setStudioSettings({
+        ...s,
+        width: 2560,
+        height: 1440,
+        scale: null,
+        fps: 60,
+        video_kbps: 18000,
+      })
+      const init = await api.view()
+      await api.saveOrder(
+        init.destinations.map((d) => ({
+          id: d.id,
+          enabled: d.id === 'youtube' || d.id === 'twitch' || d.id === 'kick',
+        })),
+      )
+      engine.setGoLive({ encode_budget: { max_sessions: 8, limit_mpx_s: 995 } })
+      // A higher bitrate than the shared 6 Mbps picture, so YouTube anchors its own group.
+      await api.setQuality('youtube', {
+        mode: 'custom',
+        width: 1920,
+        height: 1080,
+        fps: 60,
+        kbps: 10000,
+      })
+      engine.setGoLive({ encode_budget: { max_sessions: 1, limit_mpx_s: 200 } })
+      const view = await api.view()
+      for (const id of ['twitch', 'kick']) {
+        const d = view.destinations.find((x) => x.id === id)!
+        if (d.capped) {
+          // What the note says about sharing is what the resolved picture says.
+          expect(d.capped.separate_encode).toBe(d.resolved_quality!.separate_encode)
+        }
+      }
+    } finally {
+      engine.dispose()
+    }
+  })
+
   it('gives the vertical picture the main bitrate, as the engine does', async () => {
     const engine = new DemoEngine({ autoplay: false, latencyMs: 0, studioEngine: true })
     try {
