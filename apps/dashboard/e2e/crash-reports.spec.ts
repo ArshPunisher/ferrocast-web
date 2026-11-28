@@ -16,7 +16,9 @@ test.describe('crash report prompt', () => {
     const d = dialog(page)
     await expect(d).toBeVisible()
     await expect(
-      d.getByText('Send a report to help fix it? It has no stream keys, passwords or emails.'),
+      d.getByText(
+        'Send a report to help fix it? Stream keys, passwords, tokens and emails are removed first.',
+      ),
     ).toBeVisible()
     // Hidden until asked for.
     await expect(d.getByTestId('crash-report-text')).toBeHidden()
@@ -313,7 +315,7 @@ test.describe('Settings › Privacy', () => {
     await page.keyboard.press('Enter')
     const text = page.getByText('ClearCraft Labs’ Ferrocast server')
     await expect(text).toBeVisible()
-    await expect(text).toContainText('Never a memory dump')
+    await expect(text).toContainText('memory dumps are never sent')
     await expect(text).toContainText('90 days')
   })
 

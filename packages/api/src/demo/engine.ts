@@ -1834,7 +1834,7 @@ export class DemoEngine {
     // settings and data
     if (is('GET', 'settings')) return clone(this.settings)
     if (is('PUT', 'settings')) {
-      const patch = requireObj(body) as Settings
+      const patch = { ...requireObj(body) } as Settings
       if (
         patch.youtube_privacy !== undefined &&
         !['public', 'unlisted', 'private'].includes(patch.youtube_privacy)
@@ -1844,6 +1844,11 @@ export class DemoEngine {
           'invalid',
           'The settings aren’t valid: youtube_privacy: use one of public, unlisted, private.',
         )
+      // As the engine: the consent changes only by a save about nothing else (a stale form
+      // saves every field it loaded).
+      if (patch.crash_reports !== undefined && Object.keys(patch).length > 1) {
+        delete (patch as { crash_reports?: unknown }).crash_reports
+      }
       if (
         patch.crash_reports !== undefined &&
         !['ask', 'always', 'never'].includes(patch.crash_reports)

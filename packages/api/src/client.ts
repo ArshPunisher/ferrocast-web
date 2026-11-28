@@ -1,5 +1,6 @@
 import { ApiError, errorFromResponse, isAbortError, offlineError } from './errors'
 import type {
+  CrashReportsSetting,
   Account,
   AlertRule,
   Backup,
@@ -580,7 +581,19 @@ export class FerroClient {
 
   // Settings and data
   settings = () => this.get<Settings>('/api/v1/settings')
-  saveSettings = (s: Settings) => this.put<Settings>('/api/v1/settings', s)
+  /**
+   * Saves settings. Never sends `crash_reports`: the consent to send crash reports changes only
+   * through `saveCrashReports`, so a form that loaded an old value can't put it back (the engine
+   * ignores it in a save with other fields anyway).
+   */
+  saveSettings = (s: Settings) =>
+    this.put<Settings>(
+      '/api/v1/settings',
+      Object.fromEntries(Object.entries(s).filter(([k]) => k !== 'crash_reports')),
+    )
+  /** The person's choice about crash reports, and nothing else in the request. */
+  saveCrashReports = (crash_reports: CrashReportsSetting) =>
+    this.put<Settings>('/api/v1/settings', { crash_reports })
   completeSetup = () => this.post<void>('/api/v1/setup/complete')
   exportPack = async (): Promise<Blob> => {
     this.check('POST', '/api/v1/export')

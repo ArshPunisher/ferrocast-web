@@ -874,8 +874,20 @@ const CRASH_NAME: Record<CrashReportsSetting, string> = {
   never: 'Never',
 }
 
+const CRASH_HINT: Record<CrashReportsSetting, string> = {
+  ask: 'Nothing is sent unless you say yes.',
+  always: 'Sent without asking.',
+  never: 'Nothing is sent.',
+}
+
 /** Privacy: whether a crash report may be sent. One line; what it holds is behind the (i). */
-function Privacy({ settings, save }: { settings: SettingsData; save: (s: SettingsData) => void }) {
+function Privacy({
+  settings,
+  saveConsent,
+}: {
+  settings: SettingsData
+  saveConsent: (value: CrashReportsSetting) => void
+}) {
   // An engine that doesn't send the setting asks first, like the default.
   const value = settings.crash_reports ?? 'ask'
   return (
@@ -887,19 +899,20 @@ function Privacy({ settings, save }: { settings: SettingsData; save: (s: Setting
               Send crash reports
               <InfoTip label="About crash reports">
                 After a crash, Ferrocast can send a report to ClearCraft Labs’ Ferrocast server so
-                the problem can be fixed. It has error details, the crash trace and recent logs,
-                with stream keys, passwords, emails and IP addresses removed. Never a memory dump.
-                Ask: you see exactly what would be sent and choose each time. Always: sent without
-                asking. Never: nothing is sent. Reports are kept for 90 days.
+                the problem can be fixed. It has error details, the crash trace and recent logs.
+                Stream keys, passwords, tokens, emails and IP addresses are removed before it is
+                sent; memory dumps are never sent. Ask: you see exactly what would be sent and
+                choose each time. Always: sent without asking. Never: nothing is sent. Reports are
+                kept for 90 days.
               </InfoTip>
             </span>
           }
-          description="Nothing is sent unless you say yes."
+          description={CRASH_HINT[value]}
           control={
             <Segmented
               label="Send crash reports"
               value={value}
-              onChange={(crash_reports) => save({ ...settings, crash_reports })}
+              onChange={saveConsent}
               options={(['ask', 'always', 'never'] as const).map((v) => ({
                 value: v,
                 label: CRASH_NAME[v],
@@ -1201,6 +1214,12 @@ export function Settings({ section }: { section?: string | undefined }) {
     res.set(s)
     void run('settings', () => client.saveSettings(s))
   }
+  // The consent for crash reports is saved on its own, with nothing else in the request: a
+  // form that loaded an old value must never put it back (and `save` never sends it).
+  const saveConsent = (crash_reports: CrashReportsSetting) => {
+    if (res.data) res.set({ ...res.data, crash_reports })
+    void run('settings', () => client.saveCrashReports(crash_reports))
+  }
   // The sidebar theme toggle saves the theme itself; reload so Appearance isn't stale.
   const reload = res.reload
   useEffect(() => {
@@ -1351,7 +1370,7 @@ export function Settings({ section }: { section?: string | undefined }) {
                     </div>
                   </>
                 )}
-                {at === 'privacy' && <Privacy settings={res.data} save={save} />}
+                {at === 'privacy' && <Privacy settings={res.data} saveConsent={saveConsent} />}
                 {at === 'updates' && <Updates settings={res.data} save={save} />}
                 {at === 'pro' && (
                   <Section

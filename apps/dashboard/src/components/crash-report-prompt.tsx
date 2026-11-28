@@ -136,8 +136,8 @@ export function CrashReportPrompt() {
     setBusy('send')
     if (always) {
       try {
-        const current = await client.settings()
-        await client.saveSettings({ ...current, crash_reports: 'always' })
+        // Only this one field: a save of the whole settings would be ignored for it.
+        await client.saveCrashReports('always')
         window.dispatchEvent(new Event(CRASH_REPORTS_EVENT))
       } catch (e) {
         const d = describeError(e)
@@ -191,7 +191,7 @@ export function CrashReportPrompt() {
       onClose={dismiss}
       size="sm"
       title={crashReportTitle(report.kind)}
-      description="Send a report to help fix it? It has no stream keys, passwords or emails."
+      description="Send a report to help fix it? Stream keys, passwords, tokens and emails are removed first."
       footer={
         <>
           <Button variant="ghost" disabled={busy !== null} onClick={() => void discard()}>

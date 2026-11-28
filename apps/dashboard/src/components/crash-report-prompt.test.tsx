@@ -81,9 +81,10 @@ async function mount(o: Setup = {}) {
       theme: 'system',
       ...('setting' in o ? { crash_reports: o.setting } : { crash_reports: 'ask' }),
     })),
-    saveSettings: vi.fn(async (s: unknown) => {
-      saved.push(s)
-      return s
+    // Only the consent is ever saved from here, on its own.
+    saveCrashReports: vi.fn(async (value: unknown) => {
+      saved.push({ crash_reports: value })
+      return { crash_reports: value }
     }),
   }
   useLive.setState({ conn: { mode: o.mode ?? 'desktop', client } as never })
@@ -122,7 +123,7 @@ describe('CrashReportPrompt', () => {
     expect(dialog()).not.toBeNull()
     expect(dialog()?.textContent).toContain('Ferrocast closed unexpectedly')
     expect(dialog()?.textContent).toContain(
-      'Send a report to help fix it? It has no stream keys, passwords or emails.',
+      'Send a report to help fix it? Stream keys, passwords, tokens and emails are removed first.',
     )
     expect(button('Send')).toBeDefined()
     expect(button('Don’t send')).toBeDefined()
@@ -344,7 +345,7 @@ describe('CrashReportPrompt', () => {
     await click(box)
     expect(box.checked).toBe(true)
     await click(button('Send'))
-    expect(saved).toEqual([{ theme: 'system', crash_reports: 'always' }])
+    expect(saved).toEqual([{ crash_reports: 'always' }])
     expect(calls).toContain('POST /api/v1/diagnostics/pending-report/send')
   })
 

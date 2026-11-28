@@ -128,9 +128,26 @@ describe('crash reports in the demo', () => {
   it('saves the setting and refuses a value it doesn’t know', async () => {
     const { c } = setup()
     const s = await c.settings()
-    expect((await c.saveSettings({ ...s, crash_reports: 'never' })).crash_reports).toBe('never')
-    await expect(
-      c.saveSettings({ ...s, crash_reports: 'sometimes' as never }),
-    ).rejects.toMatchObject({ status: 400 })
+    expect((await c.saveCrashReports('never')).crash_reports).toBe('never')
+    await expect(c.saveCrashReports('sometimes' as never)).rejects.toMatchObject({ status: 400 })
+    // Never a part of a save about something else, whatever the form carries.
+    expect(s.crash_reports).toBe('ask')
+  })
+
+  it('a stale form that saves its other fields can’t put back the consent (the client leaves it out, and so does the engine)', async () => {
+    const { c } = setup()
+    const stale = { ...(await c.settings()), crash_reports: 'always' as const }
+    await c.saveCrashReports('never')
+    const saved = await c.saveSettings({ ...stale, theme: 'light' })
+    expect(saved.theme).toBe('light')
+    expect(saved.crash_reports).toBe('never')
+    // Even a raw PUT with the old value next to other fields is ignored by the engine.
+    const raw = await c.request<{ crash_reports?: string; theme?: string }>(
+      'PUT',
+      '/api/v1/settings',
+      { theme: 'dark', crash_reports: 'always' },
+    )
+    expect(raw.theme).toBe('dark')
+    expect(raw.crash_reports).toBe('never')
   })
 })
