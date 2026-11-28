@@ -1137,8 +1137,8 @@ export function SourcesDock() {
         )}
       </div>
       <footer className="fc-dock-bar flex h-8 flex-none items-center gap-0.5 border-t border-line px-1">
-        {/* The tools scroll sideways in a narrow dock; Remove stays in view at the end. */}
-        <div className="fc-focus-inset flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
+        {/* The tools are cut at the dock's edge in a narrow dock (never a scrollbar; Tab brings one into view); Remove stays in view at the end. */}
+        <div className="fc-focus-inset flex min-w-0 flex-1 items-center gap-0.5 overflow-x-hidden">
           <IconButton
             size="sm"
             label={picked ? `Move ${picked.name} up` : 'Move up'}

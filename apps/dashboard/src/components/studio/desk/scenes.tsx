@@ -1132,7 +1132,7 @@ export function ScenesDock() {
           </ul>
         )}
       </div>
-      <footer className="fc-dock-bar fc-focus-inset flex h-8 flex-none items-center gap-0.5 overflow-x-auto border-t border-line px-1 [scrollbar-width:none]">
+      <footer className="fc-dock-bar fc-focus-inset flex h-8 flex-none items-center gap-0.5 overflow-x-hidden border-t border-line px-1">
         <IconButton
           size="sm"
           label={`Move ${targetLabel} up`}

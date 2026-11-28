@@ -892,7 +892,7 @@ export function DockWorkspace({
                 ? 'order-3 w-full flex-col divide-y divide-line border-t border-line sm:flex-row sm:divide-x sm:divide-y-0'
                 : 'w-full flex-col divide-y divide-line border-t border-line sm:flex-row sm:divide-x sm:divide-y-0'
             : vertical
-              ? 'flex-col overflow-y-auto'
+              ? 'flex-col overflow-x-hidden overflow-y-auto'
               : 'flex-row',
           region === 'right' && 'relative',
           phone && hasFloatingReady && 'pb-14',
@@ -1411,8 +1411,12 @@ function Divider({
       onPointerDown={down}
       onKeyDown={key}
       className={cx(
-        'relative z-10 flex-none touch-none bg-line-strong outline-none after:absolute after:-inset-1 hover:bg-arc focus-visible:bg-arc data-[active=1]:bg-arc',
-        dir === 'col' ? 'w-px cursor-col-resize' : 'h-px cursor-row-resize',
+        'relative z-10 flex-none touch-none bg-line-strong outline-none after:absolute hover:bg-arc focus-visible:bg-arc data-[active=1]:bg-arc',
+        // The grab area reaches 4px past the line across it only, never past the ends: a row
+        // divider is as wide as its column, and 4px past that made the column scroll sideways.
+        dir === 'col'
+          ? 'w-px cursor-col-resize after:inset-y-0 after:-inset-x-1'
+          : 'h-px cursor-row-resize after:inset-x-0 after:-inset-y-1',
         layout.locked && 'pointer-events-none',
       )}
     />
@@ -1474,13 +1478,13 @@ export function DockHeader({
         </span>
       )}
       {/* A short name stays whole (a long one, a web panel's, is cut at two thirds); on a
-          narrow panel the buttons scroll sideways instead of squeezing it to "S…". */}
+          narrow panel the buttons are cut at the edge (no sideways scroll) instead of squeezing it to "S…". */}
       {group.length > 1 ? (
         // Panels sharing this spot (owner's pick L2): one tab each; the grip drags this one.
         <div
           role="tablist"
           aria-label="Panels here"
-          className="flex max-w-[75%] shrink-0 items-stretch gap-0.5 self-stretch overflow-x-auto [scrollbar-width:none]"
+          className="flex max-w-[75%] shrink-0 items-stretch gap-0.5 self-stretch overflow-x-hidden"
         >
           {group.map((d) => (
             <button
@@ -1511,8 +1515,8 @@ export function DockHeader({
       {info}
       <span className="min-w-0 flex-1" />
       {/* Shrinks last (the scene chip beside the name gives way first), so a long name never
-          squeezes the Add button to a dot; only when nothing else is left does it scroll. */}
-      <div className="flex min-w-0 shrink-[0.02] items-center gap-0.5 overflow-x-auto [scrollbar-width:none]">
+          squeezes the Add button to a dot; only when nothing else is left is it cut at the edge (Tab brings a button into view). */}
+      <div className="flex min-w-0 shrink-[0.02] items-center gap-0.5 overflow-x-hidden">
         {actions}
       </div>
       {!phone && <DockMenu id={id} />}
