@@ -929,107 +929,110 @@ function RuleEditor({
         {/* Centre: the live stage and, right under it, the timeline. */}
         <section
           aria-label="Live preview"
-          className="fc-scroll @container order-1 flex min-h-0 min-w-0 flex-col gap-3 bg-inset p-3 lg:order-none lg:flex-1 lg:overflow-y-auto"
+          className="fc-scroll order-1 flex min-h-0 min-w-0 flex-col gap-3 bg-inset p-3 lg:order-none lg:flex-1 lg:overflow-y-auto"
         >
-          <div className="mx-auto flex w-full shrink-0 flex-col gap-2 @[580px]:relative @[580px]:block lg:max-w-[max(340px,calc((100dvh-28rem)*16/9))]">
-            {/* Above the stage while it is narrow, so wrapped controls never cover it; overlaid once it is wide enough for one row. */}
-            <div className="flex flex-wrap items-center justify-between gap-1.5 @[580px]:pointer-events-none @[580px]:absolute @[580px]:inset-x-2 @[580px]:top-2 @[580px]:z-10 @[580px]:items-start">
-              <div
-                role="group"
-                aria-label="Preview"
-                className="pointer-events-auto inline-flex max-w-full flex-wrap items-center gap-1 rounded-[10px] border border-line-strong bg-surface-1/95 p-1 pl-2.5 text-text shadow-1 backdrop-blur-sm"
-              >
-                <span aria-hidden="true" className="mr-1 text-[12.5px] font-semibold text-text">
-                  Preview
-                </span>
-                {(['twitch', 'youtube', 'kick', 'tips'] as Platform[]).map((p) => {
-                  const supported = kindPlatformsShown.includes(p)
-                  const active = previewPlatform === p
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      data-platform-test={p}
-                      aria-pressed={active}
-                      aria-label={`Preview as ${p === 'tips' ? 'Tips' : PLATFORM_LABEL[p]}`}
-                      title={
-                        supported
-                          ? `Preview as ${PLATFORM_LABEL[p]}`
-                          : `${PLATFORM_LABEL[p]} has no alert of this kind`
-                      }
-                      disabled={!supported}
-                      onClick={() => firePlatformTest(p)}
-                      className={cx(
-                        'fc-press grid size-8 place-items-center rounded-[7px] border transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40',
-                        active
-                          ? 'border-pick bg-surface-1 ring-2 ring-pick'
-                          : 'border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3',
-                      )}
-                    >
-                      <PlatformMark platform={p} size={15} />
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="pointer-events-auto flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setReplay((n) => n + 1)}
-                  className="fc-press inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-line-strong bg-surface-1/95 px-2.5 text-[13.5px] font-semibold text-text shadow-1 backdrop-blur-sm hover:border-text-3 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none sm:h-9 sm:px-3 sm:text-[14px]"
+          {/* The query is asked of the stage's own width (it is capped by the window's height), not of the panel around it. */}
+          <div className="mx-auto w-full shrink-0 @container lg:max-w-[max(340px,calc((100dvh-28rem)*16/9))]">
+            <div className="flex w-full flex-col gap-2 @[580px]:relative @[580px]:block">
+              {/* Above the stage while it is narrow, so wrapped controls never cover it; overlaid once it is wide enough for one row. */}
+              <div className="flex flex-wrap items-center justify-between gap-1.5 @[580px]:pointer-events-none @[580px]:absolute @[580px]:inset-x-2 @[580px]:top-2 @[580px]:z-10 @[580px]:items-start">
+                <div
+                  role="group"
+                  aria-label="Preview"
+                  className="pointer-events-auto inline-flex max-w-full flex-wrap items-center gap-1 rounded-[10px] border border-line-strong bg-surface-1/95 p-1 pl-2.5 text-text shadow-1 backdrop-blur-sm"
                 >
-                  <ArrowCounterClockwise size={15} aria-hidden="true" />
-                  Replay
-                </button>
-                {alertHasSound(preview) ? (
+                  <span aria-hidden="true" className="mr-1 text-[12.5px] font-semibold text-text">
+                    Preview
+                  </span>
+                  {(['twitch', 'youtube', 'kick', 'tips'] as Platform[]).map((p) => {
+                    const supported = kindPlatformsShown.includes(p)
+                    const active = previewPlatform === p
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        data-platform-test={p}
+                        aria-pressed={active}
+                        aria-label={`Preview as ${p === 'tips' ? 'Tips' : PLATFORM_LABEL[p]}`}
+                        title={
+                          supported
+                            ? `Preview as ${PLATFORM_LABEL[p]}`
+                            : `${PLATFORM_LABEL[p]} has no alert of this kind`
+                        }
+                        disabled={!supported}
+                        onClick={() => firePlatformTest(p)}
+                        className={cx(
+                          'fc-press grid size-8 place-items-center rounded-[7px] border transition-colors focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-40',
+                          active
+                            ? 'border-pick bg-surface-1 ring-2 ring-pick'
+                            : 'border-line bg-surface-2 hover:border-line-strong hover:bg-surface-3',
+                        )}
+                      >
+                        <PlatformMark platform={p} size={15} />
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="pointer-events-auto flex items-center gap-1.5">
                   <button
                     type="button"
-                    aria-pressed={!sound}
-                    title={sound ? 'Mute the preview' : 'Play the preview with sound'}
-                    onClick={() => {
-                      unlockAudio()
-                      setSound((x) => !x)
-                    }}
+                    onClick={() => setReplay((n) => n + 1)}
                     className="fc-press inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-line-strong bg-surface-1/95 px-2.5 text-[13.5px] font-semibold text-text shadow-1 backdrop-blur-sm hover:border-text-3 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none sm:h-9 sm:px-3 sm:text-[14px]"
                   >
-                    {sound ? (
-                      <SpeakerHigh size={15} aria-hidden="true" />
-                    ) : (
-                      <SpeakerSlash size={15} aria-hidden="true" />
-                    )}
-                    Mute
+                    <ArrowCounterClockwise size={15} aria-hidden="true" />
+                    Replay
                   </button>
-                ) : (
-                  <span className="inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-line-strong bg-surface-1/95 px-2.5 text-[13.5px] font-semibold text-text-2 shadow-1 backdrop-blur-sm sm:h-9 sm:px-3 sm:text-[14px]">
-                    <SpeakerSlash size={15} aria-hidden="true" /> No sound
-                  </span>
-                )}
+                  {alertHasSound(preview) ? (
+                    <button
+                      type="button"
+                      aria-pressed={!sound}
+                      title={sound ? 'Mute the preview' : 'Play the preview with sound'}
+                      onClick={() => {
+                        unlockAudio()
+                        setSound((x) => !x)
+                      }}
+                      className="fc-press inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-line-strong bg-surface-1/95 px-2.5 text-[13.5px] font-semibold text-text shadow-1 backdrop-blur-sm hover:border-text-3 hover:bg-surface-2 focus-visible:shadow-[var(--fc-focus)] focus-visible:outline-none sm:h-9 sm:px-3 sm:text-[14px]"
+                    >
+                      {sound ? (
+                        <SpeakerHigh size={15} aria-hidden="true" />
+                      ) : (
+                        <SpeakerSlash size={15} aria-hidden="true" />
+                      )}
+                      Mute
+                    </button>
+                  ) : (
+                    <span className="inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-line-strong bg-surface-1/95 px-2.5 text-[13.5px] font-semibold text-text-2 shadow-1 backdrop-blur-sm sm:h-9 sm:px-3 sm:text-[14px]">
+                      <SpeakerSlash size={15} aria-hidden="true" /> No sound
+                    </span>
+                  )}
+                </div>
               </div>
+              <div className="relative">
+                <AlertStage
+                  alert={preview}
+                  theme="molten"
+                  controls={false}
+                  sound={sound}
+                  replay={replay}
+                  className="shadow-1"
+                  {...(customPreviewError
+                    ? {
+                        emptyMessage: `Preview paused: ${customPreviewError.replace(/^Variation '[^']*': /, '')}`,
+                      }
+                    : {})}
+                />
+                <p className="pointer-events-none absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[13px] font-medium text-white/90">
+                  <PlatformMark platform={previewPlatform} size={12} />
+                  Simulated {previewPlatform === 'tips'
+                    ? 'Tips'
+                    : PLATFORM_LABEL[previewPlatform]}{' '}
+                  sample
+                </p>
+              </div>
+              <span className="sr-only" aria-live="polite">
+                {previewStatus}
+              </span>
             </div>
-            <div className="relative">
-              <AlertStage
-                alert={preview}
-                theme="molten"
-                controls={false}
-                sound={sound}
-                replay={replay}
-                className="shadow-1"
-                {...(customPreviewError
-                  ? {
-                      emptyMessage: `Preview paused: ${customPreviewError.replace(/^Variation '[^']*': /, '')}`,
-                    }
-                  : {})}
-              />
-              <p className="pointer-events-none absolute bottom-2 left-2 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[13px] font-medium text-white/90">
-                <PlatformMark platform={previewPlatform} size={12} />
-                Simulated {previewPlatform === 'tips'
-                  ? 'Tips'
-                  : PLATFORM_LABEL[previewPlatform]}{' '}
-                sample
-              </p>
-            </div>
-            <span className="sr-only" aria-live="polite">
-              {previewStatus}
-            </span>
           </div>
           {previewOff && (
             <p role="status" className="text-[14px] font-medium text-warn">
