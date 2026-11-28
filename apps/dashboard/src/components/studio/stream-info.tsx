@@ -8,7 +8,6 @@ import { FloppyDisk, ImageSquare, PaperPlaneTilt, UploadSimple, X } from '@phosp
 import {
   ApiError,
   checkStreamInfo,
-  describeError,
   errorSentence,
   relativeTime,
   MAX_STREAM_DESCRIPTION,

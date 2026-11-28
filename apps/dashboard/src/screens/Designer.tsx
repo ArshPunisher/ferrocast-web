@@ -31,7 +31,6 @@ import {
   EVENT_LABEL,
   EVENT_SAMPLE,
   baseLook,
-  describeError,
   errorSentence,
   hasAmount,
   looksFor,

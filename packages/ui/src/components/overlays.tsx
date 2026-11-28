@@ -81,7 +81,6 @@ function useModalLifecycle(
     () => () => {
       if (shown.current) restore()
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   )
 }

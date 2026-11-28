@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { ArrowCounterClockwise, Question } from '@phosphor-icons/react'
 import {
   actorOf,
-  describeError,
   errorSentence,
   describeEvent,
   isAlertable,
