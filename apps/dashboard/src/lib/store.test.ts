@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseLiveFrame, sample, type FerroEvent, type LiveFrame } from '@ferrocast/api'
-import { currentToasts } from '@ferrocast/ui'
+import { currentToasts, toast } from '@ferrocast/ui'
 import {
   beginLinksLoad,
   cloudModerationKey,
   isLimited,
   mergeChat,
+  notePanicToast,
   selectFeed,
   useLive,
 } from './store'
@@ -171,6 +172,35 @@ describe('live store', () => {
     expect(panicToasts).toHaveLength(1)
     expect(panicToasts[0]?.message).toMatch(/Panic mode is on/)
     expect(panicToasts[0]?.tone).toBe('warn')
+  })
+  it('the engine notice does not replace the toast the Panic button just showed', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    try {
+      toast({ key: 'panic', tone: 'warn', message: 'Panic mode is on.', hint: 'Locked down.' })
+      notePanicToast(true)
+      now.mockReturnValue(1_000_300)
+      useLive.getState().apply([
+        {
+          v: 1,
+          type: 'notice',
+          data: { key: 'panic', level: 'warn', message: 'Panic mode is on' },
+        },
+      ])
+      const shown = currentToasts().filter((t) => t.key === 'panic')
+      expect(shown).toHaveLength(1)
+      expect(shown[0]?.message).toBe('Panic mode is on.')
+      // Switching it off is a different state: that notice is shown.
+      useLive.getState().apply([
+        {
+          v: 1,
+          type: 'notice',
+          data: { key: 'panic', level: 'info', message: 'Panic mode is off' },
+        },
+      ])
+      expect(currentToasts().find((t) => t.key === 'panic')?.message).toBe('Panic mode is off')
+    } finally {
+      now.mockRestore()
+    }
   })
   it('a notice with the same key replaces the shown one', () => {
     const n = (key: string | undefined, message: string): LiveFrame =>

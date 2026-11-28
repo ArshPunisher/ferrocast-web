@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { ShieldWarning } from '@phosphor-icons/react'
 import { cx, toast } from '@ferrocast/ui'
 import { describeError } from '@ferrocast/api'
-import { useLive } from '../lib/store'
+import { notePanicToast, useLive } from '../lib/store'
 
 /**
  * Ctrl+Alt+Shift+P everywhere, the same as the engine's global default, so it never
@@ -25,6 +25,7 @@ export function usePanic(): [boolean, (on?: boolean) => Promise<void>] {
       try {
         const r = await conn.client.panic(next)
         setPanic(r.on)
+        notePanicToast(r.on)
         if (r.on) {
           const where = r.applied
             .map((a) => a.platform[0]?.toUpperCase() + a.platform.slice(1))

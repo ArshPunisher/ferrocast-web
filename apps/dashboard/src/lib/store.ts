@@ -220,8 +220,18 @@ export function addNotice(list: NoticeItem[], n: Notice): NoticeItem[] {
  * Panic is never a banner: the red "Panic on" button already shows it while it's on,
  * and one toast (replaced on every switch) says what just happened.
  */
+let localPanicToast: { on: boolean; at: number } | null = null
+
+/** The Panic button just toasted this switch itself (with where it applied). */
+export function notePanicToast(on: boolean): void {
+  localPanicToast = { on, at: Date.now() }
+}
+
 function panicToast(n: Notice): void {
   const on = /panic mode is on/i.test(n.message)
+  // The engine's notice repeats what the button's own toast said a moment ago, with less detail,
+  // and shares its key: whichever came last would replace the other.
+  if (localPanicToast && localPanicToast.on === on && Date.now() - localPanicToast.at < 5000) return
   toast({
     key: 'panic',
     tone: n.level === 'error' ? 'error' : on ? 'warn' : 'ok',
