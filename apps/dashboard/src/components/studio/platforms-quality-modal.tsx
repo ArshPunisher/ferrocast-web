@@ -355,8 +355,10 @@ export function PlatformsQualityModal({
 
     if (open && !wasOpenRef.current) {
       wasOpenRef.current = true
+      // Safari and WKWebView do not focus a button on click, so activeElement is then the body:
+      // the trigger the caller passed wins, and it is kept because callers clear it on close.
       lastActiveRef.current =
-        document.activeElement instanceof HTMLElement ? document.activeElement : null
+        triggerEl ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
       if (!dialog.open) {
         if (typeof dialog.showModal === 'function') {
           try {
@@ -386,10 +388,10 @@ export function PlatformsQualityModal({
         else dialog.removeAttribute('open')
       }
       const back =
-        triggerEl && document.contains(triggerEl)
-          ? triggerEl
-          : lastActiveRef.current && document.contains(lastActiveRef.current)
-            ? lastActiveRef.current
+        lastActiveRef.current && document.contains(lastActiveRef.current)
+          ? lastActiveRef.current
+          : triggerEl && document.contains(triggerEl)
+            ? triggerEl
             : null
       back?.focus({ preventScroll: true })
     }
