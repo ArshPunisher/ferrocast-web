@@ -385,9 +385,11 @@ function Leaderboard({ name }: { name: string }) {
         </p>
       ) : (
         <div className="flex flex-1 flex-col gap-2">
-          {/* One list, read in order; two columns where there's room. */}
+          {/* One list, read in order; two columns where there's room. A grid, not CSS columns:
+              WebKit moves a pressed (scaled) button out of its place inside multi-column text. */}
           <ol
-            className="gap-x-8 md:columns-2 [&>li]:break-inside-avoid [&>li]:border-b [&>li]:border-line"
+            className="gap-x-8 md:grid md:grid-flow-col md:grid-cols-2 md:grid-rows-[repeat(var(--fc-rows),auto)] [&>li]:border-b [&>li]:border-line"
+            style={{ ['--fc-rows' as string]: Math.ceil(rows.length / 2) }}
             aria-label={`Leaderboard by ${name}`}
           >
             {rows.map((e) => (
