@@ -41,6 +41,28 @@ test('keyboard: focus opens a panel, ArrowDown enters it, Escape closes and retu
   await expect(trigger(page, 'features')).toHaveAttribute('aria-expanded', 'false')
 })
 
+test('a panel that holds keyboard focus stays open when the mouse leaves; unfocused hover still closes', async ({
+  page,
+}) => {
+  await page.goto('/pricing/')
+  await trigger(page, 'features').hover()
+  await expect(trigger(page, 'features')).toHaveAttribute('aria-expanded', 'true')
+  await trigger(page, 'features').focus()
+  await page.keyboard.press('ArrowDown')
+  await expect(page.locator('#mm-features a').first()).toBeFocused()
+  await page.mouse.move(700, 880)
+  await page.waitForTimeout(500)
+  await expect(trigger(page, 'features')).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.locator('#mm-features a').first()).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(trigger(page, 'features')).toHaveAttribute('aria-expanded', 'false')
+  // no focus inside: moving away closes it as before
+  await trigger(page, 'resources').hover()
+  await expect(trigger(page, 'resources')).toHaveAttribute('aria-expanded', 'true')
+  await page.mouse.move(700, 880)
+  await expect(trigger(page, 'resources')).toHaveAttribute('aria-expanded', 'false')
+})
+
 test('a click on a trigger keeps the panel open after the hover; a second click closes it', async ({
   page,
 }) => {
