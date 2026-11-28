@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
-import { demo, fault, open } from './helpers'
+import { demo, fault, open, settled } from './helpers'
 
 test.describe('first-run import and camera/mic check', () => {
   test('OBS Studio preview, import result, Undo/Start over, and full flow at 1280px', async ({
@@ -190,6 +190,8 @@ test.describe('first-run import and camera/mic check', () => {
     await open(page, 'home', 'firstrun&autoplay=0&latency=0')
 
     const checkAxe = async () => {
+      // The picked card and the new step ease their colours in; read them at rest.
+      await settled(page)
       const res = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze()
       expect(
         res.violations
