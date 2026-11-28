@@ -73,9 +73,10 @@ test.describe('Bitrate caps, separate encodes, and Settings platform readouts', 
       '1080p60 · 8 Mbps · auto',
     )
     await expect(dockKick.getByRole('img', { name: '8.2 Mbps upload share' })).toBeVisible()
-    await expect(dock.locator('[data-golive-encode-summary]')).toContainText(
-      '3 places · 26.5 Mbps · 3 encodes',
-    )
+    // No places and bitrate summary line under the rows, and no blank band: nothing is wrong.
+    await expect(dock.getByText(/\d+ places? ·/)).toHaveCount(0)
+    await expect(dock.getByRole('button', { name: 'Stream encode breakdown' })).toHaveCount(0)
+    await expect(dock.locator('[data-golive-problems-footer]')).toHaveCount(0)
 
     // Your platforms One Modal B shows individual row summaries and exact upload sum.
     await page.getByRole('button', { name: 'Manage platforms' }).click()

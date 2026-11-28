@@ -1510,9 +1510,11 @@ describe('per-destination quality integration in GoLiveDock and Platforms', () =
       )
       expect(host.textContent).toContain('1080p60 · 6 Mbps · auto')
       expect(host.textContent).toContain('Reconnecting · try 2')
-      const summary = host.querySelector('[data-golive-encode-summary]')
-      expect(summary?.textContent).toContain('2 places · 18.3 Mbps · 2 encodes')
-      expect(summary?.textContent).toContain('1 reconnecting')
+      const footer = host.querySelector('[data-golive-problems-footer]')
+      expect(footer?.textContent).toContain('1 reconnecting')
+      // The places and bitrate summary line (and its (i)) is gone.
+      expect(host.textContent).not.toMatch(/\d+ places? ·/)
+      expect(host.querySelector('[aria-label="Stream encode breakdown"]')).toBeNull()
 
       // Status line opens status popover on YouTube.
       await act(async () => {

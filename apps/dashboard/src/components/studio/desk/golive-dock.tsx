@@ -25,7 +25,6 @@ import {
   Button,
   IconButton,
   InfoLine,
-  InfoTip,
   PopoverSurface,
   Skeleton,
   Switch,
@@ -650,40 +649,30 @@ export function GoLiveDock({ res, view }: { res: Resource<GoLiveView>; view: GoL
           </Button>
         </div>
       )}
-      {footerSummary && (
+      {footerSummary?.problemLinkText && (
         <div
-          data-golive-encode-summary=""
-          className="flex shrink-0 items-center justify-between gap-2 border-t border-line px-3 py-2 text-[11.5px] font-medium text-text-3"
+          data-golive-problems-footer=""
+          className="flex shrink-0 items-center gap-2 border-t border-line px-3 py-2 text-[11.5px] font-medium text-text-3"
         >
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="truncate" title={footerSummary.summaryText}>
-              {footerSummary.summaryText}
-            </span>
-            {footerSummary.problemLinkText && (
-              <button
-                ref={needsLookAnchorRef}
-                type="button"
-                data-golive-problems-trigger=""
-                aria-haspopup="dialog"
-                aria-expanded={needsLookOpen}
-                onClick={() => {
-                  setStatusPop(null)
-                  setNeedsLookOpen((v) => !v)
-                }}
-                className={cx(
-                  'shrink-0 font-bold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fc-accent)]',
-                  footerSummary.problemLinkTone === 'error'
-                    ? 'text-[var(--fc-danger)]'
-                    : 'text-[var(--fc-warn)]',
-                )}
-              >
-                {footerSummary.problemLinkText}
-              </button>
+          <button
+            ref={needsLookAnchorRef}
+            type="button"
+            data-golive-problems-trigger=""
+            aria-haspopup="dialog"
+            aria-expanded={needsLookOpen}
+            onClick={() => {
+              setStatusPop(null)
+              setNeedsLookOpen((v) => !v)
+            }}
+            className={cx(
+              'shrink-0 font-bold underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--fc-accent)]',
+              footerSummary.problemLinkTone === 'error'
+                ? 'text-[var(--fc-danger)]'
+                : 'text-[var(--fc-warn)]',
             )}
-          </div>
-          {footerSummary.breakdown && (
-            <InfoTip label="Stream encode breakdown">{footerSummary.breakdown}</InfoTip>
-          )}
+          >
+            {footerSummary.problemLinkText}
+          </button>
         </div>
       )}
 

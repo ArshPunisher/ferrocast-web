@@ -269,7 +269,6 @@ describe('golive-list-model (List 3b API state mapping)', () => {
     expect(vm.mainRows[1]!.barPct).toBeGreaterThan(vm.mainRows[0]!.barPct)
     expect(vm.footer).toMatchObject({
       mode: 'summary',
-      summaryText: '2 places · 18.3 Mbps · 2 encodes',
       problems: [],
     })
   })

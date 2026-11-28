@@ -85,11 +85,9 @@ export type FooterVM =
     }
   | {
       mode: 'summary'
-      summaryText: string
       problemLinkText: string | null
       problemLinkTone: 'warn' | 'error' | null
       problems: FooterProblemItem[]
-      breakdown: string | null
     }
 
 export interface GoLiveDockVM {
@@ -120,11 +118,6 @@ function destUploadKbps(d: DestinationView, view: GoLiveView): number {
   }
   if (d.canvas === 'vertical') return view.cut.config.kbps + 160
   return Math.max(0, view.stats.kbps)
-}
-
-function formatSummaryMbps(kbps: number): string {
-  const m = Number((kbps / 1000).toFixed(1))
-  return Number.isInteger(m) ? `${m} Mbps` : `${m.toFixed(1)} Mbps`
 }
 
 export function summarizeEncodeGroups(view: GoLiveView): EncodeGroupSummary | null {
@@ -868,14 +861,8 @@ export function buildGoLiveDockVM(view: GoLiveView, ctx: BuildDockContext): GoLi
     }
   }
 
-  // Normal footer summary + clickable problem count.
-  const placesText =
-    encodeSummary && encodeSummary.places > 0
-      ? `${encodeSummary.places} ${encodeSummary.places === 1 ? 'place' : 'places'} · ${formatSummaryMbps(encodeSummary.totalKbps)} · ${encodeSummary.encodes} ${encodeSummary.encodes === 1 ? 'encode' : 'encodes'}`
-      : view.destinations.filter((d) => d.enabled).length === 0
-        ? 'Nothing on'
-        : `${view.destinations.filter((d) => d.enabled).length} ${view.destinations.filter((d) => d.enabled).length === 1 ? 'place' : 'places'}`
-
+  // Normal footer: only the clickable problem count, when something is wrong (the places and
+  // bitrate summary line was dropped: the owner found it noise; Your platforms shows the sum).
   const problems = allRows
     .map((r) => r.problemItem)
     .filter((p): p is FooterProblemItem => p !== null)
@@ -895,11 +882,9 @@ export function buildGoLiveDockVM(view: GoLiveView, ctx: BuildDockContext): GoLi
     verticalRows,
     footer: {
       mode: 'summary',
-      summaryText: placesText,
       problemLinkText,
       problemLinkTone,
       problems,
-      breakdown,
     },
   }
 }
