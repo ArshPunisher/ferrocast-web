@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { test } from '@playwright/test'
 
 const SHADOW: Record<string, string> = {
