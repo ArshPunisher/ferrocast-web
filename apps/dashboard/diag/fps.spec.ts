@@ -84,43 +84,43 @@ test('home page frames (control)', async ({ page }) => {
   console.log(`DIAG home series=${series.join(' ')}`)
 })
 
-test('ov-main overflow at 1024x600', async ({ page }) => {
+const CORE = ['home', 'studio', 'chat', 'alerts', 'alerts/sub', 'overlays', 'overlays/ov-main']
+
+test('ov-main overflow after the core sweep', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('fc-nav-folded', '0'))
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('./?autoplay=0&latency=0&studioEngine=1#/home')
   await page.waitForSelector('#main')
-  await page.setViewportSize({ width: 375, height: 812 })
-  await page.evaluate(() => (location.hash = '#/overlays/ov-main'))
-  await page.waitForTimeout(1500)
-  for (const vp of [
+  const vps = [
     { width: 1280, height: 800 },
     { width: 1024, height: 600 },
-  ]) {
-    await page.setViewportSize(vp)
-    for (let i = 0; i < 6; i++) {
-      await page.waitForTimeout(700)
-      const m = await page.evaluate(() => {
-        const de = document.documentElement
-        const offenders = Array.from(document.body.querySelectorAll('*'))
-          .map((e) => ({ e, r: e.getBoundingClientRect() }))
-          .filter((x) => x.r.bottom > window.innerHeight + 2 && x.r.height > 0)
-          .sort((a, b) => b.r.bottom - a.r.bottom)
-          .slice(0, 6)
-          .map(
-            (x) =>
-              `${x.e.tagName}.${String((x.e as HTMLElement).className).slice(0, 60)}@${Math.round(x.r.top)}-${Math.round(x.r.bottom)}`,
-          )
-        return {
-          sh: de.scrollHeight,
-          ch: de.clientHeight,
-          ih: window.innerHeight,
-          bodySh: document.body.scrollHeight,
-          vv: window.visualViewport?.height,
-          fonts: document.fonts.status,
-          offenders,
-        }
-      })
-      console.log(`DIAG ov ${vp.width}x${vp.height} t=${i} ${JSON.stringify(m)}`)
+    { width: 900, height: 700 },
+    { width: 375, height: 812 },
+  ]
+  for (const route of CORE) {
+    await page.evaluate((r) => (location.hash = `#/${r}`), route)
+    await page.waitForTimeout(800)
+    for (const vp of vps) {
+      await page.setViewportSize(vp)
+      await page.waitForTimeout(50)
+      if (route !== 'overlays/ov-main' && route !== 'overlays' && vp.width !== 1024) continue
+      for (let i = 0; i < (route === 'overlays/ov-main' && vp.width === 1024 ? 4 : 1); i++) {
+        const m = await page.evaluate(() => {
+          const de = document.documentElement
+          const offenders = Array.from(document.body.querySelectorAll('*'))
+            .map((e) => ({ e, r: e.getBoundingClientRect() }))
+            .filter((x) => x.r.bottom > window.innerHeight + 2 && x.r.height > 0)
+            .sort((a, b) => b.r.bottom - a.r.bottom)
+            .slice(0, 6)
+            .map(
+              (x) =>
+                `${x.e.tagName}.${String((x.e as HTMLElement).className).slice(0, 70)}@${Math.round(x.r.top)}-${Math.round(x.r.bottom)}`,
+            )
+          return { sh: de.scrollHeight, ih: window.innerHeight, offenders }
+        })
+        console.log(`DIAG sweep ${route} ${vp.width}x${vp.height} i=${i} ${JSON.stringify(m)}`)
+        await page.waitForTimeout(700)
+      }
     }
   }
 })
