@@ -2139,6 +2139,141 @@ describe('Studio preview live-resize and scale sync', () => {
     }
   })
 
+  /** The desk with the vertical picture on beside the main one, and a thumbnail route that
+   * answers per scene (the vertical scene's picture is its own, never the main one's). */
+  function setupVerticalTest(thumb: (scene: string) => Promise<unknown>) {
+    const base = setupPreviewTest()
+    base.req.mockImplementation(async (method: string, path: string) => {
+      const m = /\/scenes\/([^/]+)\/thumbnail/.exec(path)
+      if (method === 'GET' && m) return thumb(decodeURIComponent(m[1]!))
+      return undefined
+    })
+    ;(base.desk.scenes as { data: unknown }).data = {
+      current: 'Main',
+      transition: { kind: 'cut_transition', ms: 0 },
+      vertical: { current: 'Tall', preview: null, scenes: [{ name: 'Tall' }] },
+      preview: null,
+    }
+    const boxes = (host: HTMLElement) => {
+      const stages = host.querySelectorAll<HTMLElement>('[data-stage-bg]')
+      return {
+        main: host.querySelector<HTMLElement>('[data-canvas-box]')!,
+        tall: stages[1]!.firstElementChild as HTMLElement,
+      }
+    }
+    const lastPut = () => {
+      const calls = base.putCalls()
+      return calls[calls.length - 1]![2] as {
+        rect: { opacity?: number } | null
+        vertical: { opacity?: number } | null
+      }
+    }
+    return { ...base, boxes, lastPut }
+  }
+
+  it('paints the vertical picture its own still, not the main one, for the whole live resize', async () => {
+    const { desk, putCalls, boxes, lastPut } = setupVerticalTest(async (scene) => ({
+      image: `data:image/png;base64,PIC_${scene.toUpperCase()}`,
+    }))
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const { main, tall } = boxes(host)
+      expect(putCalls().length).toBeGreaterThanOrEqual(1)
+      const basePuts = putCalls().length
+
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, {
+            detail: { active: true, reason: 'window', seq: 2, scale: 1 },
+          }),
+        )
+      })
+      expect(main.style.backgroundImage).toContain('PIC_MAIN')
+      expect(tall.style.backgroundImage).toContain('PIC_TALL')
+      expect(tall.style.backgroundImage).not.toContain('PIC_MAIN')
+      expect(putCalls().length).toBe(basePuts)
+
+      // Still there after the window events of a long drag.
+      await act(async () => {
+        window.dispatchEvent(new Event('resize'))
+        await vi.advanceTimersByTimeAsync(400)
+      })
+      expect(tall.style.backgroundImage).toContain('PIC_TALL')
+
+      // The end puts all views back in one place, the live vertical one included.
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(PREVIEW_LIVE_RESIZE_EVENT, {
+            detail: { active: false, reason: 'window', seq: 3 },
+          }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      expect(putCalls().length).toBe(basePuts + 1)
+      expect(lastPut().vertical).not.toBeNull()
+      expect(lastPut().vertical?.opacity).not.toBe(0)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(150)
+      })
+      expect(tall.style.backgroundImage).toBe('')
+      expect(main.style.backgroundImage).toBe('')
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
+  it('keeps the vertical view where it is when no still can be had for it (never an empty slot)', async () => {
+    const { desk, putCalls, boxes, lastPut } = setupVerticalTest(async (scene) => {
+      if (scene === 'Tall') throw new Error('studio_no_scene')
+      return { image: `data:image/png;base64,PIC_${scene.toUpperCase()}` }
+    })
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(host)
+    try {
+      await act(async () => {
+        root.render(
+          <DeskProvider value={desk as never}>
+            <PreviewBox running />
+          </DeskProvider>,
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      const { main, tall } = boxes(host)
+      const basePuts = putCalls().length
+
+      await act(async () => {
+        window.dispatchEvent(
+          new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: true, axis: 'x' } }),
+        )
+        await vi.advanceTimersByTimeAsync(25)
+      })
+      // The main view is hidden behind its still; the vertical one has none, so it stays.
+      expect(main.style.backgroundImage).toContain('PIC_MAIN')
+      expect(tall.style.backgroundImage).toBe('')
+      expect(putCalls().length).toBe(basePuts + 1)
+      expect(lastPut().rect?.opacity).toBe(0)
+      expect(lastPut().vertical).not.toBeNull()
+      expect(lastPut().vertical?.opacity).not.toBe(0)
+    } finally {
+      await act(async () => root.unmount())
+      host.remove()
+    }
+  })
+
   it('invalidates still cache on fc://scale-changed and defers PUT while live-resize is active', async () => {
     const { desk, putCalls, thumbCalls } = setupPreviewTest()
     const host = document.body.appendChild(document.createElement('div'))
@@ -2496,7 +2631,7 @@ describe('Studio preview live-resize and scale sync', () => {
     }
   })
 
-  it('defers hiding native view on uncached divider drag until thumbnail paints and still hides on error (CR-15)', async () => {
+  it('defers hiding native view on uncached divider drag until thumbnail paints and keeps the view on error (CR-15)', async () => {
     const { req, desk, putCalls } = setupPreviewTest()
     let resolveThumb!: (v: { image: string }) => void
     let rejectNext = false
@@ -2545,7 +2680,7 @@ describe('Studio preview live-resize and scale sync', () => {
         (putCalls()[putCalls().length - 1]![2] as { rect?: { opacity?: number } }).rect?.opacity,
       ).toBe(0)
 
-      // Reset drag and clear stage with a new uncached scene whose thumbnail fails: fallback still hides native view.
+      // Reset drag and clear stage with a new uncached scene whose thumbnail fails: the view stays.
       await act(async () => {
         window.dispatchEvent(
           new CustomEvent(DIVIDER_DRAG_EVENT, { detail: { active: false, axis: 'x' } }),
@@ -2573,7 +2708,9 @@ describe('Studio preview live-resize and scale sync', () => {
         await Promise.resolve()
         await Promise.resolve()
       })
-      expect(putCalls().length).toBe(putsBeforeFailDrag + 1)
+      // No still could be had for the only picture: its live view stays rather than leaving an
+      // empty slot (it used to be hidden anyway).
+      expect(putCalls().length).toBe(putsBeforeFailDrag)
     } finally {
       await act(async () => root.unmount())
       host.remove()

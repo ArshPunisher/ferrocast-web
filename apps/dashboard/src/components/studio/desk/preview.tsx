@@ -865,6 +865,9 @@ function PreviewBoxes({ running }: { running: boolean }) {
         index === 0 ? hints?.main : index === 1 ? hints?.program : hints?.vertical
       const now = Date.now()
 
+      // Which slots have a still under them: only those may lose their live view. A slot with
+      // no still (its picture could not be had) keeps its view, never an empty hole.
+      const painted = [false, false, false]
       const hideNativeNow = () => {
         if (
           !alive ||
@@ -874,17 +877,22 @@ function PreviewBoxes({ running }: { running: boolean }) {
           hidNative
         )
           return
+        if (!painted.some(Boolean)) return
         hidNative = true
-        const off = (r: PreviewRect | null) => r && { ...r, opacity: 0 }
+        const off = (r: PreviewRect | null, i: number) =>
+          r && painted[i] ? { ...r, opacity: 0 } : r
         last = JSON.stringify(['still', still])
-        void put(off(still[0]), off(still[1]), off(still[2])).catch(() => undefined)
+        void put(off(still[0], 0), off(still[1], 1), off(still[2], 2)).catch(() => undefined)
       }
 
       let pendingInitial = 0
       boxes().forEach((b, i) => {
         if (!b) return
         const hint = hintFor(i)
-        if (hint && paintStill(b, hint)) return
+        if (hint && paintStill(b, hint)) {
+          painted[i] = true
+          return
+        }
         const name = names[i]
         if (!name) return
         const w = targetWidth(b)
@@ -896,6 +904,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
           }
         }
         const paintedSync = matched ? paintStill(b, matched.url) : false
+        if (paintedSync) painted[i] = true
         const staleOrMiss = !paintedSync || !matched || now - matched.ts > STILL_TTL_MS
         if (!staleOrMiss || typeof apiRef.current.thumbnail !== 'function') return
         if (!paintedSync) pendingInitial += 1
@@ -912,7 +921,7 @@ function PreviewBoxes({ running }: { running: boolean }) {
             await decodeImage(res.image)
             if (!alive || frozen !== token || collectionKeyRef.current !== atCollection) return
             setCacheEntry(stillKey(name, w, atCollection), name, w, res.image)
-            paintStill(b, res.image)
+            if (paintStill(b, res.image)) painted[i] = true
             if (!paintedSync) {
               pendingInitial -= 1
               if (pendingInitial <= 0) hideNativeNow()

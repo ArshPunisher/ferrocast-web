@@ -251,6 +251,65 @@ test.describe('Studio CSS layout and resize stability', () => {
     expect(afterScale).toBe(1)
   })
 
+  test('paints the vertical picture its own tall still during a live window resize, then restores', async ({
+    page,
+  }) => {
+    await openDesktopStudio(page, 1280, 800)
+    await page.getByRole('button', { name: 'Go live to panel: move, pop out or hide' }).click()
+    await page.getByRole('menuitem', { name: 'Hide this panel' }).click()
+    await settled(page)
+    await page.getByRole('button', { name: 'Vertical', exact: true }).click()
+    const stages = page.locator('[data-stage-bg]')
+    await expect(stages).toHaveCount(2)
+    const tall = stages.nth(1).locator('div').first()
+    const main = page.locator('[data-canvas-box]').first()
+    await expect(tall).toBeVisible()
+    // Begin a live resize as the desktop app announces it.
+    await page.evaluate(() => {
+      const w = window as unknown as { __previewPuts?: PreviewReqLog[] }
+      if (w.__previewPuts) w.__previewPuts.length = 0
+      window.dispatchEvent(
+        new CustomEvent('fc://preview-live-resize', {
+          detail: { active: true, reason: 'window', seq: 1, scale: 1 },
+        }),
+      )
+    })
+    await page.setViewportSize({ width: 1120, height: 700 })
+    // Both slots hold a still while it lasts (the vertical one is not left empty).
+    await expect(main).not.toHaveCSS('background-image', 'none')
+    await expect(tall).not.toHaveCSS('background-image', 'none')
+    const during = await page.evaluate(async () => {
+      const shape = async (el: HTMLElement | null) => {
+        const m = /url\("(.*)"\)/.exec(el?.style.backgroundImage ?? '')
+        if (!m) return null
+        const img = new Image()
+        img.src = m[1]!
+        await img.decode()
+        return { w: img.naturalWidth, h: img.naturalHeight }
+      }
+      const stage = document.querySelectorAll<HTMLElement>('[data-stage-bg]')[1]
+      return {
+        main: await shape(document.querySelector<HTMLElement>('[data-canvas-box]')),
+        tall: await shape(stage?.firstElementChild as HTMLElement | null),
+      }
+    })
+    // Each picture shows a still of its own canvas: wide for the main one, tall for the vertical.
+    expect(during.main).not.toBeNull()
+    expect(during.tall).not.toBeNull()
+    expect(during.main!.w).toBeGreaterThan(during.main!.h)
+    expect(during.tall!.h).toBeGreaterThan(during.tall!.w)
+
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new CustomEvent('fc://preview-live-resize', {
+          detail: { active: false, reason: 'window', seq: 2, scale: 1 },
+        }),
+      )
+    })
+    await expect(tall).toHaveCSS('background-image', 'none')
+    await expect(main).toHaveCSS('background-image', 'none')
+  })
+
   test('restores divider drag on 900px unmount and avoids overflow in 375px Studio Mode (F7, F16)', async ({
     page,
   }) => {
