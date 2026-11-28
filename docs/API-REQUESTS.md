@@ -632,19 +632,25 @@ Built against `ferrocast/notes/q38/CRASH-REPORTS-SPEC.md`. All three routes are 
 and an API key can never reach them), and the demo engine implements them.
 
 - `GET /api/v1/diagnostics/pending-report` →
-  `{ pending: boolean, kind: "crash"|"error"|"unclean_exit"|"hang", created_ms: number, preview_text: string }`.
-  At most one report waits. `preview_text` is the exact redacted text that would be sent; the
-  dashboard shows it as plain text only. `kind` + `created_ms` name the report, so the dashboard asks
-  once per report.
-- `POST /api/v1/diagnostics/pending-report/send` → `{ sent: boolean, reason?: "relay_too_old"|"rate_limited"|string }`.
-  `sent: false` keeps the local copy (Settings › Advanced › support report still works). A 404 when
-  nothing waits.
-- `DELETE /api/v1/diagnostics/pending-report` → 204. "Don't send".
+  `{ pending: true, kind: "crash"|"unclean_exit"|…, created_ms: number, preview_text: string }`, or
+  `{ pending: false, kind: null, created_ms: null, preview_text: null }` (200, not a 404) when
+  nothing waits. At most one report waits. The engine builds it a few seconds after start, so the
+  dashboard looks again every 2 s for up to 30 s (visible time) and stops at the first report.
+  `preview_text` is the exact redacted text that would be sent; the dashboard shows it as plain
+  text only. `kind` + `created_ms` name the report, so the dashboard asks once per report.
+- `POST /api/v1/diagnostics/pending-report/send` `{ created_ms }` (the report that was shown) →
+  `{ sent: true }`, or `{ sent: false, reason }` with `reason` one of `relay_too_old`,
+  `rate_limited`, `too_large`, `rejected`, `relay_unavailable`; the report stays on the PC (Settings ›
+  Advanced › support report still works). 404 `no_pending_report` when nothing waits; 409
+  `conflict` when a different report waits now (nothing sent; the dashboard asks again about the
+  new one, without a message).
+- `DELETE /api/v1/diagnostics/pending-report` → 204 (also when nothing waits). "Don't send". It
+  takes no `created_ms`: it removes whatever waits.
 - Setting `crash_reports: "ask" | "always" | "never"` in `GET/PUT /api/v1/settings` (missing from an
-  older engine: the dashboard treats it as `ask` and shows no Privacy choice). Only `ask` makes the
+  older engine: the dashboard treats it as `ask`). Only `ask` makes the
   dashboard prompt; with `always` the engine sends by itself, with `never` it sends nothing.
 - Dashboard: the prompt shows only in the desktop window (not a linked browser, a phone or cloud
   mode), after the safe-mode screen and first-run setup, once per report, and waits while another
   dialog is open. Settings › Privacy holds the choice.
-- Demo: `?crash=crash|error|unclean_exit|hang` leaves a report waiting, `&crash_send=old|limited|other|fail`
-  sets what Send does, `?crash_setting=always|never` starts the setting there.
+- Demo: `?crash=crash|error|unclean_exit|hang` leaves a report waiting, `&crash_after=<ms>` shows it
+  only that long after start, `&crash_send=old|limited|other|fail` sets what Send does, `?crash_setting=always|never` starts the setting there.
