@@ -1422,6 +1422,10 @@ export class DemoStudioEngine {
     this.simDropped += dropped
     this.simLagged += lagged
     this.simSkipped += skipped
+    // Stats' last minute shows them too.
+    if (lagged > 0 || skipped > 0) {
+      this.simMisses.push({ at: Date.now(), render: lagged, encode: 0, skipped, resize: 0 })
+    }
     this.evaluateWatchStep()
   }
 
@@ -1437,6 +1441,7 @@ export class DemoStudioEngine {
     this.simMisses.push({ at: Date.now() - agoS * 1000, ...e })
     this.simLagged += e.render + e.encode
     this.simSkipped += e.skipped
+    this.evaluateWatchStep()
   }
 
   /** The upload struggled `agoS` seconds ago. */

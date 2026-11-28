@@ -2349,6 +2349,11 @@ describe('the last minute of missed frames in the demo stats', () => {
       expect(r.upload_trouble).toBe(true)
       // Totals since the start still count all of it.
       expect(s.engine.lagged).toBe(56)
+      // The older injection shows in the minute too, once (not twice in the totals).
+      engine.studioEngine!.injectDroppedFrames(0, 100, 0)
+      const t = await api.stats()
+      expect(t.engine.missed_recent!.render).toBe(104)
+      expect(t.engine.lagged).toBe(156)
     } finally {
       engine.dispose()
     }
