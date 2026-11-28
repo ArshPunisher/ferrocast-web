@@ -60,6 +60,8 @@ describe('a long menu', () => {
     expect(menu).toBeTruthy()
     await act(async () => menu.dispatchEvent(new Event('scroll')))
     expect(menus().length).toBe(1)
+    // The page moves: its scroll position differs from where the menu opened.
+    vi.spyOn(window, 'scrollY', 'get').mockReturnValue(window.scrollY + 40)
     await act(async () => document.dispatchEvent(new Event('scroll')))
     expect(menus().length).toBe(0)
   })
